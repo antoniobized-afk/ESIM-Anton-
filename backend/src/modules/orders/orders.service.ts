@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
@@ -70,6 +71,8 @@ type OrderPricingSnapshot = {
     bonusBalance: Prisma.Decimal | number;
     totalSpent: Prisma.Decimal | number;
     pendingPromoCode?: string | null;
+    referralLinkId?: string | null;
+    referredById?: string | null;
   };
   product: {
     id: string;
@@ -83,6 +86,10 @@ type OrderPricingSnapshot = {
   promoId: string | null;
   promoCode: string | null;
   promoCodeSource: PromoCodeSource | null;
+  promoStatus: 'applied' | 'none' | 'unavailable';
+  promoMessage: string | null;
+  hasReferralAttribution: boolean;
+  pendingPromoCodeToClear: string | null;
   baseAmount: number;
   promoDiscount: number;
   loyaltyDiscount: number;
@@ -437,6 +444,71 @@ export class OrdersService {
     return normalized || null;
   }
 
+  private isNonBlockingAutoPromoError(error: unknown) {
+    return (
+      error instanceof NotFoundException ||
+      error instanceof BadRequestException
+    );
+  }
+
+  private getAutoPromoUnavailableMessage(error: unknown) {
+    const rawMessage =
+      error instanceof Error && error.message
+        ? error.message
+        : 'Промокод недоступен';
+
+    switch (rawMessage) {
+      case 'Срок действия промокода истёк':
+        return 'Срок действия промокода по партнёрской ссылке истёк. Покупка продолжится без этой скидки.';
+      case 'Промокод деактивирован':
+        return 'Промокод по партнёрской ссылке деактивирован. Покупка продолжится без этой скидки.';
+      case 'Промокод исчерпан':
+        return 'Промокод по партнёрской ссылке исчерпан. Покупка продолжится без этой скидки.';
+      case 'Промокод не найден':
+        return 'Промокод по партнёрской ссылке больше не найден. Покупка продолжится без этой скидки.';
+      default:
+        return 'Промокод по партнёрской ссылке сейчас недоступен. Покупка продолжится без этой скидки.';
+    }
+  }
+
+  private async clearPendingPromoCodeIfMatches(
+    userId: string,
+    promoCode: string,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    await client.user.updateMany({
+      where: {
+        id: userId,
+        pendingPromoCode: promoCode,
+      },
+      data: {
+        pendingPromoCode: null,
+      },
+    });
+  }
+
+  private async healUnavailableAutoPromoIfNeeded(
+    userId: string,
+    pricing: OrderPricingSnapshot,
+    client: Prisma.TransactionClient | PrismaService,
+  ) {
+    if (
+      pricing.promoStatus !== 'unavailable' ||
+      pricing.pendingPromoCodeToClear === null
+    ) {
+      return;
+    }
+
+    await this.clearPendingPromoCodeIfMatches(
+      userId,
+      pricing.pendingPromoCodeToClear,
+      client,
+    );
+    this.logger.warn(
+      `Healed unavailable pending promo "${pricing.pendingPromoCodeToClear}" for user ${userId}: ${pricing.promoMessage ?? 'no message'}`,
+    );
+  }
+
   private async buildOrderPricingSnapshot(
     userId: string,
     productId: string,
@@ -465,24 +537,51 @@ export class OrdersService {
     let promoDiscount = 0;
     let loyaltyDiscount = 0;
     let promoId: string | null = null;
+    let promoCode: string | null = null;
+    let promoCodeSource: PromoCodeSource | null = null;
+    let promoStatus: OrderPricingSnapshot['promoStatus'] = 'none';
+    let promoMessage: string | null = null;
+    let pendingPromoCodeToClear: string | null = null;
     const normalizedManualPromoCode = opts?.promoCode?.trim().toUpperCase() || null;
     const normalizedPendingPromoCode = this.normalizePendingPromoCode(
       user.pendingPromoCode,
     );
-    const promoCodeSource = normalizedManualPromoCode
-      ? PromoCodeSource.MANUAL
-      : normalizedPendingPromoCode
-        ? PromoCodeSource.REFERRAL_LINK_AUTO
-        : null;
-    const normalizedPromoCode =
-      normalizedManualPromoCode ?? normalizedPendingPromoCode;
+    const hasReferralAttribution = Boolean(
+      user.referredById || user.referralLinkId,
+    );
 
-    if (normalizedPromoCode) {
-      const promoPreview = await this.promoCodesService.validateForReservation(normalizedPromoCode);
+    if (normalizedManualPromoCode) {
+      const promoPreview = await this.promoCodesService.validateForReservation(
+        normalizedManualPromoCode,
+      );
       promoId = promoPreview.promoId;
+      promoCode = promoPreview.code;
+      promoCodeSource = PromoCodeSource.MANUAL;
+      promoStatus = 'applied';
       const discountPercent = Number(promoPreview.discountPercent);
       promoDiscount = (totalAmount * discountPercent) / 100;
       totalAmount -= promoDiscount;
+    } else if (normalizedPendingPromoCode) {
+      try {
+        const promoPreview = await this.promoCodesService.validateForReservation(
+          normalizedPendingPromoCode,
+        );
+        promoId = promoPreview.promoId;
+        promoCode = promoPreview.code;
+        promoCodeSource = PromoCodeSource.REFERRAL_LINK_AUTO;
+        promoStatus = 'applied';
+        const discountPercent = Number(promoPreview.discountPercent);
+        promoDiscount = (totalAmount * discountPercent) / 100;
+        totalAmount -= promoDiscount;
+      } catch (error) {
+        if (!this.isNonBlockingAutoPromoError(error)) {
+          throw error;
+        }
+
+        promoStatus = 'unavailable';
+        promoMessage = this.getAutoPromoUnavailableMessage(error);
+        pendingPromoCodeToClear = normalizedPendingPromoCode;
+      }
     }
 
     const currentLoyaltyLevel = await this.getEffectiveLoyaltyLevel(
@@ -511,8 +610,12 @@ export class OrdersService {
       quantity,
       days,
       promoId,
-      promoCode: normalizedPromoCode,
+      promoCode,
       promoCodeSource,
+      promoStatus,
+      promoMessage,
+      hasReferralAttribution,
+      pendingPromoCodeToClear,
       baseAmount,
       promoDiscount,
       loyaltyDiscount,
@@ -1039,6 +1142,8 @@ export class OrdersService {
     });
 
     return this.prisma.$transaction(async (tx) => {
+      await this.healUnavailableAutoPromoIfNeeded(userId, pricing, tx);
+
       const order = await tx.order.create({
         data: {
           userId,
@@ -1102,6 +1207,10 @@ export class OrdersService {
       periodNum: pricing.product.isUnlimited && pricing.days > 1 ? pricing.days : null,
       baseAmount: pricing.baseAmount,
       promoCode: pricing.promoCode,
+      promoCodeSource: pricing.promoCodeSource,
+      promoStatus: pricing.promoStatus,
+      promoMessage: pricing.promoMessage,
+      hasReferralAttribution: pricing.hasReferralAttribution,
       promoDiscount: pricing.promoDiscount,
       loyaltyDiscount: pricing.loyaltyDiscount,
       bonusUsed: pricing.bonusUsed,
@@ -1951,6 +2060,8 @@ export class OrdersService {
       if (!userFresh || Number(userFresh.balance) < priceRub) {
         throw new BadRequestException('Недостаточно средств на балансе');
       }
+
+      await this.healUnavailableAutoPromoIfNeeded(userId, pricing, tx);
 
       await tx.user.update({
         where: { id: userId },

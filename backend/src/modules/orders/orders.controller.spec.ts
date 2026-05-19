@@ -13,7 +13,7 @@ describe('OrdersController', () => {
     createWithBalance: jest.fn(),
     create: jest.fn(),
     previewPricing: jest.fn(),
-    updateStatus: jest.fn(),
+    markOrderPaid: jest.fn(),
     fulfillOrder: jest.fn(),
   };
 
@@ -61,13 +61,13 @@ describe('OrdersController', () => {
 
   it('fulfillFree позволяет владельцу выполнить бесплатный заказ', async () => {
     ordersService.findById.mockResolvedValue({ id: 'order_1', totalAmount: 0 });
-    ordersService.updateStatus.mockResolvedValue({ id: 'order_1', status: OrderStatus.PAID });
+    ordersService.markOrderPaid.mockResolvedValue({ id: 'order_1', status: OrderStatus.PAID });
     ordersService.fulfillOrder.mockResolvedValue({ id: 'order_1', status: OrderStatus.COMPLETED });
 
     const result = await controller.fulfillFree('order_1', { id: 'user_1', type: 'user' });
 
     expect(ordersService.assertOwnership).toHaveBeenCalledWith('order_1', 'user_1');
-    expect(ordersService.updateStatus).toHaveBeenCalledWith('order_1', OrderStatus.PAID);
+    expect(ordersService.markOrderPaid).toHaveBeenCalledWith('order_1');
     expect(result).toEqual({ id: 'order_1', status: OrderStatus.COMPLETED });
   });
 });

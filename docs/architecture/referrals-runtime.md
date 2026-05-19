@@ -190,6 +190,11 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
   успешную покупку, partner `pendingPromoCode` очищается без redemption
 - При этом referral attribution по `referralLinkId` не теряется: manual promo
   заменяет только скидку покупателя, но не отменяет партнёрский bonus percent
+- Если auto-promo от partner link к моменту checkout уже невалиден
+  (`expired` / `deactivated` / `not found` / `exhausted`), checkout не должен
+  падать на `400`: `quote` возвращает `promoStatus=unavailable` и pricing
+  message для UI без мутаций, а cleanup `pendingPromoCode` выполняется уже в
+  mutation path (`create` / `createWithBalance`) compare-and-set способом
 - Failed/cancelled/stale order не очищает `pendingPromoCode`
 - `reserveForOrder` защищает capacity через serializable transaction
 - Manual promo больше не живёт на eager `usedCount++` до создания заказа: capacity reserve делается внутри order transaction, а consume идёт только на successful completion

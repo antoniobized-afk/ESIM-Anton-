@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import {
   OrderStatus,
   PromoCodeSource,
@@ -538,6 +539,130 @@ describe('OrdersService', () => {
           loyaltyDiscount: 4.5,
           totalAmount: 85.5,
           isFree: false,
+        }),
+      );
+    });
+
+    it('previewPricing не падает, если auto-promo по реферальной ссылке истёк, и не мутирует pendingPromoCode', async () => {
+      const { service, prisma, usersService } = makeService();
+      usersService.findById.mockResolvedValue({
+        id: 'user_1',
+        balance: 1000,
+        bonusBalance: 100,
+        totalSpent: 10000,
+        pendingPromoCode: 'MOJO30',
+        referralLinkId: 'link_1',
+        referredById: 'ref_1',
+        loyaltyLevel: {
+          discount: 0,
+        },
+      });
+      const promoCodesService = (service as any).promoCodesService;
+      promoCodesService.validateForReservation.mockRejectedValueOnce(
+        new BadRequestException('Срок действия промокода истёк'),
+      );
+
+      const quote = await service.previewPricing('user_1', 'product_1');
+
+      expect(quote).toEqual(
+        expect.objectContaining({
+          promoCode: null,
+          promoCodeSource: null,
+          promoStatus: 'unavailable',
+          hasReferralAttribution: true,
+          totalAmount: 100,
+        }),
+      );
+      expect(quote.promoMessage).toContain('истёк');
+      expect(prisma.user.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: 'user_1',
+            pendingPromoCode: 'MOJO30',
+          }),
+        }),
+      );
+      expect(prisma.order.create).not.toHaveBeenCalled();
+    });
+
+    it('create продолжает checkout без referral auto-promo, если он истёк', async () => {
+      const { service, prisma, usersService } = makeService();
+      usersService.findById.mockResolvedValue({
+        id: 'user_1',
+        balance: 1000,
+        bonusBalance: 100,
+        totalSpent: 10000,
+        pendingPromoCode: 'MOJO30',
+        referralLinkId: 'link_1',
+        referredById: 'ref_1',
+        loyaltyLevel: {
+          discount: 0,
+        },
+      });
+      const promoCodesService = (service as any).promoCodesService;
+      promoCodesService.validateForReservation.mockRejectedValueOnce(
+        new BadRequestException('Срок действия промокода истёк'),
+      );
+
+      await service.create('user_1', 'product_1');
+
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'user_1',
+          pendingPromoCode: 'MOJO30',
+        },
+        data: {
+          pendingPromoCode: null,
+        },
+      });
+      expect(prisma.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            promoCode: null,
+            promoCodeSource: null,
+          }),
+        }),
+      );
+      expect(promoCodesService.reserveForOrder).not.toHaveBeenCalled();
+    });
+
+    it('createWithBalance healing-ит stale referral auto-promo внутри mutation path', async () => {
+      const { service, prisma, usersService } = makeService();
+      usersService.findById.mockResolvedValue({
+        id: 'user_1',
+        balance: 1000,
+        bonusBalance: 100,
+        totalSpent: 10000,
+        pendingPromoCode: 'MOJO30',
+        referralLinkId: 'link_1',
+        referredById: 'ref_1',
+        loyaltyLevel: {
+          discount: 0,
+        },
+      });
+      const promoCodesService = (service as any).promoCodesService;
+      promoCodesService.validateForReservation.mockRejectedValueOnce(
+        new BadRequestException('Срок действия промокода истёк'),
+      );
+
+      await service.createWithBalance('user_1', 'product_1');
+
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'user_1',
+          pendingPromoCode: 'MOJO30',
+        },
+        data: {
+          pendingPromoCode: null,
+        },
+      });
+      expect(promoCodesService.reserveForOrder).not.toHaveBeenCalled();
+      expect(prisma.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            promoCode: null,
+            promoCodeSource: null,
+          }),
         }),
       );
     });

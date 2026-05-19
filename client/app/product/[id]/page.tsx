@@ -100,14 +100,22 @@ function ProductPageInner() {
   const promoDiscountAmount = pricingQuote?.promoDiscount ?? estimatedPromoDiscount
   const loyaltyDiscountAmount = pricingQuote?.loyaltyDiscount ?? 0
   const payableTotal = pricingQuote?.totalAmount ?? estimatedTotalPrice
-  const pendingReferralPromoCode = authUser?.pendingPromoCode?.trim() || null
   const quotePromoCode = pricingQuote?.promoCode?.trim() || null
-  const effectivePromoCode = quotePromoCode ?? pendingReferralPromoCode
+  const effectivePromoCode = quotePromoCode
+  const serverPromoStatus = pricingQuote?.promoStatus ?? 'none'
+  const serverPromoMessage = pricingQuote?.promoMessage ?? null
   const manualPromoActive = promoApplied && Boolean(promoCode.trim())
-  const autoPromoActive = Boolean(effectivePromoCode && promoDiscountAmount > 0 && !manualPromoActive)
-  const hasAnyPromoDiscount = Boolean(effectivePromoCode && promoDiscountAmount > 0)
+  const autoPromoActive =
+    pricingQuote?.promoCodeSource === 'REFERRAL_LINK_AUTO' &&
+    serverPromoStatus === 'applied' &&
+    Boolean(quotePromoCode && promoDiscountAmount > 0 && !manualPromoActive)
+  const autoPromoUnavailable =
+    serverPromoStatus === 'unavailable' &&
+    Boolean(pricingQuote?.hasReferralAttribution) &&
+    !manualPromoActive
+  const hasAnyPromoDiscount = Boolean(quotePromoCode && promoDiscountAmount > 0)
   const displayedBasePrice = pricingQuote?.baseAmount ?? basePrice
-  const isReferralPurchase = Boolean(authUser?.referralLinkId || pendingReferralPromoCode)
+  const isReferralPurchase = Boolean(pricingQuote?.hasReferralAttribution)
   const hasPricingContext = Boolean(authUser?.id || authToken)
   const pricingResolved = !hasPricingContext || Boolean(pricingQuote)
   const pricingPending = hasPricingContext && (pricingLoading || !pricingResolved)
@@ -244,7 +252,7 @@ function ProductPageInner() {
     return () => {
       cancelled = true
     }
-  }, [authLoading, authToken, authUser?.id, authUser?.pendingPromoCode, isDaily, product, promoApplied, promoCode, selectedDays])
+  }, [authLoading, authToken, authUser?.id, isDaily, product, promoApplied, promoCode, selectedDays])
 
   const loadProduct = useCallback(async () => {
     try {
@@ -733,9 +741,11 @@ function ProductPageInner() {
               Покупка по партнёрской ссылке
             </p>
             <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">
-              {pendingReferralPromoCode
-                ? `Промокод ${pendingReferralPromoCode} будет применён автоматически к первой покупке.`
-                : 'Скидка по партнёрской ссылке будет применена автоматически после пересчёта цены.'}
+              {autoPromoUnavailable && serverPromoMessage
+                ? serverPromoMessage
+                : quotePromoCode
+                  ? `Промокод ${quotePromoCode} будет применён автоматически к первой покупке.`
+                  : 'Скидка по партнёрской ссылке будет применена автоматически после пересчёта цены.'}
             </p>
           </div>
         )}
@@ -794,6 +804,9 @@ function ProductPageInner() {
             </p>
           </>
         )}
+        {autoPromoUnavailable && serverPromoMessage && (
+          <p className="text-xs text-amber-600 mt-2">{serverPromoMessage}</p>
+        )}
         {promoError && (
           <p className="text-xs text-red-500 mt-2">{promoError}</p>
         )}
@@ -851,9 +864,11 @@ function ProductPageInner() {
             Подтверждаем цену на сервере с учётом промокода, реферальной ссылки и уровня лояльности.
           </p>
         )}
-        {!pricingPending && isReferralPurchase && hasAnyPromoDiscount && (
-          <p className="text-xs text-green-700 dark:text-green-400 mt-2">
-            Это реферальная покупка. Скидка уже включена в сумму списания.
+        {!pricingPending && isReferralPurchase && (
+          <p className={`text-xs mt-2 ${hasAnyPromoDiscount ? 'text-green-700 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+            {hasAnyPromoDiscount
+              ? 'Это реферальная покупка. Скидка уже включена в сумму списания.'
+              : 'Это реферальная покупка. Сейчас заказ будет оформлен без реферальной скидки.'}
           </p>
         )}
         {pricingError && (

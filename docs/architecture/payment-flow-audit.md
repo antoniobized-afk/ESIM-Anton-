@@ -156,6 +156,18 @@
 
 Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `createWithBalance`) обязаны использовать одну и ту же формулу.
 
+### Quote degradation rule for referral auto-promo
+
+- manual promo остаётся strict input: невалидный код должен возвращать `400`;
+- auto-promo из `User.pendingPromoCode`, полученный через partner referral link,
+  не имеет права ломать checkout целиком;
+- `POST /orders/quote` остаётся pure read path: он не делает cleanup/referral-healing,
+  а только возвращает pricing metadata (`promoStatus = unavailable`,
+  `promoMessage`, `hasReferralAttribution`) для явного UI-сообщения;
+- если такой auto-promo истёк / деактивирован / удалён / исчерпан, mutation path
+  (`create` / `createWithBalance`) очищает `pendingPromoCode` compare-and-set
+  способом и продолжает checkout без этой скидки.
+
 ## Confirmed Invariants
 
 - Purchase completion boundary одна: `OrdersService.fulfillOrder()`.

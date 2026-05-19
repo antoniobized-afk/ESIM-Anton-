@@ -17,6 +17,9 @@ export interface CheckoutLoyaltyLevel {
   discount: number;
 }
 
+export type CheckoutPromoCodeSource = 'MANUAL' | 'REFERRAL_LINK_AUTO';
+export type CheckoutPromoStatus = 'applied' | 'none' | 'unavailable';
+
 export interface CheckoutOrder {
   id: string;
   userId: string;
@@ -65,6 +68,10 @@ export interface OrderQuoteResponse {
   periodNum: number | null;
   baseAmount: number;
   promoCode: string | null;
+  promoCodeSource: CheckoutPromoCodeSource | null;
+  promoStatus: CheckoutPromoStatus;
+  promoMessage: string | null;
+  hasReferralAttribution: boolean;
   promoDiscount: number;
   loyaltyDiscount: number;
   bonusUsed: number;
