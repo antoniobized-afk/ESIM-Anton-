@@ -16,7 +16,6 @@ export default function ReferralLandingPage() {
   const [loading, setLoading] = useState(true)
   const [isValid, setIsValid] = useState(false)
   const [promoCode, setPromoCode] = useState<string | null>(null)
-  const [promoCopied, setPromoCopied] = useState(false)
   const [error, setError] = useState(false)
 
   useEffect(() => {
@@ -34,19 +33,6 @@ export default function ReferralLandingPage() {
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [code])
-
-  const copyPromo = async () => {
-    if (!promoCode) return
-    try {
-      await navigator.clipboard.writeText(promoCode)
-      setPromoCopied(true)
-      const tg = (window as any).Telegram?.WebApp
-      tg?.HapticFeedback?.notificationOccurred('success')
-      setTimeout(() => setPromoCopied(false), 2000)
-    } catch {
-      /* clipboard может быть недоступен */
-    }
-  }
 
   const telegramLink = `https://t.me/${BOT_USERNAME}?start=ref_${code}`
 
@@ -121,27 +107,14 @@ export default function ReferralLandingPage() {
           </div>
         </div>
 
-        {/* Promo code */}
+        {/* Referral offer */}
         {promoCode && (
           <div className="card-neutral p-4 mb-4 animate-slide-up" style={{ animationDelay: '0.05s' }}>
-            <p className="text-xs text-muted mb-2">Ваш промокод на скидку</p>
-            <div className="flex items-center gap-3">
-              <span className="flex-1 text-lg font-bold font-mono text-primary tracking-wider">
-                {promoCode}
-              </span>
-              <button
-                onClick={copyPromo}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                  promoCopied
-                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                    : 'bg-[#f77430]/10 text-[#f77430] hover:bg-[#f77430]/20'
-                }`}
-              >
-                {promoCopied ? '✓ Скопировано' : 'Копировать'}
-              </button>
-            </div>
-            <p className="mt-3 text-xs text-secondary">
-              Скидка активируется после входа или регистрации и появится в расчёте первой покупки.
+            <p className="text-sm font-medium text-primary">
+              По этому приглашению скидка применится автоматически к вашей первой покупке.
+            </p>
+            <p className="mt-2 text-xs text-secondary">
+              Ничего копировать и вводить вручную не нужно. Сначала войдите или зарегистрируйтесь.
             </p>
           </div>
         )}
