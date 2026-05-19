@@ -10,6 +10,7 @@ import type {
   CreateReferralLinkDto,
   PaginationMeta,
   NumericLike,
+  ReferralPayoutMode,
   UpdateReferralLinkDto,
 } from '@/lib/types'
 import Button from '@/components/ui/Button'
@@ -53,6 +54,13 @@ function getLinkStatus(link: AdminReferralLink): { label: string; className: str
     return { label: 'Истекла', className: 'bg-amber-100 text-amber-700' }
   }
   return { label: 'Активна', className: 'bg-green-100 text-green-700' }
+}
+
+function getPayoutModeLabel(mode: ReferralPayoutMode): { label: string; className: string } {
+  if (mode === 'EXTERNAL') {
+    return { label: 'К выплате', className: 'bg-orange-100 text-orange-700' }
+  }
+  return { label: 'На баланс', className: 'bg-sky-100 text-sky-700' }
 }
 
 function ownerName(link: AdminReferralLink): string {
@@ -202,9 +210,9 @@ export default function ReferralLinks() {
   const totalRegistrations = links.reduce((s, l) => s + l._count.referredUsers, 0)
 
   return (
-    <div className="space-y-6">
+    <div>
       {/* Header */}
-      <div className="glass-card p-6 flex items-center justify-between">
+      <div className="glass-card p-6 flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Партнёрские ссылки</h2>
           <p className="text-sm text-slate-500 mt-1">
@@ -236,6 +244,7 @@ export default function ReferralLinks() {
                   <TableHeaderCell className="px-6">Код</TableHeaderCell>
                   <TableHeaderCell className="px-6">Владелец</TableHeaderCell>
                   <TableHeaderCell className="px-6">Бонус</TableHeaderCell>
+                  <TableHeaderCell className="px-6">Выплата</TableHeaderCell>
                   <TableHeaderCell className="px-6">Промокод</TableHeaderCell>
                   <TableHeaderCell className="px-6">Статус</TableHeaderCell>
                   <TableHeaderCell className="px-6">Регистрации</TableHeaderCell>
@@ -265,6 +274,18 @@ export default function ReferralLinks() {
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">
                           {num(link.bonusPercent)}%
                         </span>
+                      </TableCell>
+                      <TableCell className="px-6 py-3">
+                        {(() => {
+                          const pm = getPayoutModeLabel(link.payoutMode ?? 'BALANCE')
+                          return (
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${pm.className}`}
+                            >
+                              {pm.label}
+                            </span>
+                          )
+                        })()}
                       </TableCell>
                       <TableCell className="px-6 py-3 text-slate-600 font-mono text-xs">
                         {link.promoCode?.code ?? '—'}
@@ -365,7 +386,6 @@ export default function ReferralLinks() {
           )}
         </div>
       )}
-
       {/* Create / Edit Modal */}
       {formOpen && (
         <LinkFormModal
@@ -411,6 +431,9 @@ function LinkFormModal({ link, onClose, onSave }: LinkFormModalProps) {
   const [expiresAt, setExpiresAt] = useState(
     link?.expiresAt ? link.expiresAt.slice(0, 10) : '',
   )
+  const [payoutMode, setPayoutMode] = useState<ReferralPayoutMode>(
+    link?.payoutMode ?? 'BALANCE',
+  )
   const [saving, setSaving] = useState(false)
 
   const parsedBonusPercent = parseBonusPercentInput(bonusPercent)
@@ -432,6 +455,7 @@ function LinkFormModal({ link, onClose, onSave }: LinkFormModalProps) {
         const dto: UpdateReferralLinkDto = {
           code: code.trim() || undefined,
           bonusPercent: parsedBonusPercent,
+          payoutMode,
           label: normalizeOptionalText(label),
           promoCodeId: normalizeOptionalText(promoCodeId),
           isActive,
@@ -444,6 +468,7 @@ function LinkFormModal({ link, onClose, onSave }: LinkFormModalProps) {
           code: code.trim(),
           userId: userId.trim(),
           bonusPercent: parsedBonusPercent,
+          payoutMode,
           isActive,
         }
         if (label.trim()) dto.label = label.trim()
@@ -562,6 +587,24 @@ function LinkFormModal({ link, onClose, onSave }: LinkFormModalProps) {
           />
         </div>
 
+        <div className="md:col-span-2">
+          <label className="block text-xs font-medium text-slate-500 mb-1">
+            Режим выплаты
+          </label>
+          <select
+            value={payoutMode}
+            onChange={(e) => setPayoutMode(e.target.value as ReferralPayoutMode)}
+            className={inputCls}
+          >
+            <option value="BALANCE">На баланс — бонус зачисляется на счёт партнёра</option>
+            <option value="EXTERNAL">К выплате — только статистика, деньги вне системы</option>
+          </select>
+          <p className="mt-1 text-xs text-slate-400">
+            {payoutMode === 'EXTERNAL'
+              ? 'Бонус не зачисляется на баланс. Сумма к выплате видна в статистике.'
+              : 'Бонус зачисляется на bonusBalance партнёра автоматически.'}
+          </p>
+        </div>
         <div className="flex items-center gap-3 md:col-span-2">
           <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
             <input
@@ -619,6 +662,13 @@ function StatsModal({ data, loading, onClose }: StatsModalProps) {
           value={`${num(stats.totalReferrerEarnings).toFixed(0)} ₽`}
         />
       </div>
+
+      {/* Payout mode badge */}
+      {link.payoutMode === 'EXTERNAL' && (
+        <div className="mb-4 px-3 py-2 rounded-lg bg-orange-50 border border-orange-200 text-sm text-orange-700">
+          Режим выплаты: <strong>к выплате вне системы</strong> — бонус не зачисляется на баланс, сумма выше — это сколько нужно выплатить деньгами.
+        </div>
+      )}
 
       {/* Referred users */}
       {referredUsers.length > 0 && (

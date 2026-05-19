@@ -242,20 +242,21 @@ model Transaction {
 }
 
 model ReferralLink {
-  id            String        @id @default(cuid())
-  code          String        @unique
+  id            String              @id @default(cuid())
+  code          String              @unique
   userId        String
   label         String?
-  bonusPercent  Decimal       @db.Decimal(5, 2)
+  bonusPercent  Decimal             @db.Decimal(5, 2)
+  payoutMode    ReferralPayoutMode  @default(BALANCE)
   promoCodeId   String?
-  isActive      Boolean       @default(true)
+  isActive      Boolean             @default(true)
   expiresAt     DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  user          User          @relation("OwnedReferralLinks", fields: [userId], references: [id])
-  promoCode     PromoCode?    @relation(fields: [promoCodeId], references: [id])
-  referredUsers User[]        @relation("ReferredViaLink")
-  transactions  Transaction[] @relation("ReferralLinkTransactions")
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  user          User                @relation("OwnedReferralLinks", fields: [userId], references: [id])
+  promoCode     PromoCode?          @relation(fields: [promoCodeId], references: [id])
+  referredUsers User[]              @relation("ReferredViaLink")
+  transactions  Transaction[]       @relation("ReferralLinkTransactions")
 
   @@index([userId])
   @@index([promoCodeId])
@@ -441,4 +442,9 @@ enum AdminRole {
   SUPER_ADMIN
   MANAGER
   SUPPORT
+}
+
+enum ReferralPayoutMode {
+  BALANCE  // Бонус зачисляется на bonusBalance партнёра
+  EXTERNAL // Бонус НЕ зачисляется, только запись для статистики (выплата вне системы)
 }

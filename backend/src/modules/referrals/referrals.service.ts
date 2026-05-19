@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import {
   Prisma,
+  ReferralPayoutMode,
   TransactionStatus,
   TransactionType,
 } from '@prisma/client';
@@ -19,6 +20,7 @@ type ReferralLinkCreateInput = {
   userId: string;
   label?: string | null;
   bonusPercent: number;
+  payoutMode?: ReferralPayoutMode;
   promoCodeId?: string | null;
   isActive?: boolean;
   expiresAt?: Date | string | null;
@@ -28,6 +30,7 @@ type ReferralLinkUpdateInput = {
   code?: string;
   label?: string | null;
   bonusPercent?: number;
+  payoutMode?: ReferralPayoutMode;
   promoCodeId?: string | null;
   isActive?: boolean;
   expiresAt?: Date | string | null;
@@ -188,6 +191,7 @@ export class ReferralsService {
         userId: dto.userId,
         label: dto.label?.trim() || null,
         bonusPercent: this.ensurePositiveBonusPercent(dto.bonusPercent),
+        payoutMode: dto.payoutMode ?? ReferralPayoutMode.BALANCE,
         promoCodeId: dto.promoCodeId ?? null,
         isActive: dto.isActive ?? true,
         expiresAt: this.parseOptionalDate(dto.expiresAt) ?? null,
@@ -255,6 +259,10 @@ export class ReferralsService {
 
     if (dto.expiresAt !== undefined) {
       data.expiresAt = this.parseOptionalDate(dto.expiresAt);
+    }
+
+    if (dto.payoutMode !== undefined) {
+      data.payoutMode = dto.payoutMode;
     }
 
     return this.prisma.referralLink.update({
@@ -572,7 +580,7 @@ export class ReferralsService {
         ? null
         : await this.prisma.referralLink.findUnique({
             where: { id: resolvedReferralLinkId },
-            select: { id: true, bonusPercent: true },
+            select: { id: true, bonusPercent: true, payoutMode: true },
           });
 
     if (resolvedReferralLinkId && !referralLink) {
@@ -612,14 +620,18 @@ export class ReferralsService {
           }
         }
 
-        await tx.user.update({
-          where: { id: referrerId },
-          data: {
-            bonusBalance: {
-              increment: bonusAmount,
+        const payoutMode = referralLink?.payoutMode ?? ReferralPayoutMode.BALANCE;
+
+        if (payoutMode === ReferralPayoutMode.BALANCE) {
+          await tx.user.update({
+            where: { id: referrerId },
+            data: {
+              bonusBalance: {
+                increment: bonusAmount,
+              },
             },
-          },
-        });
+          });
+        }
 
         await tx.transaction.create({
           data: {
@@ -633,6 +645,7 @@ export class ReferralsService {
               orderAmount,
               bonusPercent: Number(bonusPercent),
               minPayout: settings.minPayout,
+              payoutMode,
               source: orderId ? 'completed_order' : 'manual_award',
             },
           },

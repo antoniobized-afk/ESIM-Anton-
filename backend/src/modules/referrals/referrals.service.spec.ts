@@ -105,6 +105,7 @@ describe('ReferralsService', () => {
           userId: 'owner_1',
           label: null,
           bonusPercent: new Prisma.Decimal(12.5),
+          payoutMode: 'BALANCE',
           promoCodeId: 'promo_1',
           isActive: true,
           expiresAt: null,
@@ -372,6 +373,7 @@ describe('ReferralsService', () => {
             orderAmount: 1200,
             bonusPercent: 7,
             minPayout: 900,
+            payoutMode: 'BALANCE',
             source: 'completed_order',
           },
         },
@@ -449,6 +451,7 @@ describe('ReferralsService', () => {
       prisma.referralLink.findUnique.mockResolvedValue({
         id: 'link_1',
         bonusPercent: new Prisma.Decimal(12.5),
+        payoutMode: 'BALANCE',
       });
 
       const result = await service.awardReferralBonus(
@@ -484,6 +487,84 @@ describe('ReferralsService', () => {
 
       expect(prisma.transaction.create).not.toHaveBeenCalled();
       expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('при payoutMode=EXTERNAL создаёт transaction, но НЕ увеличивает bonusBalance', async () => {
+      const { service, prisma } = makeService({
+        bonusPercent: 5,
+        minPayout: 500,
+        enabled: true,
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_ext',
+        bonusPercent: new Prisma.Decimal(10),
+        payoutMode: 'EXTERNAL',
+      });
+
+      const result = await service.awardReferralBonus(
+        'ref_1',
+        1000,
+        'order_1',
+        'link_ext',
+      );
+
+      // bonusBalance НЕ увеличивается
+      expect(prisma.user.update).not.toHaveBeenCalled();
+
+      // Transaction создаётся для статистики
+      expect(prisma.transaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          referralLinkId: 'link_ext',
+          type: TransactionType.REFERRAL_BONUS,
+          status: TransactionStatus.SUCCEEDED,
+          amount: new Prisma.Decimal(100),
+          metadata: expect.objectContaining({
+            payoutMode: 'EXTERNAL',
+            bonusPercent: 10,
+          }),
+        }),
+      });
+      expect(result).toEqual({ awarded: true, bonusAmount: 100 });
+    });
+
+    it('при payoutMode=BALANCE (default) увеличивает bonusBalance как обычно', async () => {
+      const { service, prisma } = makeService({
+        bonusPercent: 5,
+        minPayout: 500,
+        enabled: true,
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_bal',
+        bonusPercent: new Prisma.Decimal(10),
+        payoutMode: 'BALANCE',
+      });
+
+      const result = await service.awardReferralBonus(
+        'ref_1',
+        1000,
+        'order_1',
+        'link_bal',
+      );
+
+      // bonusBalance увеличивается
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'ref_1' },
+        data: {
+          bonusBalance: {
+            increment: new Prisma.Decimal(100),
+          },
+        },
+      });
+
+      // Transaction создаётся
+      expect(prisma.transaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          metadata: expect.objectContaining({
+            payoutMode: 'BALANCE',
+          }),
+        }),
+      });
+      expect(result).toEqual({ awarded: true, bonusAmount: 100 });
     });
   });
 

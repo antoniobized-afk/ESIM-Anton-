@@ -427,12 +427,15 @@ export interface SystemSettingsMap {
 
 // ── Partner Referral Links ─────────────────────────────────────────
 
+export type ReferralPayoutMode = 'BALANCE' | 'EXTERNAL'
+
 export interface AdminReferralLink {
   id: string
   code: string
   userId: string
   label: string | null
   bonusPercent: NumericLike
+  payoutMode: ReferralPayoutMode
   isActive: boolean
   expiresAt: string | null
   createdAt: string
@@ -463,6 +466,7 @@ export interface CreateReferralLinkDto {
   code: string
   userId: string
   bonusPercent: number
+  payoutMode?: ReferralPayoutMode
   label?: string
   promoCodeId?: string
   isActive?: boolean
@@ -472,6 +476,7 @@ export interface CreateReferralLinkDto {
 export interface UpdateReferralLinkDto {
   code?: string
   bonusPercent?: number
+  payoutMode?: ReferralPayoutMode
   label?: string | null
   promoCodeId?: string | null
   isActive?: boolean

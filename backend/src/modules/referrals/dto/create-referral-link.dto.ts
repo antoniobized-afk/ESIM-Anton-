@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsEnum,
   IsNumber,
   IsOptional,
   IsString,
@@ -8,6 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { ReferralPayoutMode } from '@prisma/client';
 
 export class CreateReferralLinkDto {
   @IsString()
@@ -28,6 +30,12 @@ export class CreateReferralLinkDto {
   @Min(0.01)
   @Max(100)
   bonusPercent: number;
+
+  @IsOptional()
+  @IsEnum(ReferralPayoutMode, {
+    message: 'payoutMode должен быть BALANCE или EXTERNAL',
+  })
+  payoutMode?: ReferralPayoutMode;
 
   @IsOptional()
   @IsString()

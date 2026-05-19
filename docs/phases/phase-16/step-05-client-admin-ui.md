@@ -38,7 +38,10 @@
   - summary metrics: registrations, primary purchase revenue, earnings;
   - optional secondary LTV/top-up metric только отдельно от commissionable
     revenue;
-  - detail stats surface или modal.
+  - detail stats surface или modal;
+  - `payoutMode` select в create/edit форме (BALANCE / EXTERNAL);
+  - столбец «Выплата» с бейджем в таблице;
+  - banner в stats modal при `EXTERNAL` режиме.
 - В `admin/components/AdminShell.tsx` добавить nav item `Партнёрские ссылки`.
 - Следовать текущим admin UI patterns:
   - использовать существующие `Button`, `Modal`, `Toast`/local patterns;
@@ -84,6 +87,9 @@
   - stats modal использует explicit open-state и request invalidation against late response.
 - **Admin nav**: `Link2` icon, «Партнёрские ссылки» перед Analytics.
 - Верификация: `tsc --noEmit` чист (client + admin), 25/25 backend тестов.
+- Добавлен `payoutMode` в admin types (`ReferralPayoutMode`), create/update DTOs,
+  таблицу (столбец «Выплата» с бейджем «На баланс»/«К выплате»),
+  форму (select BALANCE/EXTERNAL с подсказкой), stats modal (banner при EXTERNAL).
 
 ## Файлы
 

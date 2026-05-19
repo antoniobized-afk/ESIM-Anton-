@@ -20,6 +20,8 @@
   - считать `bonusAmount` через `Prisma.Decimal`;
   - duplicate check, `Transaction.create` и `User.bonusBalance.increment` выполнять
     в одном `$transaction`;
+  - при `ReferralLink.payoutMode === EXTERNAL` пропускать `bonusBalance.increment`,
+    но всегда создавать `Transaction` с `payoutMode` в metadata;
   - писать `Transaction.referralLinkId`.
 - В `OrdersService.applyPurchaseCompletionEffects` передавать
   `order.user.referralLinkId ?? null`.
@@ -98,6 +100,10 @@
   общий ledger признан меньшим риском, чем поддержка двух разных consumption path.
 - В тестах добавлены кейсы на individual partner percent, auto-promo
   reservation/consume/release, manual-priority cleanup и stale/cancel paths.
+- `awardReferralBonus` расширен поддержкой `ReferralLink.payoutMode`:
+  при `EXTERNAL` бонус не зачисляется на `bonusBalance`, но `Transaction`
+  создаётся всегда для полной статистики. Metadata содержит `payoutMode`.
+  Два новых теста: EXTERNAL mode skip balance / BALANCE mode increment.
 
 ## Файлы
 

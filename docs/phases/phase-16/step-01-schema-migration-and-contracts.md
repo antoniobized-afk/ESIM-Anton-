@@ -34,7 +34,10 @@
   - `PromoCodeSource`;
   - `PromoCodeRedemptionSource` с единственным V1 source
     `REFERRAL_LINK_AUTO`;
-  - `PromoCodeRedemptionStatus`.
+  - `PromoCodeRedemptionStatus`;
+  - `ReferralPayoutMode` (`BALANCE`, `EXTERNAL`).
+- В `ReferralLink` добавить `payoutMode ReferralPayoutMode @default(BALANCE)` —
+  управляет режимом выплаты бонуса (BALANCE — на счёт, EXTERNAL — вне системы).
 - Не добавлять `MANUAL` в `PromoCodeRedemptionSource` в V1: ручные промокоды
   остаются на текущем `PromoCodesService.use()` без redemption ledger.
 - Добавить raw partial unique index для защиты от дублей referral bonus:
@@ -95,6 +98,9 @@ DROP INDEX IF EXISTS transactions_referral_bonus_once_per_referrer_order;
   partial unique index для `REFERRAL_BONUS` и rollback note.
 - Валидация подтверждена через `npx prisma validate`,
   `npx prisma generate --no-engine` и `npx tsc --noEmit -p tsconfig.json`.
+- Добавлен enum `ReferralPayoutMode` (`BALANCE`, `EXTERNAL`) и поле
+  `payoutMode` в `ReferralLink` с backward-compatible миграцией
+  `20260519121454_add_referral_payout_mode` (default `BALANCE`).
 
 ## Файлы
 

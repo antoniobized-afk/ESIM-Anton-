@@ -39,10 +39,17 @@
 ```
 ReferralLink {
   id, code (unique), userId, label, bonusPercent (Decimal 5,2),
+  payoutMode (ReferralPayoutMode, default BALANCE),
   promoCodeId?, isActive, expiresAt?, createdAt, updatedAt
   → user (OwnedReferralLinks), promoCode?, referredUsers[], transactions[]
 }
 ```
+
+### ReferralPayoutMode (enum)
+
+- `BALANCE` — бонус зачисляется на `bonusBalance` партнёра (default)
+- `EXTERNAL` — бонус НЕ зачисляется на баланс, только запись `Transaction`
+  для статистики (выплата вне системы)
 
 ### Связи в User
 
@@ -143,15 +150,28 @@ Body: `{ userId, referralCode, telegramId }`
   - completed `Order` и `REFERRAL_BONUS` ledger уже immutable и не
     пересчитываются после edit link.
 
-## Partner Bonus Percent Flow
+## Partner Bonus Percent And PayoutMode Flow
 
 `awardReferralBonus()` определяет процент по каскаду:
 
 1. `ReferralLink.bonusPercent` (если `Transaction.referralLinkId` → link exists)
 2. Fallback на глобальный `REFERRAL_BONUS_PERCENT` из `SystemSettings`
 
+После расчёта `bonusAmount` определяется режим выплаты по
+`ReferralLink.payoutMode`:
+
+| PayoutMode | `bonusBalance` increment | `Transaction` запись | Metadata |
+|------------|--------------------------|---------------------|----------|
+| `BALANCE`  | ✅ да                    | ✅ `REFERRAL_BONUS` | `payoutMode: 'BALANCE'` |
+| `EXTERNAL` | ❌ нет                   | ✅ `REFERRAL_BONUS` | `payoutMode: 'EXTERNAL'` |
+
+При `EXTERNAL` бонус не попадает на `bonusBalance`, но `Transaction` создаётся
+всегда — это обеспечивает полную финансовую статистику и позволяет
+администратору видеть сумму к выплате вне системы.
+
 `Transaction.referralLinkId` является индексируемым source of truth для
-партнёрских analytics. JSON metadata не используется как аналитический ключ.
+партнёрских analytics. JSON metadata не используется как аналитический ключ,
+но содержит `payoutMode` для аудита.
 
 ## Когда В Ссылке Заданы И `bonusPercent`, И `promoCode`
 
@@ -246,9 +266,15 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 **Admin edit form contract**:
 - `promoCodeId: null` означает intentional disconnect promo link;
 - `expiresAt: null` означает сделать ссылку бессрочной;
-- `undefined` в PATCH payload означает “не менять поле”;
+- `undefined` в PATCH payload означает "не менять поле";
 - `bonusPercent` в UI хранится как строка формы и проходит explicit client-side validation до отправки;
+- `payoutMode` управляется через select в форме создания/редактирования;
 - stats modal использует отдельный open-state и игнорирует late responses после закрытия.
+
+**Admin table**:
+- Столбец «Выплата» с бейджем: «На баланс» (sky) / «К выплате» (orange)
+- При `EXTERNAL` в stats modal отображается banner с пояснением, что сумма
+  заработка — это сумма к выплате деньгами вне системы.
 
 ## Referral Bonus And `minPayout`
 
@@ -275,7 +301,6 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 
 ## Known Boundaries V1
 
-- `minPayout` остаётся глобальным; per-link payout threshold не входит в V1
 - Immutable attribution: смена referrer-а не поддерживается
 - Commercial policy mutable until first successful purchase:
   - изменение `ReferralLink.promoCodeId` или `bonusPercent` сразу влияет на ещё
