@@ -319,6 +319,17 @@ export const referralsApi = {
     const stats = await this.getStats();
     return stats.referrals;
   },
+
+  // Публичная информация о партнёрской ссылке (без JWT)
+  async getPublicLinkInfo(code: string): Promise<{ isValid: boolean; promoCode: string | null }> {
+    const { data } = await api.get(`/referrals/links/${encodeURIComponent(code)}/public`);
+    return data;
+  },
+
+  // Привязать реферальный код через web (требует JWT)
+  async registerWebReferral(referralCode: string): Promise<void> {
+    await api.post('/referrals/register-web', { referralCode });
+  },
 };
 
 export const promoApi = {

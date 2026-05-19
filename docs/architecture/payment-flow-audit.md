@@ -167,6 +167,7 @@ Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `
 - Token fail не должен приводить к widget retry на том же order/invoice.
 - Repeat charge по saved card теперь обязан иметь один durable attempt на order; `IN_PROGRESS` и `AMBIGUOUS` attempt запрещают второй provider charge на тот же `orderId`.
 - Обычный CloudPayments widget `pay` callback тоже не должен иметь second-fulfill window: только один callback может claim-ить completion boundary и запустить `fulfillOrder()`.
+- После успешного provider issuance локальная ошибка финализации больше не должна откатывать заказ в обычный `FAILED` или запускать refund-компенсацию как будто provider side-effect не случился. Такой кейс обязан оставлять durable reconciliation state без повторного `purchaseEsim()` / `topupEsim()`.
 
 ## Confirmed Risks / Remaining Gaps
 
@@ -184,6 +185,18 @@ Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `
 - Client пока не показывает отдельный UI для bonus spend на product page, хотя backend pricing formula это поддерживает.
 - `POST /orders/:id/fulfill-free` остаётся отдельным client-visible step вместо полного server-side auto-fulfill внутри `POST /orders`.
 - Saved-card repeat charge уже защищён durable attempt contract, но для `AMBIGUOUS` outcome по-прежнему нет автоматического reconciliation worker: текущий baseline опирается на persisted attempt state + support/runbook triage.
+
+### Closed after follow-up hardening
+
+- race на двойную выдачу eSIM в `fulfillOrder()` закрыт через `PAID -> PROCESSING` claim до внешнего provider call;
+- сценарий `provider success -> local finalize failure` больше не деградирует в ложный `FAILED`/refund:
+  - issued snapshot сохраняется на `Order` даже при падении `markOrderCompleted()`;
+  - заказ остаётся в `PROCESSING` с reconciliation category `issued_but_finalize_failed` или `topup_issued_but_finalize_failed`;
+  - balance purchase / balance top-up не делают refund, если provider side-effect уже подтвердился, но локальная финализация упала.
+- purchase completion accounting для cashback и `totalSpent` теперь one-shot и durable:
+  - `Order.completionAccountingAppliedAt` служит compare-and-set marker для purchase-only accounting boundary;
+  - cashback credit, `BONUS_ACCRUAL` ledger и `user.totalSpent` применяются внутри одной транзакции;
+  - повторный вход в accounting path после уже выставленного marker становится safe no-op вместо повторного начисления.
 
 ## Enterprise Refactor Baseline
 

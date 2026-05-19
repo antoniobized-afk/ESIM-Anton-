@@ -80,7 +80,7 @@ DROP INDEX IF EXISTS transactions_referral_bonus_once_per_referrer_order;
 
 ## Статус
 
-- `planned`
+- `completed`
 
 ## Журнал изменений
 
@@ -89,6 +89,13 @@ DROP INDEX IF EXISTS transactions_referral_bonus_once_per_referrer_order;
 - Шаг выделен как foundation для Phase 16.
 - Зафиксирована обязательная preflight-проверка дублей до raw partial unique
   index.
+- В `backend/prisma/schema.prisma` добавлены `ReferralLink`,
+  `PromoCodeRedemption`, новые referral/promo relations и enum-контракты Phase 16.
+- Создана ручная миграция
+  `20260519090000_add_referral_links_and_promo_redemptions` с preflight-запросом,
+  partial unique index для `REFERRAL_BONUS` и rollback note.
+- Валидация подтверждена через `npx prisma validate`,
+  `npx prisma generate --no-engine` и `npx tsc --noEmit -p tsconfig.json`.
 
 ## Файлы
 

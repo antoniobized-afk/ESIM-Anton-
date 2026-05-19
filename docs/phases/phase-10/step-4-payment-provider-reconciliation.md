@@ -50,6 +50,7 @@
 - **[2026-05-08]** `OrdersService` получил derived `reconciliation` snapshot для заказов: marker вычисляется из `status`, успешной `PAYMENT` transaction, refund transaction, `parentOrderId` и `errorMessage` без новой схемы БД.
 - **[2026-05-08]** Для provider failure после успешной оплаты добавлен structured operational signal `Reconciliation required` с категорией (`provider_failed_after_card_charge`, `provider_failed_balance_refunded`, `topup_failed_balance_refunded`), payment method/provider и refund status.
 - **[2026-05-08]** `GET /orders` для админки теперь принимает `reconciliation=needs_attention`, а `findAll`, `findById` и `findByUser` возвращают reconciliation marker вместе с заказом для ручного triage.
+- **[2026-05-19]** Follow-up hardening закрыл ещё один blocking partial-failure mode: если `purchaseEsim()` / `topupEsim()` уже вернул success, а локальная финализация (`markOrderCompleted`) упала, заказ больше не деградирует в ложный `FAILED` и balance-path не делает refund поверх уже выданной eSIM. Вместо этого issued snapshot сохраняется на `Order`, статус остаётся `PROCESSING`, а reconciliation category становится `issued_but_finalize_failed` или `topup_issued_but_finalize_failed`.
 
 ## Файлы
 
@@ -70,4 +71,8 @@
   - card -> `provider_failed_after_card_charge`;
   - balance purchase -> `provider_failed_balance_refunded`;
   - balance topup -> `topup_failed_balance_refunded`.
+- Provider-success/local-finalize-failure теперь имеет отдельный durable triage path:
+  - заказ остаётся `PROCESSING`, а не ложным `FAILED`;
+  - `providerOrderId` / `providerResponse` и при purchase также `iccid` / `qrCode` / `activationCode` сохраняются для recovery;
+  - balance purchase и balance top-up не делают automatic refund, если provider side-effect уже случился.
 - Ограничение baseline: это detection/triage path, а не автоматический retry worker и не отдельная reconciliation queue.

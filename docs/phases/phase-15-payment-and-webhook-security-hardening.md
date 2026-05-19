@@ -115,6 +115,12 @@
 - После implementation audit был дополнительно закрыт ещё один runtime defect уже в обычном CloudPayments widget flow:
   - `pay` webhook теперь использует durable DB claim на переход `order -> PAID`, и только победитель claim-а имеет право запускать `fulfillOrder()` и post-payment side effects;
   - admin reconciliation pagination для `needs_attention` больше не занижает backlog через длину текущей страницы.
+- **[2026-05-19]** Follow-up после audit findings:
+  - пункт про double-issue race закрыт через `PAID -> PROCESSING` claim в `OrdersService.fulfillOrder()`;
+  - отдельный blocking риск `provider success -> local finalize failure` теперь тоже закрыт без новой платформы:
+    - issued snapshot сохраняется на `Order` до/вместо полного `COMPLETED` transition;
+    - заказ остаётся в `PROCESSING` с reconciliation category `issued_but_finalize_failed` / `topup_issued_but_finalize_failed`;
+    - balance purchase и balance top-up не делают refund, если provider уже выполнил side-effect, а локальная финализация упала.
 
 ## Ссылки
 

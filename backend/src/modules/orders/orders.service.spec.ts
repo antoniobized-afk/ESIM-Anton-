@@ -1,4 +1,9 @@
-import { OrderStatus, TransactionStatus, TransactionType } from '@prisma/client';
+import {
+  OrderStatus,
+  PromoCodeSource,
+  TransactionStatus,
+  TransactionType,
+} from '@prisma/client';
 import { OrdersService } from './orders.service';
 
 function makeOrder(overrides: Record<string, unknown> = {}) {
@@ -21,6 +26,8 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
       email: 'user@example.com',
       telegramId: null,
       totalSpent: 10000,
+      pendingPromoCode: null,
+      referralLinkId: null,
       loyaltyLevel: {
         cashbackPercent: 10,
       },
@@ -28,6 +35,7 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
     },
     transactions: [],
     repeatChargeAttempt: null,
+    completionAccountingAppliedAt: null,
     ...overrides,
   };
 }
@@ -57,6 +65,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     },
     user: {
       update: jest.fn().mockResolvedValue(undefined),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findUnique: jest.fn().mockResolvedValue(null),
     },
     transaction: {
@@ -76,20 +85,28 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
         return arg({
           user: {
             findUnique: jest.fn().mockResolvedValue({ balance: 1000 }),
-            update: jest.fn().mockResolvedValue(undefined),
+            update: prisma.user.update,
+            updateMany: prisma.user.updateMany,
           },
           order: {
-            create: jest.fn().mockResolvedValue({
-              id: 'order_1',
-              userId: 'user_1',
-              status: OrderStatus.PAID,
-              product: { providerId: 'provider_plan_1', providerPrice: 10, isActive: true },
-              user: { id: 'user_1' },
-            }),
+            findUnique: prisma.order.findUnique,
+            create: prisma.order.create,
+            update: prisma.order.update,
+            updateMany: prisma.order.updateMany,
           },
           transaction: {
-            create: jest.fn().mockResolvedValue(undefined),
+            findFirst: prisma.transaction.findFirst,
+            create: prisma.transaction.create,
+            updateMany: prisma.transaction.updateMany,
           },
+          promoCodeRedemption: {
+            findUnique: jest.fn().mockResolvedValue(null),
+            update: jest.fn().mockResolvedValue(undefined),
+          },
+          promoCode: {
+            update: jest.fn().mockResolvedValue(undefined),
+          },
+          $queryRaw: jest.fn().mockResolvedValue([]),
         });
       }
       return Promise.all(arg);
@@ -133,8 +150,16 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
   };
 
   const promoCodesService = {
-    use: jest.fn(),
     validate: jest.fn(),
+    validateForReservation: jest.fn().mockResolvedValue({
+      valid: true,
+      promoId: 'promo_1',
+      code: 'PROMO10',
+      discountPercent: 10,
+    }),
+    reserveForOrder: jest.fn().mockResolvedValue(undefined),
+    consumeReservation: jest.fn().mockResolvedValue({ consumed: false, status: null }),
+    releaseReservation: jest.fn().mockResolvedValue({ released: false, status: null }),
   };
 
   const telegramNotification = {
@@ -223,7 +248,25 @@ describe('OrdersService', () => {
           completedAt: expect.any(Date),
         }),
       });
-      expect(usersService.updateBalance).toHaveBeenCalledWith('user_1', 10, 'bonusBalance');
+      expect(prisma.order.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'order_1',
+          status: OrderStatus.COMPLETED,
+          completionAccountingAppliedAt: null,
+        },
+        data: {
+          completionAccountingAppliedAt: expect.any(Date),
+        },
+      });
+      expect(usersService.updateBalance).not.toHaveBeenCalled();
+      expect(prisma.user.update).toHaveBeenNthCalledWith(1, {
+        where: { id: 'user_1' },
+        data: {
+          bonusBalance: {
+            increment: 10,
+          },
+        },
+      });
       expect(prisma.transaction.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           userId: 'user_1',
@@ -237,30 +280,189 @@ describe('OrdersService', () => {
           },
         }),
       });
-      expect(prisma.user.update).toHaveBeenCalledWith({
+      expect(prisma.user.update).toHaveBeenNthCalledWith(2, {
         where: { id: 'user_1' },
         data: { totalSpent: { increment: 100 } },
       });
-      expect(referralsService.awardReferralBonus).toHaveBeenCalledWith('ref_1', 100, 'order_1');
+      expect(referralsService.awardReferralBonus).toHaveBeenCalledWith(
+        'ref_1',
+        100,
+        'order_1',
+        null,
+        expect.anything(),
+      );
       expect(loyaltyService.updateUserLevel).toHaveBeenCalledWith('user_1');
       expect(loyaltyService.getEffectiveLevelForSpent).toHaveBeenCalledWith(10000);
       expect(emailService.sendEsimReady).toHaveBeenCalledTimes(1);
       expect(result.status).toBe(OrderStatus.COMPLETED);
     });
 
-    it('не роняет completed order, если referral awarding падает после выдачи eSIM', async () => {
+    it('не применяет completion accounting повторно, если marker уже выставлен', async () => {
+      const { service, prisma, referralsService, loyaltyService } = makeService();
+      prisma.order.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      const result = await (service as any).applyPurchaseCompletionEffects(
+        makeOrder({ status: OrderStatus.COMPLETED }),
+      );
+
+      expect(result).toEqual({ applied: false });
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+      expect(referralsService.awardReferralBonus).not.toHaveBeenCalled();
+      expect(loyaltyService.updateUserLevel).not.toHaveBeenCalled();
+    });
+
+    it('оставляет заказ в processing для reconciliation, если referral awarding падает после выдачи eSIM', async () => {
       const { service, prisma, referralsService, loyaltyService, emailService } = makeService();
       referralsService.awardReferralBonus.mockRejectedValue(new Error('referral unavailable'));
+      prisma.order.update
+        .mockResolvedValueOnce({
+          id: 'order_1',
+          status: OrderStatus.COMPLETED,
+          providerOrderId: 'provider-order-1',
+          providerResponse: { order_id: 'provider-order-1' },
+          iccid: 'iccid-1',
+          qrCode: 'qr',
+          activationCode: 'act-1',
+          completedAt: expect.any(Date),
+        })
+        .mockResolvedValueOnce({
+        ...makeOrder({
+          status: OrderStatus.PROCESSING,
+          providerOrderId: 'provider-order-1',
+          providerResponse: { order_id: 'provider-order-1' },
+          iccid: 'iccid-1',
+          qrCode: 'qr',
+          activationCode: 'act-1',
+          errorMessage:
+            'Provider issuance succeeded, local finalize failed: referral unavailable',
+          transactions: [
+            {
+              type: TransactionType.PAYMENT,
+              status: TransactionStatus.SUCCEEDED,
+              amount: 100,
+              paymentProvider: 'cloudpayments',
+              paymentMethod: 'card',
+              metadata: {},
+            },
+          ],
+        }),
+      });
+
+      await expect(service.fulfillOrder('order_1')).rejects.toThrow('referral unavailable');
+
+      expect(loyaltyService.updateUserLevel).not.toHaveBeenCalled();
+      expect(emailService.sendEsimReady).not.toHaveBeenCalled();
+      expect(prisma.order.update).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: { id: 'order_1' },
+          data: expect.objectContaining({
+            status: OrderStatus.PROCESSING,
+            errorMessage:
+              'Provider issuance succeeded, local finalize failed: referral unavailable',
+          }),
+        }),
+      );
+    });
+
+    it('не вызывает provider повторно, если заказ уже completed другим worker', async () => {
+      const { service, prisma, esimProviderService } = makeService();
+      prisma.order.updateMany.mockResolvedValueOnce({ count: 0 });
+      prisma.order.findUnique.mockResolvedValueOnce({
+        ...makeOrder({ status: OrderStatus.COMPLETED }),
+        status: OrderStatus.COMPLETED,
+      });
+      prisma.order.findUnique.mockResolvedValueOnce({
+        ...makeOrder({ status: OrderStatus.COMPLETED }),
+        status: OrderStatus.COMPLETED,
+      });
 
       const result = await service.fulfillOrder('order_1');
 
-      expect(result.status).toBe(OrderStatus.COMPLETED);
-      expect(loyaltyService.updateUserLevel).toHaveBeenCalledWith('user_1');
-      expect(emailService.sendEsimReady).toHaveBeenCalledTimes(1);
-      expect(prisma.order.update).toHaveBeenCalledTimes(1);
-      expect(prisma.order.update).not.toHaveBeenCalledWith(
+      expect(esimProviderService.purchaseEsim).not.toHaveBeenCalled();
+      expect(result?.status).toBe(OrderStatus.COMPLETED);
+    });
+
+    it('блокирует параллельный fulfillment, если другой worker уже перевёл заказ в processing', async () => {
+      const { service, prisma, esimProviderService } = makeService();
+      prisma.order.updateMany.mockResolvedValueOnce({ count: 0 });
+      prisma.order.findUnique.mockResolvedValueOnce({
+        ...makeOrder({ status: OrderStatus.PROCESSING }),
+        status: OrderStatus.PROCESSING,
+      });
+
+      await expect(service.fulfillOrder('order_1')).rejects.toThrow('Заказ уже обрабатывается');
+
+      expect(esimProviderService.purchaseEsim).not.toHaveBeenCalled();
+    });
+
+    it('сохраняет issued snapshot и оставляет заказ в processing, если локальная финализация падает после successful provider purchase', async () => {
+      const { service, prisma, esimProviderService } = makeService({
+        transactions: [
+          {
+            type: TransactionType.PAYMENT,
+            status: TransactionStatus.SUCCEEDED,
+            amount: 100,
+            paymentProvider: 'cloudpayments',
+            paymentMethod: 'card',
+            metadata: {},
+          },
+        ],
+      });
+      const finalizedFailure = new Error('db down during complete');
+      prisma.order.update.mockRejectedValueOnce(finalizedFailure).mockResolvedValueOnce({
+        ...makeOrder({
+          status: OrderStatus.PROCESSING,
+          providerOrderId: 'provider-order-1',
+          providerResponse: { order_id: 'provider-order-1' },
+          iccid: 'iccid-1',
+          qrCode: 'qr',
+          activationCode: 'act-1',
+          errorMessage: 'Provider issuance succeeded, local finalize failed: db down during complete',
+          transactions: [
+            {
+              type: TransactionType.PAYMENT,
+              status: TransactionStatus.SUCCEEDED,
+              amount: 100,
+              paymentProvider: 'cloudpayments',
+              paymentMethod: 'card',
+              metadata: {},
+            },
+          ],
+        }),
+      });
+
+      await expect(service.fulfillOrder('order_1')).rejects.toThrow('db down during complete');
+
+      expect(esimProviderService.purchaseEsim).toHaveBeenCalledTimes(1);
+      expect(prisma.order.update).toHaveBeenNthCalledWith(
+        1,
         expect.objectContaining({
-          data: expect.objectContaining({ status: OrderStatus.FAILED }),
+          where: { id: 'order_1' },
+          data: expect.objectContaining({
+            status: OrderStatus.COMPLETED,
+            providerOrderId: 'provider-order-1',
+            iccid: 'iccid-1',
+          }),
+        }),
+      );
+      expect(prisma.order.update).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: { id: 'order_1' },
+          data: expect.objectContaining({
+            status: OrderStatus.PROCESSING,
+            providerOrderId: 'provider-order-1',
+            iccid: 'iccid-1',
+            errorMessage:
+              'Provider issuance succeeded, local finalize failed: db down during complete',
+          }),
+        }),
+      );
+      expect(prisma.transaction.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: TransactionType.REFUND }),
         }),
       );
     });
@@ -307,6 +509,12 @@ describe('OrdersService', () => {
         code: 'SALE10',
         discountPercent: 10,
       });
+      promoCodesService.validateForReservation.mockResolvedValue({
+        valid: true,
+        promoId: 'promo_1',
+        code: 'SALE10',
+        discountPercent: 10,
+      });
       loyaltyService.getEffectiveLevelForSpent.mockResolvedValue({
         id: 'gold',
         name: 'Золото',
@@ -319,8 +527,7 @@ describe('OrdersService', () => {
         promoCode: 'sale10',
       });
 
-      expect(promoCodesService.validate).toHaveBeenCalledWith('SALE10');
-      expect(promoCodesService.use).not.toHaveBeenCalled();
+      expect(promoCodesService.validateForReservation).toHaveBeenCalledWith('SALE10');
       expect(prisma.order.create).not.toHaveBeenCalled();
       expect(quote).toEqual(
         expect.objectContaining({
@@ -331,6 +538,208 @@ describe('OrdersService', () => {
           loyaltyDiscount: 4.5,
           totalAmount: 85.5,
           isFree: false,
+        }),
+      );
+    });
+
+    it('consume-ит auto-promo reservation и очищает pendingPromoCode после successful purchase', async () => {
+      const { service, prisma } = makeService({
+        promoCode: 'PROMO10',
+        promoCodeSource: PromoCodeSource.REFERRAL_LINK_AUTO,
+        user: {
+          id: 'user_1',
+          email: 'user@example.com',
+          telegramId: null,
+          totalSpent: 10000,
+          pendingPromoCode: 'PROMO10',
+          referralLinkId: 'link_1',
+          loyaltyLevel: {
+            cashbackPercent: 10,
+          },
+          referredById: 'ref_1',
+        },
+      });
+
+      await service.fulfillOrder('order_1');
+
+      const promoCodesService = (service as any).promoCodesService;
+      expect(promoCodesService.consumeReservation).toHaveBeenCalledWith(
+        'order_1',
+        expect.anything(),
+      );
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'user_1',
+          pendingPromoCode: 'PROMO10',
+        },
+        data: {
+          pendingPromoCode: null,
+        },
+      });
+    });
+
+    it('очищает pendingPromoCode после successful first purchase с manual promo без reservation lifecycle', async () => {
+      const { service, prisma } = makeService({
+        promoCode: 'MANUAL10',
+        promoCodeSource: PromoCodeSource.MANUAL,
+        user: {
+          id: 'user_1',
+          email: 'user@example.com',
+          telegramId: null,
+          totalSpent: 10000,
+          pendingPromoCode: 'PARTNER10',
+          referralLinkId: 'link_1',
+          loyaltyLevel: {
+            cashbackPercent: 10,
+          },
+          referredById: 'ref_1',
+        },
+      });
+
+      await service.fulfillOrder('order_1');
+
+      const promoCodesService = (service as any).promoCodesService;
+      expect(promoCodesService.consumeReservation).toHaveBeenCalledWith(
+        'order_1',
+        expect.anything(),
+      );
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'user_1',
+          pendingPromoCode: { not: null },
+        },
+        data: {
+          pendingPromoCode: null,
+        },
+      });
+    });
+
+    it('create резервирует manual promo внутри order transaction вместо eager use()', async () => {
+      const { service, prisma } = makeService();
+      const promoCodesService = (service as any).promoCodesService;
+      promoCodesService.validateForReservation.mockResolvedValue({
+        valid: true,
+        promoId: 'promo_manual_1',
+        code: 'MANUAL10',
+        discountPercent: 10,
+      });
+
+      await service.create('user_1', 'product_1', 1, 0, undefined, 'manual10');
+
+      expect(prisma.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            promoCode: 'MANUAL10',
+            promoCodeSource: PromoCodeSource.MANUAL,
+          }),
+        }),
+      );
+      expect(promoCodesService.reserveForOrder).toHaveBeenCalledWith(
+        'MANUAL10',
+        'user_1',
+        'order_1',
+        'MANUAL',
+        expect.anything(),
+      );
+    });
+
+    it('не помечает order completed, если durable auto-promo consume падает', async () => {
+      const { service, prisma } = makeService({
+        promoCode: 'PROMO10',
+        promoCodeSource: PromoCodeSource.REFERRAL_LINK_AUTO,
+        user: {
+          id: 'user_1',
+          email: 'user@example.com',
+          telegramId: null,
+          totalSpent: 10000,
+          pendingPromoCode: 'PROMO10',
+          referralLinkId: 'link_1',
+          loyaltyLevel: {
+            cashbackPercent: 10,
+          },
+          referredById: 'ref_1',
+        },
+      });
+      const promoCodesService = (service as any).promoCodesService;
+      promoCodesService.consumeReservation.mockRejectedValueOnce(new Error('db down'));
+
+      await expect(service.fulfillOrder('order_1')).rejects.toThrow('db down');
+
+      expect(prisma.order.update).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: { id: 'order_1' },
+          data: expect.objectContaining({
+            status: OrderStatus.PROCESSING,
+            errorMessage: 'Provider issuance succeeded, local finalize failed: db down',
+          }),
+        }),
+      );
+    });
+
+    it('createWithBalance release-ит auto-promo reservation внутри failure transaction path', async () => {
+      const { service, usersService, esimProviderService } = makeService();
+      usersService.findById.mockResolvedValue({
+        id: 'user_1',
+        balance: 1000,
+        bonusBalance: 0,
+        totalSpent: 10000,
+        pendingPromoCode: 'PARTNER10',
+        loyaltyLevel: {
+          discount: 0,
+        },
+      });
+      const promoCodesService = (service as any).promoCodesService;
+      promoCodesService.validateForReservation.mockResolvedValue({
+        valid: true,
+        code: 'PARTNER10',
+        discountPercent: 10,
+      });
+      esimProviderService.purchaseEsim.mockRejectedValue(new Error('provider down'));
+
+      await expect(
+        service.createWithBalance('user_1', 'product_1'),
+      ).rejects.toThrow('Покупка не выполнена');
+
+      expect(promoCodesService.releaseReservation).toHaveBeenCalledWith(
+        'order_1',
+        expect.anything(),
+      );
+    });
+
+    it('createWithBalance не делает refund, если provider purchase уже успешен, а local finalize упал', async () => {
+      const { service, prisma } = makeService();
+      const finalizedFailure = new Error('db down during complete');
+      prisma.order.update.mockRejectedValueOnce(finalizedFailure).mockResolvedValueOnce({
+        ...makeOrder({
+          status: OrderStatus.PROCESSING,
+          providerOrderId: 'provider-order-1',
+          providerResponse: { order_id: 'provider-order-1' },
+          iccid: 'iccid-1',
+          qrCode: 'qr',
+          activationCode: 'act-1',
+          errorMessage: 'Provider issuance succeeded, local finalize failed: db down during complete',
+          transactions: [
+            {
+              type: TransactionType.PAYMENT,
+              status: TransactionStatus.SUCCEEDED,
+              amount: 100,
+              paymentProvider: 'balance',
+              paymentMethod: 'balance',
+              metadata: {},
+            },
+          ],
+        }),
+      });
+
+      await expect(service.createWithBalance('user_1', 'product_1')).rejects.toThrow(
+        'db down during complete',
+      );
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(2);
+      expect(prisma.transaction.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: TransactionType.REFUND }),
         }),
       );
     });
@@ -474,6 +883,46 @@ describe('OrdersService', () => {
       });
     });
 
+    it('create резервирует auto-promo без расхода usedCount до completion', async () => {
+      const { service, prisma, usersService } = makeService();
+      usersService.findById.mockResolvedValue({
+        id: 'user_1',
+        balance: 1000,
+        bonusBalance: 100,
+        totalSpent: 10000,
+        pendingPromoCode: 'PARTNER10',
+        loyaltyLevel: {
+          discount: 0,
+        },
+      });
+      const promoCodesService = (service as any).promoCodesService;
+      promoCodesService.validateForReservation.mockResolvedValue({
+        valid: true,
+        promoId: 'promo_partner_1',
+        code: 'PARTNER10',
+        discountPercent: 10,
+      });
+
+      const order = await service.create('user_1', 'product_1', 1, 0);
+
+      expect(promoCodesService.reserveForOrder).toHaveBeenCalledWith(
+        'PARTNER10',
+        'user_1',
+        'order_1',
+        'REFERRAL_LINK_AUTO',
+        expect.anything(),
+      );
+      expect(Number(order.promoDiscount)).toBe(10);
+      expect(prisma.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            promoCode: 'PARTNER10',
+            promoCodeSource: PromoCodeSource.REFERRAL_LINK_AUTO,
+          }),
+        }),
+      );
+    });
+
     it('учитывает pending bonus hold как уже зарезервированный и не даёт потратить его повторно', async () => {
       const { service, prisma, systemSettingsService } = makeService();
       systemSettingsService.getReferralSettings.mockResolvedValue({
@@ -538,16 +987,18 @@ describe('OrdersService', () => {
           },
         },
       });
-      expect(prisma.order.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: { in: ['order_stale'] },
-          status: OrderStatus.PENDING,
-        },
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: 'order_stale' },
         data: {
           status: OrderStatus.CANCELLED,
           errorMessage: 'Payment session expired',
         },
       });
+      const promoCodesService = (service as any).promoCodesService;
+      expect(promoCodesService.releaseReservation).toHaveBeenCalledWith(
+        'order_stale',
+        expect.anything(),
+      );
     });
 
     it('cancels stale pending orders even without bonus hold', async () => {
@@ -565,12 +1016,10 @@ describe('OrdersService', () => {
 
       await service.findByUser('user_1');
 
-      expect(prisma.transaction.updateMany).toHaveBeenCalledWith({
+      expect(prisma.transaction.updateMany).toHaveBeenNthCalledWith(1, {
         where: {
           orderId: 'order_card_stale',
-          type: {
-            in: [TransactionType.PAYMENT, TransactionType.BONUS_SPENT],
-          },
+          type: TransactionType.PAYMENT,
           status: TransactionStatus.PENDING,
         },
         data: {
@@ -580,11 +1029,21 @@ describe('OrdersService', () => {
           },
         },
       });
-      expect(prisma.order.updateMany).toHaveBeenCalledWith({
+      expect(prisma.transaction.updateMany).toHaveBeenNthCalledWith(2, {
         where: {
-          id: 'order_card_stale',
-          status: OrderStatus.PENDING,
+          orderId: 'order_card_stale',
+          type: TransactionType.BONUS_SPENT,
+          status: TransactionStatus.PENDING,
         },
+        data: {
+          status: TransactionStatus.CANCELLED,
+          metadata: {
+            releaseReason: 'payment_session_expired',
+          },
+        },
+      });
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: 'order_card_stale' },
         data: {
           status: OrderStatus.CANCELLED,
           errorMessage: 'Payment session expired',
@@ -594,6 +1053,59 @@ describe('OrdersService', () => {
   });
 
   describe('reconciliation visibility', () => {
+    it('includes issued-but-finalize-failed processing orders in needs_attention', async () => {
+      const { service, prisma } = makeService();
+      prisma.order.findMany.mockResolvedValue([
+        makeOrder({
+          id: 'order_processing_issue',
+          status: OrderStatus.PROCESSING,
+          providerOrderId: 'provider-order-1',
+          providerResponse: { order_id: 'provider-order-1' },
+          iccid: 'iccid-1',
+          qrCode: 'qr',
+          activationCode: 'act-1',
+          errorMessage: 'Provider issuance succeeded, local finalize failed: db down during complete',
+          transactions: [
+            {
+              type: TransactionType.PAYMENT,
+              status: TransactionStatus.SUCCEEDED,
+              amount: 100,
+              paymentProvider: 'cloudpayments',
+              paymentMethod: 'card',
+              metadata: {},
+            },
+          ],
+        }),
+      ]);
+      prisma.order.count.mockResolvedValue(1);
+
+      const result = await service.findAll({ reconciliation: 'needs_attention' });
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({ status: OrderStatus.PROCESSING }),
+            ]),
+          }),
+        }),
+      );
+      expect(result.data[0].reconciliation).toEqual({
+        needsAttention: true,
+        category: 'issued_but_finalize_failed',
+        refunded: false,
+        paymentProvider: 'cloudpayments',
+        paymentMethod: 'card',
+        paymentAmount: 100,
+        lastError: 'Provider issuance succeeded, local finalize failed: db down during complete',
+        repeatChargeAttemptId: null,
+        repeatChargeAttemptStatus: null,
+        providerReasonCode: null,
+        providerMessage: null,
+        ambiguousReason: null,
+      });
+    });
+
     it('includes ambiguous saved-card repeat charge orders in needs_attention', async () => {
       const { service, prisma } = makeService();
       prisma.order.findMany.mockResolvedValue([
@@ -628,8 +1140,8 @@ describe('OrdersService', () => {
 
       expect(prisma.order.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: {
-            OR: [
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
               {
                 status: OrderStatus.FAILED,
                 transactions: {
@@ -646,8 +1158,8 @@ describe('OrdersService', () => {
                   },
                 },
               },
-            ],
-          },
+            ]),
+          }),
         }),
       );
       expect(result.data).toHaveLength(1);

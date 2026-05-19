@@ -1,8 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useRef } from 'react'
 import { AuthUser, getToken, setToken as saveToken, getStoredUser, setStoredUser, clearToken, isTelegramEnvironment, hasTelegramLaunchParams } from '@/lib/auth'
-import { api } from '@/lib/api'
+import { api, referralsApi } from '@/lib/api'
 
 interface AuthContextValue {
   user: AuthUser | null
@@ -29,6 +29,8 @@ const AuthContext = createContext<AuthContextValue>({
   logout: () => {},
   refreshUser: async () => {},
 })
+
+const PENDING_REFERRAL_KEY = 'pendingReferralCode'
 
 export function AuthProvider({ children }: { children: any }) {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -153,6 +155,27 @@ export function AuthProvider({ children }: { children: any }) {
 
     init()
   }, [])
+
+  // One-shot: отправить pending referral code после авторизации
+  const referralAttemptedRef = useRef(false)
+  useEffect(() => {
+    if (!isBootstrapped || !user || referralAttemptedRef.current) return
+    const pendingCode = typeof window !== 'undefined'
+      ? localStorage.getItem(PENDING_REFERRAL_KEY)
+      : null
+    if (!pendingCode) return
+    referralAttemptedRef.current = true
+    referralsApi
+      .registerWebReferral(pendingCode)
+      .then(() => {
+        localStorage.removeItem(PENDING_REFERRAL_KEY)
+        return refreshUser()
+      })
+      .catch(() => {
+        // При transient ошибке сохраняем код для retry после следующего auth/bootstrap pass.
+        referralAttemptedRef.current = false
+      })
+  }, [isBootstrapped, user])
 
   const login = (newToken: string, newUser: AuthUser) => {
     setToken(newToken)

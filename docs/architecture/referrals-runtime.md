@@ -2,15 +2,19 @@
 
 > [Корневой документ wiki](../README.md)
 
-> Актуальный runtime-контракт referral flow после follow-up правок в `backend`, `client` и `bot`.
+> Актуальный runtime-контракт referral-модуля после Phase 16 (Partner Referral
+> Links). Source of truth — код и Prisma schema, затем этот документ.
 
 ## Scope
 
-Этот документ описывает только текущий runtime referral-модуля:
+Этот документ описывает текущий runtime referral-модуля:
 
-- referral registration из Telegram bot;
-- client-facing referral stats для `web` и `Telegram Mini App`;
-- admin/internal referral endpoints;
+- user-to-user referral registration (Telegram bot path);
+- **partner referral links** (Telegram + Web acquisition paths);
+- client-facing referral stats;
+- admin partner link CRUD и analytics;
+- referral bonus award с индивидуальным bonusPercent;
+- auto-promo reservation lifecycle;
 - spending referral bonus с учётом `minPayout`;
 - lifecycle bonus hold-ов в card payment flow.
 
@@ -20,125 +24,252 @@
 - `backend/src/modules/referrals/referrals.service.ts`
 - `backend/src/modules/orders/orders.service.ts`
 - `backend/src/modules/payments/cloudpayments.service.ts`
+- `backend/prisma/schema.prisma` — модели `ReferralLink`, `PromoCodeRedemption`
 - `client/app/referrals/page.tsx`
+- `client/app/ref/[code]/page.tsx`
 - `client/components/AuthProvider.tsx`
+- `admin/components/ReferralLinks.tsx`
 - `bot/src/api.ts`
 - `bot/src/commands/index.ts`
 
+## Prisma Contracts (Phase 16)
+
+### ReferralLink
+
+```
+ReferralLink {
+  id, code (unique), userId, label, bonusPercent (Decimal 5,2),
+  promoCodeId?, isActive, expiresAt?, createdAt, updatedAt
+  → user (OwnedReferralLinks), promoCode?, referredUsers[], transactions[]
+}
+```
+
+### Связи в User
+
+- `referralLinkId` — через какую партнёрскую ссылку пришёл пользователь
+- `pendingPromoCode` — auto-promo от партнёрской ссылки (first-purchase only)
+
+### Связи в Transaction
+
+- `referralLinkId` — для `REFERRAL_BONUS` через партнёрскую ссылку (analytics key)
+
+### PromoCodeRedemption
+
+```
+PromoCodeRedemption {
+  id, promoCodeId, userId, orderId? (unique), source (MANUAL | REFERRAL_LINK_AUTO),
+  status (RESERVED | CONSUMED | RELEASED), createdAt, consumedAt?, releasedAt?
+}
+```
+
+### Order.promoCodeSource
+
+- `MANUAL` — пользователь ввёл промокод руками
+- `REFERRAL_LINK_AUTO` — auto-promo от партнёрской ссылки
+
 ## API Surface
 
-### Client-facing route
+### Client-facing routes
 
-- `GET /referrals/me`
-- guard: `JwtUserGuard`
-- consumer: `client/app/referrals/page.tsx`
+| Route | Guard | Consumer |
+|-------|-------|----------|
+| `GET /referrals/me` | `JwtUserGuard` | `client/app/referrals/page.tsx` |
+| `POST /referrals/register-web` | `JwtUserGuard` | `client/components/AuthProvider.tsx` |
+| `GET /referrals/links/:code/public` | none (public) | `client/app/ref/[code]/page.tsx` |
 
-Response shape:
+**`GET /referrals/me`** response:
 
-- `referralCode: string`
-- `referralLink: string`
-- `referralsCount: number`
-- `totalEarnings: number`
-- `referralPercent: number`
-- `enabled: boolean`
-- `minPayout: number`
-- `referrals: Array<{ id, name, joinedAt, totalOrders, totalSpent }>`
+```
+{ referralCode, referralLink, referralsCount, totalEarnings,
+  referralPercent, enabled, minPayout,
+  referrals: [{ id, name, joinedAt, totalOrders, totalSpent }] }
+```
 
-`referralLink` строится на backend как `https://t.me/<bot>?start=ref_<referralCode>`. Клиент должен использовать это поле как source of truth, а не собирать ссылку самостоятельно.
+`referralLink` строится на backend. Клиент использует это поле as-is.
 
-### Admin/internal routes
+**`POST /referrals/register-web`** body: `{ referralCode: string }`
 
-- `GET /referrals/stats/:userId`
-- `GET /referrals/top`
-- guard: `JwtAdminGuard`
+One-shot привязка pending referral code к текущему JWT-пользователю.
+Вызывается из `AuthProvider` после auth bootstrap.
 
-Эти маршруты больше не являются client-facing и не должны использоваться пользовательским фронтом или ботом.
+**`GET /referrals/links/:code/public`** response:
+
+```
+{ isValid: boolean, promoCode: string | null }
+```
+
+Throttle: 30 req/min. Cache: `public, max-age=60`.
+Не отдаёт `userId`, `bonusPercent`, `label`, stats или internal ids.
 
 ### Bot registration route
 
-- `POST /referrals/register`
-- body: `{ userId, referralCode, telegramId }`
-- required header: `x-telegram-bot-token`
+| Route | Guard | Consumer |
+|-------|-------|----------|
+| `POST /referrals/register` | `ServiceTokenGuard` | `bot/src/api.ts` |
 
-Контракт intentionally не переведён на user JWT, чтобы не ломать bot flow. При этом endpoint больше не доверяет одному только `userId`:
+Body: `{ userId, referralCode, telegramId }`
 
-- контроллер проверяет `x-telegram-bot-token` против backend-configured bot token;
-- сервис сверяет `telegramId` из запроса с пользователем в БД;
-- повторная привязка блокируется через anti-rebind guard по `referredById`;
-- self-referral по-прежнему запрещён.
+### Admin routes
 
-## Web And Telegram Client Behavior
+| Route | Guard |
+|-------|-------|
+| `POST /referrals/links` | `JwtAdminGuard` |
+| `GET /referrals/links` | `JwtAdminGuard` |
+| `PATCH /referrals/links/:id` | `JwtAdminGuard` |
+| `GET /referrals/links/:id/stats` | `JwtAdminGuard` |
+| `GET /referrals/stats/:userId` | `JwtAdminGuard` |
+| `GET /referrals/top` | `JwtAdminGuard` |
 
-Страница `/referrals` должна жить через единый auth layer, а не через самостоятельную развилку по режимам.
+## Dual Lookup Order
 
-- `web`: используется существующий user JWT;
-- `Telegram Mini App`: auth bootstrap идёт через `AuthProvider` и WebApp auth flow;
-- если Telegram auth не завершился, страница показывает явное состояние `telegram-auth-required`, а не generic data-load error.
+`registerReferral(userId, referralCode, telegramId?)` использует фиксированный
+порядок поиска:
 
-Практический смысл:
+1. `ReferralLink.code` (case-insensitive через `normalizeLookupCode`)
+2. Fallback на `User.referralCode` (через `normalizeLegacyReferralCode`)
 
-- страница не должна сама собирать Telegram auth;
-- страница не должна ходить в admin/internal referral endpoints;
-- вся runtime загрузка referral stats должна идти только через `/referrals/me`.
+**Важно**: если `ReferralLink` найден но inactive/expired — fallback запрещён.
+Метод возвращает `null`, не пытаясь интерпретировать код как legacy user code.
 
-Тот же контракт относится к profile entrypoints и share-UI:
+## Immutable Attribution Policy
 
-- баннеры и CTA на клиенте не должны хардкодить `20%`, `₽300` или plain bot link;
-- любой share-flow должен использовать backend `referralLink` как canonical invite URL;
-- plain `https://t.me/<bot>` без `?start=ref_<code>` не считается рабочей referral-ссылкой, потому что bot registration живёт только на `/start ref_<code>`;
-- если реферальная программа выключена, профильный баннер должен вести пользователя на `/referrals` или показывать нейтральный статус, а не обещать несуществующие бонусы.
+- Если `User.referredById` уже заполнен → привязка блокируется
+- `pendingPromoCode` также не выдаётся уже привлечённому пользователю
+- Self-referral запрещён и для `User.referralCode`, и для `ReferralLink.userId`
+- Повторная смена referrer-а не поддерживается в V1
+
+## Partner Bonus Percent Flow
+
+`awardReferralBonus()` определяет процент по каскаду:
+
+1. `ReferralLink.bonusPercent` (если `Transaction.referralLinkId` → link exists)
+2. Fallback на глобальный `REFERRAL_BONUS_PERCENT` из `SystemSettings`
+
+`Transaction.referralLinkId` является индексируемым source of truth для
+партнёрских analytics. JSON metadata не используется как аналитический ключ.
+
+## Promo Reservation Lifecycle
+
+И manual promo, и auto-promo от партнёрской ссылки работают через единый reservation lifecycle:
+
+```
+User registered → pendingPromoCode set
+  ↓
+Order created with auto-promo → PromoCodeRedemption(RESERVED)
+  ↓
+  ├─ Order completed → CONSUMED, usedCount++, pendingPromoCode cleared if needed
+  ├─ Order failed/cancelled → RELEASED
+  └─ Order stale (cleanup) → RELEASED
+```
+
+**First-purchase semantics**:
+- Manual promo имеет приоритет: если пользователь вводит свой промокод на первую
+  успешную покупку, partner `pendingPromoCode` очищается без redemption
+- Failed/cancelled/stale order не очищает `pendingPromoCode`
+- `reserveForOrder` защищает capacity через serializable transaction
+- Manual promo больше не живёт на eager `usedCount++` до создания заказа: capacity reserve делается внутри order transaction, а consume идёт только на successful completion
+
+## Web Landing / AuthProvider Flow
+
+**Landing** (`/ref/[code]`):
+1. Fetch `GET /referrals/links/:code/public`
+2. Если `isValid=true` → сохранить `pendingReferralCode` в `localStorage`
+3. Показать Telegram deep link CTA + Web CTA
+4. Если `promoCode` есть → показать с copy action
+
+**AuthProvider** integration:
+1. One-shot `useEffect` с `useRef` guard после `isBootstrapped && user`
+2. Читает `pendingReferralCode` из `localStorage`
+3. Вызывает `POST /referrals/register-web { referralCode }`
+4. После success → `refreshUser()`
+5. Очищает `localStorage` только при success
+6. При transient error код остаётся в `localStorage`, а one-shot guard сбрасывается для retry после следующего auth/bootstrap pass
+7. Backend `registerReferral()` возвращает `200/null` для terminal no-op исходов (`already referred`, self-referral, inactive code, not found), поэтому success-path можно безопасно считать подтверждённым завершением one-shot без клиентской классификации статусов
+
+## Admin Analytics Surface
+
+**Список** (`GET /referrals/links`):
+- Использует Prisma `_count` для summary stats (без N+1)
+- Возвращает `{ data, meta: { total, page, limit, totalPages } }`
+
+**Detail stats** (`GET /referrals/links/:id/stats`):
+- `registrations` — count users с `referralLinkId`
+- `ordersCount` — completed primary orders (без top-up)
+- `commissionableRevenue` — sum `totalAmount` primary completed orders
+- `totalReferrerEarnings` — sum `REFERRAL_BONUS` transactions по `referralLinkId`
+- `referredUsers[]` — top 50 users с заказами
+
+**Commissionable revenue исключает top-up** (`parentOrderId IS NULL`).
+
+**Admin edit form contract**:
+- `promoCodeId: null` означает intentional disconnect promo link;
+- `expiresAt: null` означает сделать ссылку бессрочной;
+- `undefined` в PATCH payload означает “не менять поле”;
+- `bonusPercent` в UI хранится как строка формы и проходит explicit client-side validation до отправки;
+- stats modal использует отдельный open-state и игнорирует late responses после закрытия.
 
 ## Referral Bonus And `minPayout`
 
 `minPayout` относится только к referral bonus, а не ко всему `bonusBalance`.
 
-Правило расчёта:
-
 - cashback-часть бонусов доступна без порога;
-- referral-часть доступна только если доступный referral balance `>= minPayout`;
-- итоговый бонусный лимит для покупки = `cashback available + referral available above threshold`, с ограничением requested/useBonuses и total amount заказа.
-
-Исторический `bonusBalance` не мигрируется задним числом по отдельным кошелькам. Модель deliberately forward-only:
-
-- старые остатки не перераскладываются идеально;
-- начиная с новых spending/accrual операций, ledger обязан оставлять достаточный metadata trail;
-- для `BONUS_SPENT` metadata содержит как минимум `spentFromReferral` и `spentFromCashback`.
+- referral-часть доступна только если referral balance `>= minPayout`;
+- исторический `bonusBalance` forward-only: старые остатки не перераскладываются.
 
 ## Bonus Hold Lifecycle In Card Flow
 
-Card payment flow больше не должен сразу окончательно списывать бонусы.
-
-Текущая модель:
-
-1. При создании card order backend создаёт `BONUS_SPENT` hold со статусом `PENDING`.
-2. Пока hold активен, availability helper учитывает его и не даёт зарезервировать те же бонусы повторно.
-3. После успешной оплаты hold финализируется.
-4. На payment fail hold должен релизиться.
-5. Протухшие hold-ы очищаются автоматически вместе со связанными `PENDING` orders и pending payment transactions.
-
-Сейчас TTL для stale bonus hold-ов зафиксирован в `OrdersService` и составляет `30 минут`.
+1. При создании card order backend создаёт `BONUS_SPENT` hold (`PENDING`)
+2. Availability helper учитывает hold и блокирует повторное резервирование
+3. После успешной оплаты hold финализируется
+4. На payment fail hold релизится
+5. Stale hold-ы очищаются автоматически (TTL 30 минут в `OrdersService`)
 
 ## Integration Boundaries
 
-- Referral award boundary живёт в purchase completion flow, а не в payment handlers per provider.
-- Top-up flow intentionally не должен создавать referral reward side effects.
-- При изменении loyalty/referral логики нельзя дублировать award/release поведение в нескольких местах.
+- Referral award boundary живёт в purchase completion flow, а не в payment
+  handlers per provider
+- Top-up flow не создаёт referral reward side effects
+- Loyalty/referral логика не дублируется между payment handlers
+
+## Known Boundaries V1
+
+- `minPayout` остаётся глобальным; per-link payout threshold не входит в V1
+- Immutable attribution: смена referrer-а не поддерживается
+- `PromoCodeRedemptionSource` содержит только `REFERRAL_LINK_AUTO`
+- Top-up revenue не комиссионируемый; LTV с top-up — secondary metric
+- `ReferralLink.code` не может совпадать с `User.referralCode` (validation guard)
 
 ## Verification Baseline
 
-Минимальная проверка после изменений:
+Backend:
 
-- `backend`: `npx jest src/modules/referrals/referrals.service.spec.ts src/modules/referrals/referrals.controller.spec.ts src/modules/orders/orders.service.spec.ts --runInBand`
-- `backend`: `npx tsc --noEmit -p tsconfig.json`
-- `client`: `npx tsc --noEmit --incremental false`
-- `client`: `npx next lint`
+```bash
+npx jest src/modules/referrals/ --runInBand
+npx jest src/modules/orders/orders.service.spec.ts --runInBand
+npx jest src/modules/promo-codes/promo-codes.service.spec.ts --runInBand
+npx tsc --noEmit -p tsconfig.json
+```
 
-Runtime smoke before production:
+Client/Admin:
 
-- web login -> `/referrals`;
-- Telegram Mini App cold start -> `/referrals`;
-- `/start ref_<code>` для нового пользователя;
-- order with cashback-only bonus;
-- order with referral bonus below `minPayout`;
-- order with referral bonus above `minPayout`;
-- abandoned card payment -> retry after stale hold cleanup.
+```bash
+# client
+npx tsc --noEmit
+# admin
+npx tsc --noEmit
+```
+
+Runtime smoke:
+
+- web login → `/referrals`
+- Telegram Mini App cold start → `/referrals`
+- `/start ref_<userCode>` для нового пользователя (legacy path)
+- `/start ref_<partnerCode>` для нового пользователя (partner path)
+- web `/ref/<partnerCode>` → auth → verify attribution
+- admin create partner link → copy Telegram/Web URL
+- admin detail stats → verify registrations/revenue
+- order with partner bonus percent ≠ global percent
+- first purchase with auto-promo → CONSUMED
+- first purchase with manual promo → partner pending cleared
+- failed order → reservation RELEASED
+- abandoned card payment → retry after stale hold cleanup

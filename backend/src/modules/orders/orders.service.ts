@@ -1,6 +1,7 @@
 import {
   Injectable,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
@@ -18,6 +19,8 @@ import { LoyaltyService } from '../loyalty/loyalty.service';
 import {
   OrderStatus,
   Prisma,
+  PromoCodeRedemptionSource,
+  PromoCodeSource,
   RepeatChargeAttemptStatus,
   TransactionStatus,
   TransactionType,
@@ -66,6 +69,7 @@ type OrderPricingSnapshot = {
     balance: Prisma.Decimal | number;
     bonusBalance: Prisma.Decimal | number;
     totalSpent: Prisma.Decimal | number;
+    pendingPromoCode?: string | null;
   };
   product: {
     id: string;
@@ -76,7 +80,9 @@ type OrderPricingSnapshot = {
   };
   quantity: number;
   days: number;
+  promoId: string | null;
   promoCode: string | null;
+  promoCodeSource: PromoCodeSource | null;
   baseAmount: number;
   promoDiscount: number;
   loyaltyDiscount: number;
@@ -90,7 +96,9 @@ type ReconciliationCategory =
   | 'provider_failed_after_card_charge'
   | 'provider_failed_balance_refunded'
   | 'topup_failed_balance_refunded'
-  | 'repeat_charge_ambiguous';
+  | 'repeat_charge_ambiguous'
+  | 'issued_but_finalize_failed'
+  | 'topup_issued_but_finalize_failed';
 
 type ReconciliationSnapshot = {
   needsAttention: boolean;
@@ -106,6 +114,30 @@ type ReconciliationSnapshot = {
   providerMessage: string | null;
   ambiguousReason: string | null;
 };
+
+type PurchaseAccountingOrder = {
+  id: string;
+  userId: string;
+  totalAmount: Prisma.Decimal | number;
+  user: {
+    totalSpent: Prisma.Decimal | number;
+    referralLinkId?: string | null;
+    referredById?: string | null;
+  };
+};
+
+class FulfillmentFinalizeException extends Error {
+  readonly kind = 'fulfillment_finalize_failed';
+
+  constructor(
+    message: string,
+    readonly orderId: string,
+    readonly stage: 'purchase' | 'topup',
+  ) {
+    super(message);
+    this.name = 'FulfillmentFinalizeException';
+  }
+}
 
 @Injectable()
 export class OrdersService {
@@ -137,6 +169,11 @@ export class OrdersService {
     status: OrderStatus;
     parentOrderId?: string | null;
     errorMessage?: string | null;
+    providerOrderId?: string | null;
+    providerResponse?: Prisma.JsonValue | null;
+    iccid?: string | null;
+    qrCode?: string | null;
+    activationCode?: string | null;
     transactions?: Array<{
       type: TransactionType;
       status: TransactionStatus;
@@ -182,6 +219,35 @@ export class OrdersService {
         providerReasonCode: repeatChargeAttempt.providerReasonCode ?? null,
         providerMessage: repeatChargeAttempt.providerMessage ?? null,
         ambiguousReason: repeatChargeAttempt.ambiguousReason ?? null,
+      };
+    }
+
+    const providerIssuedLocallyUnfinalized =
+      order.status === OrderStatus.PROCESSING &&
+      Boolean(
+        order.providerOrderId ||
+          order.providerResponse ||
+          order.iccid ||
+          order.qrCode ||
+          order.activationCode,
+      );
+
+    if (providerIssuedLocallyUnfinalized && paymentTx) {
+      return {
+        needsAttention: true,
+        category: order.parentOrderId
+          ? 'topup_issued_but_finalize_failed'
+          : 'issued_but_finalize_failed',
+        refunded: false,
+        paymentProvider: paymentTx.paymentProvider ?? null,
+        paymentMethod: paymentTx.paymentMethod ?? null,
+        paymentAmount: Number(paymentTx.amount),
+        lastError: order.errorMessage ?? null,
+        repeatChargeAttemptId: repeatChargeAttempt?.id ?? null,
+        repeatChargeAttemptStatus: repeatChargeAttempt?.status ?? null,
+        providerReasonCode: repeatChargeAttempt?.providerReasonCode ?? null,
+        providerMessage: repeatChargeAttempt?.providerMessage ?? null,
+        ambiguousReason: repeatChargeAttempt?.ambiguousReason ?? null,
       };
     }
 
@@ -235,6 +301,11 @@ export class OrdersService {
     status: OrderStatus;
     parentOrderId?: string | null;
     errorMessage?: string | null;
+    providerOrderId?: string | null;
+    providerResponse?: Prisma.JsonValue | null;
+    iccid?: string | null;
+    qrCode?: string | null;
+    activationCode?: string | null;
     transactions?: Array<{
       type: TransactionType;
       status: TransactionStatus;
@@ -307,16 +378,63 @@ export class OrdersService {
     return this.loyaltyService.getEffectiveLevelForSpent(totalSpent);
   }
 
-  private async resolvePromoDiscountPercent(
-    promoCode: string,
-    consumePromoCode: boolean,
-  ): Promise<number> {
-    if (consumePromoCode) {
-      return this.promoCodesService.use(promoCode);
-    }
+  private isFulfillmentFinalizeError(error: unknown): error is FulfillmentFinalizeException {
+    return error instanceof FulfillmentFinalizeException;
+  }
 
-    const preview = await this.promoCodesService.validate(promoCode);
-    return Number(preview.discountPercent);
+  private buildIssuedEsimSnapshot(esimData: {
+    qr_code?: string | null;
+    iccid?: string | null;
+    activation_code?: string | null;
+    order_id?: string | null;
+    smdp_address?: string | null;
+  }): Prisma.OrderUpdateInput {
+    return {
+      qrCode: esimData.qr_code ?? null,
+      iccid: esimData.iccid ?? null,
+      activationCode: esimData.activation_code ?? null,
+      providerOrderId: esimData.order_id ?? null,
+      providerResponse: esimData as any,
+      ...(esimData.smdp_address ? { smdpAddress: esimData.smdp_address } : {}),
+    };
+  }
+
+  private async persistProviderIssuedButFinalizeFailed(
+    orderId: string,
+    stage: 'purchase' | 'topup',
+    data: Prisma.OrderUpdateInput,
+    cause: unknown,
+  ) {
+    const message = cause instanceof Error ? cause.message : 'Локальная финализация заказа не удалась';
+    const persisted = await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: OrderStatus.PROCESSING,
+        errorMessage: `Provider issuance succeeded, local finalize failed: ${message}`,
+        ...data,
+      },
+      include: {
+        product: true,
+        user: {
+          include: {
+            loyaltyLevel: true,
+            referredBy: true,
+          },
+        },
+        transactions: true,
+        repeatChargeAttempt: true,
+      },
+    });
+
+    this.logReconciliationSignal(persisted, stage);
+
+    throw new FulfillmentFinalizeException(message, orderId, stage);
+  }
+
+  private normalizePendingPromoCode(value?: string | null) {
+    if (!value) return null;
+    const normalized = value.trim().toUpperCase();
+    return normalized || null;
   }
 
   private async buildOrderPricingSnapshot(
@@ -327,7 +445,6 @@ export class OrdersService {
       useBonuses?: number;
       periodNum?: number;
       promoCode?: string;
-      consumePromoCode?: boolean;
     },
   ): Promise<OrderPricingSnapshot> {
     const quantity = opts?.quantity ?? 1;
@@ -347,13 +464,23 @@ export class OrdersService {
     let totalAmount = baseAmount;
     let promoDiscount = 0;
     let loyaltyDiscount = 0;
-    const normalizedPromoCode = opts?.promoCode?.trim().toUpperCase() || null;
+    let promoId: string | null = null;
+    const normalizedManualPromoCode = opts?.promoCode?.trim().toUpperCase() || null;
+    const normalizedPendingPromoCode = this.normalizePendingPromoCode(
+      user.pendingPromoCode,
+    );
+    const promoCodeSource = normalizedManualPromoCode
+      ? PromoCodeSource.MANUAL
+      : normalizedPendingPromoCode
+        ? PromoCodeSource.REFERRAL_LINK_AUTO
+        : null;
+    const normalizedPromoCode =
+      normalizedManualPromoCode ?? normalizedPendingPromoCode;
 
     if (normalizedPromoCode) {
-      const discountPercent = await this.resolvePromoDiscountPercent(
-        normalizedPromoCode,
-        opts?.consumePromoCode === true,
-      );
+      const promoPreview = await this.promoCodesService.validateForReservation(normalizedPromoCode);
+      promoId = promoPreview.promoId;
+      const discountPercent = Number(promoPreview.discountPercent);
       promoDiscount = (totalAmount * discountPercent) / 100;
       totalAmount -= promoDiscount;
     }
@@ -383,7 +510,9 @@ export class OrdersService {
       product,
       quantity,
       days,
+      promoId,
       promoCode: normalizedPromoCode,
+      promoCodeSource,
       baseAmount,
       promoDiscount,
       loyaltyDiscount,
@@ -440,32 +569,9 @@ export class OrdersService {
       },
     });
 
-    if (staleOrderIds.length > 0) {
-      await this.prisma.transaction.updateMany({
-        where: {
-          orderId: { in: staleOrderIds },
-          type: TransactionType.PAYMENT,
-          status: TransactionStatus.PENDING,
-        },
-        data: {
-          status: TransactionStatus.CANCELLED,
-          metadata: {
-            releaseReason: 'payment_session_expired',
-          } as any,
-        },
-      });
-
-      await this.prisma.order.updateMany({
-        where: {
-          id: { in: staleOrderIds },
-          status: OrderStatus.PENDING,
-        },
-        data: {
-          status: OrderStatus.CANCELLED,
-          errorMessage: PAYMENT_SESSION_EXPIRED_MESSAGE,
-        },
-      });
-    }
+    await Promise.all(
+      staleOrderIds.map((orderId) => this.expirePendingPaymentSession(orderId)),
+    );
   }
 
   isExpiredPaymentSessionOrder(order: {
@@ -485,9 +591,7 @@ export class OrdersService {
     await this.prisma.transaction.updateMany({
       where: {
         orderId,
-        type: {
-          in: [TransactionType.PAYMENT, TransactionType.BONUS_SPENT],
-        },
+        type: TransactionType.PAYMENT,
         status: TransactionStatus.PENDING,
       },
       data: {
@@ -498,16 +602,13 @@ export class OrdersService {
       },
     });
 
-    await this.prisma.order.updateMany({
-      where: {
-        id: orderId,
-        status: OrderStatus.PENDING,
-      },
-      data: {
-        status: OrderStatus.CANCELLED,
+    await this.markOrderCancelled(
+      orderId,
+      {
         errorMessage: PAYMENT_SESSION_EXPIRED_MESSAGE,
       },
-    });
+      'payment_session_expired',
+    );
   }
 
   private async cleanupExpiredPendingPaymentSessions(userId?: string) {
@@ -649,10 +750,11 @@ export class OrdersService {
     userId: string,
     orderId: string,
     bonusSpend: BonusSpendBreakdown,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
     if (bonusSpend.bonusToUse <= 0) return;
 
-    await this.prisma.transaction.create({
+    await client.transaction.create({
       data: {
         userId,
         orderId,
@@ -702,6 +804,26 @@ export class OrdersService {
 
   async releaseBonusSpendHold(orderId: string, reason = 'payment_failed') {
     await this.prisma.transaction.updateMany({
+      where: {
+        orderId,
+        type: TransactionType.BONUS_SPENT,
+        status: TransactionStatus.PENDING,
+      },
+      data: {
+        status: TransactionStatus.CANCELLED,
+        metadata: {
+          releaseReason: reason,
+        } as any,
+      },
+    });
+  }
+
+  private async releaseBonusSpendHoldWithClient(
+    client: Prisma.TransactionClient | PrismaService,
+    orderId: string,
+    reason = 'payment_failed',
+  ) {
+    await client.transaction.updateMany({
       where: {
         orderId,
         type: TransactionType.BONUS_SPENT,
@@ -770,6 +892,108 @@ export class OrdersService {
     ]);
   }
 
+  async markOrderPaid(
+    orderId: string,
+    data?: Partial<Prisma.OrderUpdateInput>,
+    client?: Prisma.TransactionClient | PrismaService,
+  ) {
+    return this.updateStatus(orderId, OrderStatus.PAID, data, client ?? this.prisma);
+  }
+
+  async markOrderCompleted(
+    orderId: string,
+    data?: Partial<Prisma.OrderUpdateInput>,
+    client?: Prisma.TransactionClient | PrismaService,
+  ) {
+    const run = async (tx: Prisma.TransactionClient | PrismaService) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: {
+          id: true,
+          userId: true,
+          promoCode: true,
+          promoCodeSource: true,
+          user: {
+            select: {
+              pendingPromoCode: true,
+            },
+          },
+        },
+      });
+
+      if (!order) {
+        throw new BadRequestException('Заказ не найден');
+      }
+
+      const updated = await this.updateStatus(orderId, OrderStatus.COMPLETED, data, tx);
+
+      if (order.promoCode) {
+        await this.promoCodesService.consumeReservation(order.id, tx);
+      }
+
+      if (
+        order.promoCodeSource === PromoCodeSource.REFERRAL_LINK_AUTO &&
+        order.promoCode
+      ) {
+        await tx.user.updateMany({
+          where: {
+            id: order.userId,
+            pendingPromoCode: order.promoCode,
+          },
+          data: {
+            pendingPromoCode: null,
+          },
+        });
+      }
+
+      if (
+        order.promoCodeSource === PromoCodeSource.MANUAL &&
+        order.promoCode &&
+        order.user.pendingPromoCode
+      ) {
+        await tx.user.updateMany({
+          where: {
+            id: order.userId,
+            pendingPromoCode: { not: null },
+          },
+          data: {
+            pendingPromoCode: null,
+          },
+        });
+      }
+
+      return updated;
+    };
+
+    if (client) {
+      return run(client);
+    }
+
+    return this.prisma.$transaction((tx) => run(tx));
+  }
+
+  async markOrderFailed(
+    orderId: string,
+    data?: Partial<Prisma.OrderUpdateInput>,
+    reason = 'payment_failed',
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    await this.releaseBonusSpendHoldWithClient(client, orderId, reason);
+    await this.promoCodesService.releaseReservation(orderId, client);
+    return this.updateStatus(orderId, OrderStatus.FAILED, data, client);
+  }
+
+  async markOrderCancelled(
+    orderId: string,
+    data?: Partial<Prisma.OrderUpdateInput>,
+    reason = 'cancelled',
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    await this.releaseBonusSpendHoldWithClient(client, orderId, reason);
+    await this.promoCodesService.releaseReservation(orderId, client);
+    return this.updateStatus(orderId, OrderStatus.CANCELLED, data, client);
+  }
+
   private isBalancePaidOrder(order: any) {
     return order.transactions?.some(
       (tx: any) =>
@@ -812,34 +1036,48 @@ export class OrdersService {
       useBonuses,
       periodNum,
       promoCode: promoCodeStr,
-      consumePromoCode: true,
     });
 
-    const order = await this.prisma.order.create({
-      data: {
-        userId,
-        productId,
-        quantity: pricing.quantity,
-        ...(pricing.product.isUnlimited && pricing.days > 1
-          ? { periodNum: pricing.days }
-          : {}),
-        productPrice: pricing.product.ourPrice,
-        discount: new Prisma.Decimal(pricing.loyaltyDiscount),
-        promoCode: pricing.promoCode,
-        promoDiscount: new Prisma.Decimal(pricing.promoDiscount),
-        bonusUsed: new Prisma.Decimal(pricing.bonusUsed),
-        totalAmount: new Prisma.Decimal(pricing.totalAmount),
-        status: OrderStatus.PENDING,
-      },
-      include: {
-        product: true,
-        user: true,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          userId,
+          productId,
+          quantity: pricing.quantity,
+          ...(pricing.product.isUnlimited && pricing.days > 1
+            ? { periodNum: pricing.days }
+            : {}),
+          productPrice: pricing.product.ourPrice,
+          discount: new Prisma.Decimal(pricing.loyaltyDiscount),
+          promoCode: pricing.promoCode,
+          promoCodeSource: pricing.promoCodeSource,
+          promoDiscount: new Prisma.Decimal(pricing.promoDiscount),
+          bonusUsed: new Prisma.Decimal(pricing.bonusUsed),
+          totalAmount: new Prisma.Decimal(pricing.totalAmount),
+          status: OrderStatus.PENDING,
+        },
+        include: {
+          product: true,
+          user: true,
+        },
+      });
+
+      await this.createBonusSpendHold(userId, order.id, pricing.bonusSpend, tx);
+
+      if (pricing.promoCode && pricing.promoCodeSource) {
+        await this.promoCodesService.reserveForOrder(
+          pricing.promoCode,
+          userId,
+          order.id,
+          pricing.promoCodeSource === PromoCodeSource.MANUAL
+            ? PromoCodeRedemptionSource.MANUAL
+            : PromoCodeRedemptionSource.REFERRAL_LINK_AUTO,
+          tx,
+        );
+      }
+
+      return order;
     });
-
-    await this.createBonusSpendHold(userId, order.id, pricing.bonusSpend);
-
-    return order;
   }
 
   async previewPricing(
@@ -856,7 +1094,6 @@ export class OrdersService {
 
     const pricing = await this.buildOrderPricingSnapshot(userId, productId, {
       ...opts,
-      consumePromoCode: false,
     });
 
     return {
@@ -897,49 +1134,82 @@ export class OrdersService {
     return order ? this.decorateOrderWithReconciliation(order) : order;
   }
 
-  private async applyPurchaseCompletionEffects(order: any) {
-    const currentLoyaltyLevel = await this.getEffectiveLoyaltyLevel(
-      Number(order.user.totalSpent),
-    );
+  private async applyPurchaseCompletionEffects(
+    order: PurchaseAccountingOrder,
+    client?: Prisma.TransactionClient | PrismaService,
+  ) {
+    const run = async (tx: Prisma.TransactionClient | PrismaService) => {
+      const claimed = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          status: OrderStatus.COMPLETED,
+          completionAccountingAppliedAt: null,
+        },
+        data: {
+          completionAccountingAppliedAt: new Date(),
+        },
+      });
 
-    if (currentLoyaltyLevel) {
-      const cashback =
-        (Number(order.totalAmount) * Number(currentLoyaltyLevel.cashbackPercent)) / 100;
-      await this.usersService.updateBalance(order.userId, cashback, 'bonusBalance');
-      if (cashback > 0) {
-        await this.prisma.transaction.create({
-          data: {
-            userId: order.userId,
-            orderId: order.id,
-            type: TransactionType.BONUS_ACCRUAL,
-            status: TransactionStatus.SUCCEEDED,
-            amount: new Prisma.Decimal(cashback),
-            metadata: {
-              source: 'loyalty_cashback',
-              cashbackPercent: Number(currentLoyaltyLevel.cashbackPercent),
-            },
-          },
-        });
+      if (claimed.count !== 1) {
+        return false;
       }
-    }
 
-    await this.prisma.user.update({
-      where: { id: order.userId },
-      data: { totalSpent: { increment: order.totalAmount } },
-    });
+      const currentLoyaltyLevel = await this.getEffectiveLoyaltyLevel(
+        Number(order.user.totalSpent),
+      );
 
-    if (order.user.referredById) {
-      try {
+      if (currentLoyaltyLevel) {
+        const cashback =
+          (Number(order.totalAmount) * Number(currentLoyaltyLevel.cashbackPercent)) / 100;
+
+        if (cashback > 0) {
+          await tx.user.update({
+            where: { id: order.userId },
+            data: {
+              bonusBalance: { increment: cashback },
+            },
+          });
+
+          await tx.transaction.create({
+            data: {
+              userId: order.userId,
+              orderId: order.id,
+              type: TransactionType.BONUS_ACCRUAL,
+              status: TransactionStatus.SUCCEEDED,
+              amount: new Prisma.Decimal(cashback),
+              metadata: {
+                source: 'loyalty_cashback',
+                cashbackPercent: Number(currentLoyaltyLevel.cashbackPercent),
+              },
+            },
+          });
+        }
+      }
+
+      await tx.user.update({
+        where: { id: order.userId },
+        data: { totalSpent: { increment: order.totalAmount } },
+      });
+
+      if (order.user.referredById) {
         await this.referralsService.awardReferralBonus(
           order.user.referredById,
           Number(order.totalAmount),
           order.id,
-        );
-      } catch (error: any) {
-        this.logger.error(
-          `Referral bonus failed for order ${order.id}: ${error.message}`,
+          order.user.referralLinkId ?? null,
+          tx,
         );
       }
+
+      return true;
+    };
+
+    const accountingApplied = client
+      ? await run(client)
+      : await this.prisma.$transaction(async (tx) => run(tx));
+
+    if (!accountingApplied) {
+      return { applied: false };
     }
 
     try {
@@ -949,6 +1219,8 @@ export class OrdersService {
         `Loyalty level recalculation failed for order ${order.id}: ${error.message}`,
       );
     }
+
+    return { applied: true };
   }
 
   /**
@@ -1003,8 +1275,13 @@ export class OrdersService {
   /**
    * Обновить статус заказа
    */
-  async updateStatus(orderId: string, status: OrderStatus, data?: Partial<Prisma.OrderUpdateInput>) {
-    return this.prisma.order.update({
+  private async updateStatus(
+    orderId: string,
+    status: OrderStatus,
+    data?: Partial<Prisma.OrderUpdateInput>,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    return client.order.update({
       where: { id: orderId },
       data: {
         status,
@@ -1012,6 +1289,37 @@ export class OrdersService {
         ...data,
       },
     });
+  }
+
+  private async claimOrderForFulfillment(orderId: string) {
+    const claimed = await this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        status: OrderStatus.PAID,
+      },
+      data: {
+        status: OrderStatus.PROCESSING,
+      },
+    });
+
+    if (claimed.count === 1) {
+      return true;
+    }
+
+    const freshOrder = await this.findById(orderId);
+    if (!freshOrder) {
+      throw new BadRequestException('Заказ не найден');
+    }
+
+    if (freshOrder.status === OrderStatus.COMPLETED) {
+      return false;
+    }
+
+    if (freshOrder.status === OrderStatus.PROCESSING) {
+      throw new ConflictException('Заказ уже обрабатывается');
+    }
+
+    throw new BadRequestException('Заказ еще не оплачен');
   }
 
   /**
@@ -1022,13 +1330,14 @@ export class OrdersService {
    * к ICCID родительского заказа.
    */
   async fulfillOrder(orderId: string) {
+    const claimed = await this.claimOrderForFulfillment(orderId);
+    if (!claimed) {
+      return this.findById(orderId);
+    }
+
     const order = await this.findById(orderId);
     if (!order) {
       throw new BadRequestException('Заказ не найден');
-    }
-
-    if (order.status !== OrderStatus.PAID) {
-      throw new BadRequestException('Заказ еще не оплачен');
     }
 
     await this.finalizeBonusSpendHold(orderId);
@@ -1045,22 +1354,21 @@ export class OrdersService {
         order.periodNum ?? undefined,
         Number(order.product.providerPrice) || undefined,
       );
+      const issuedEsimSnapshot = this.buildIssuedEsimSnapshot(esimData);
 
-      const updatedOrder = await this.updateStatus(orderId, OrderStatus.COMPLETED, {
-        qrCode: esimData.qr_code,
-        iccid: esimData.iccid,
-        activationCode: esimData.activation_code,
-        providerOrderId: esimData.order_id,
-        providerResponse: esimData as any,
-        // Сохраняем SMDP сразу — он нужен для построения LPA-ссылки активации
-        ...(esimData.smdp_address ? { smdpAddress: esimData.smdp_address } : {}),
-      });
-
+      let updatedOrder;
       try {
-        await this.applyPurchaseCompletionEffects(order);
+        updatedOrder = await this.prisma.$transaction(async (tx) => {
+          const completedOrder = await this.markOrderCompleted(orderId, issuedEsimSnapshot, tx);
+          await this.applyPurchaseCompletionEffects(order, tx);
+          return completedOrder;
+        });
       } catch (error: any) {
-        this.logger.error(
-          `Post-completion accounting failed for order ${order.id}: ${error.message}`,
+        await this.persistProviderIssuedButFinalizeFailed(
+          orderId,
+          'purchase',
+          issuedEsimSnapshot,
+          error,
         );
       }
 
@@ -1104,6 +1412,10 @@ export class OrdersService {
 
       return updatedOrder;
     } catch (error) {
+      if (this.isFulfillmentFinalizeError(error)) {
+        throw error;
+      }
+
       if (!this.isBalancePaidOrder(order)) {
         try {
           await this.restoreBonusSpend(orderId, error.message);
@@ -1115,7 +1427,7 @@ export class OrdersService {
       }
 
       // В случае ошибки помечаем заказ как FAILED
-      await this.updateStatus(orderId, OrderStatus.FAILED, {
+      await this.markOrderFailed(orderId, {
         errorMessage: error.message,
       });
 
@@ -1536,6 +1848,10 @@ export class OrdersService {
         const fulfilled = await this.fulfillOrder(created.id);
         return { order: fulfilled, paymentMethod: 'balance' as const };
       } catch (error: any) {
+        if (this.isFulfillmentFinalizeError(error)) {
+          throw error;
+        }
+
         // Откатываем списание с баланса при провале провайдера
         await this.prisma.$transaction([
           this.prisma.user.update({
@@ -1611,7 +1927,6 @@ export class OrdersService {
       useBonuses: opts?.useBonuses,
       periodNum: opts?.periodNum,
       promoCode: opts?.promoCode,
-      consumePromoCode: true,
     });
     const priceRub = pricing.totalAmount;
 
@@ -1660,6 +1975,7 @@ export class OrdersService {
           productPrice: pricing.product.ourPrice,
           discount: new Prisma.Decimal(pricing.loyaltyDiscount),
           promoCode: pricing.promoCode,
+          promoCodeSource: pricing.promoCodeSource,
           promoDiscount: new Prisma.Decimal(pricing.promoDiscount),
           bonusUsed: new Prisma.Decimal(pricing.bonusUsed),
           totalAmount: new Prisma.Decimal(priceRub),
@@ -1698,6 +2014,18 @@ export class OrdersService {
         });
       }
 
+      if (pricing.promoCode && pricing.promoCodeSource) {
+        await this.promoCodesService.reserveForOrder(
+          pricing.promoCode,
+          userId,
+          newOrder.id,
+          pricing.promoCodeSource === PromoCodeSource.MANUAL
+            ? PromoCodeRedemptionSource.MANUAL
+            : PromoCodeRedemptionSource.REFERRAL_LINK_AUTO,
+          tx,
+        );
+      }
+
       return newOrder;
     });
 
@@ -1705,37 +2033,41 @@ export class OrdersService {
       const fulfilled = await this.fulfillOrder(created.id);
       return { order: fulfilled, paymentMethod: 'balance' as const };
     } catch (error: any) {
+      if (this.isFulfillmentFinalizeError(error)) {
+        throw error;
+      }
+
       // Откатываем списание при провале провайдера
-      await this.prisma.$transaction([
-        this.prisma.user.update({
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
           where: { id: userId },
           data: { balance: { increment: new Prisma.Decimal(priceRub) } },
-        }),
-        ...(pricing.bonusUsed > 0
-          ? [
-              this.prisma.user.update({
-                where: { id: userId },
-                data: {
-                  bonusBalance: { increment: new Prisma.Decimal(pricing.bonusUsed) },
-                },
-              }),
-              this.prisma.transaction.create({
-                data: {
-                  userId,
-                  orderId: created.id,
-                  type: TransactionType.BONUS_ACCRUAL,
-                  status: TransactionStatus.SUCCEEDED,
-                  amount: new Prisma.Decimal(pricing.bonusUsed),
-                  metadata: {
-                    source: 'order_bonus_refund',
-                    restoredToReferral: pricing.bonusSpend.spentFromReferral,
-                    restoredToCashback: pricing.bonusSpend.spentFromCashback,
-                  } as any,
-                },
-              }),
-            ]
-          : []),
-        this.prisma.transaction.create({
+        });
+
+        if (pricing.bonusUsed > 0) {
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              bonusBalance: { increment: new Prisma.Decimal(pricing.bonusUsed) },
+            },
+          });
+          await tx.transaction.create({
+            data: {
+              userId,
+              orderId: created.id,
+              type: TransactionType.BONUS_ACCRUAL,
+              status: TransactionStatus.SUCCEEDED,
+              amount: new Prisma.Decimal(pricing.bonusUsed),
+              metadata: {
+                source: 'order_bonus_refund',
+                restoredToReferral: pricing.bonusSpend.spentFromReferral,
+                restoredToCashback: pricing.bonusSpend.spentFromCashback,
+              } as any,
+            },
+          });
+        }
+
+        await tx.transaction.create({
           data: {
             userId,
             orderId: created.id,
@@ -1745,12 +2077,15 @@ export class OrdersService {
             paymentProvider: 'balance',
             metadata: { purpose: 'esim_purchase_refund', reason: error.message } as any,
           },
-        }),
-        this.prisma.order.update({
-          where: { id: created.id },
-          data: { status: OrderStatus.FAILED, errorMessage: error.message },
-        }),
-      ]);
+        });
+
+        await this.markOrderFailed(
+          created.id,
+          { errorMessage: error.message },
+          'provider_failed_after_balance_purchase',
+          tx,
+        );
+      });
       throw new BadRequestException(
         `Покупка не выполнена: ${error.message}. Деньги возвращены на баланс.`,
       );
@@ -1767,7 +2102,7 @@ export class OrdersService {
       select: { iccid: true, userId: true },
     });
     if (!parent || !parent.iccid) {
-      await this.updateStatus(order.id, OrderStatus.FAILED, {
+      await this.markOrderFailed(order.id, {
         errorMessage: 'У родительского заказа нет ICCID',
       });
       throw new BadRequestException('Родительская eSIM не найдена');
@@ -1779,13 +2114,25 @@ export class OrdersService {
         order.topupPackageCode,
         `topup_${order.id}_${Date.now()}`,
       );
-
-      const updated = await this.updateStatus(order.id, OrderStatus.COMPLETED, {
+      const topupSnapshot: Prisma.OrderUpdateInput = {
         providerOrderId: result.orderNo,
         providerResponse: result as any,
-        // Сбрасываем кэш usage у родителя — чтобы при следующем запросе мы
-        // пошли к провайдеру за свежими цифрами с учётом нового объёма.
-      });
+      };
+
+      let updated;
+      try {
+        updated = await this.markOrderCompleted(order.id, topupSnapshot);
+      } catch (finalizeError) {
+        await this.persistProviderIssuedButFinalizeFailed(
+          order.id,
+          'topup',
+          topupSnapshot,
+          finalizeError,
+        );
+      }
+
+      // Сбрасываем кэш usage у родителя — чтобы при следующем запросе мы
+      // пошли к провайдеру за свежими цифрами с учётом нового объёма.
       await this.prisma.order.update({
         where: { id: order.parentOrderId },
         data: {
@@ -1816,7 +2163,11 @@ export class OrdersService {
 
       return updated;
     } catch (error: any) {
-      await this.updateStatus(order.id, OrderStatus.FAILED, {
+      if (this.isFulfillmentFinalizeError(error)) {
+        throw error;
+      }
+
+      await this.markOrderFailed(order.id, {
         errorMessage: error.message,
       });
       this.logReconciliationSignal(
@@ -1864,6 +2215,16 @@ export class OrdersService {
       ...(reconciliation === 'needs_attention'
         ? {
             OR: [
+              {
+                status: OrderStatus.PROCESSING,
+                OR: [
+                  { providerOrderId: { not: null } },
+                  { providerResponse: { not: Prisma.JsonNull } },
+                  { iccid: { not: null } },
+                  { qrCode: { not: null } },
+                  { activationCode: { not: null } },
+                ],
+              },
               {
                 status: OrderStatus.FAILED,
                 transactions: {
@@ -1945,10 +2306,12 @@ export class OrdersService {
       );
     }
 
-    await this.releaseBonusSpendHold(orderId, 'admin_cancel');
-
-    return this.updateStatus(orderId, OrderStatus.CANCELLED, {
-      errorMessage: 'Отменён администратором',
-    });
+    return this.markOrderCancelled(
+      orderId,
+      {
+        errorMessage: 'Отменён администратором',
+      },
+      'admin_cancel',
+    );
   }
 }

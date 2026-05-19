@@ -61,7 +61,7 @@ await prisma.user.updateMany({
 
 ## Статус
 
-- `planned`
+- `completed`
 
 ## Журнал изменений
 
@@ -69,6 +69,16 @@ await prisma.user.updateMany({
 
 - Шаг выделен отдельно от API layer, чтобы сначала стабилизировать domain
   contract.
+- Локальная миграция Phase 16 применена через `npx prisma migrate dev`; корневой
+  `db:migrate` исправлен на рабочий `pnpm --filter backend exec prisma migrate dev`.
+- В `ReferralsService` добавлены CRUD/domain methods для `ReferralLink`,
+  dual-lookup registration (`ReferralLink.code -> User.referralCode`) и atomic
+  attribution через `user.updateMany({ where: { referredById: null } ... })`.
+- Partner path теперь сохраняет `referralLinkId` и optional `pendingPromoCode`,
+  а inactive/expired link возвращает `null` без fallback на `User.referralCode`.
+- В `referrals.service.spec.ts` добавлены кейсы на partner registration,
+  inactive link, self-referral, `updateMany.count = 0` и cross-table validation
+  для `ReferralLink.code`.
 
 ## Файлы
 

@@ -55,7 +55,7 @@
 
 ## Статус
 
-- `planned`
+- `done`
 
 ## Журнал изменений
 
@@ -63,6 +63,15 @@
 
 - Шаг выделен отдельно, потому что документация referral runtime является
   обязательной частью delivery, а не post-factum cleanup.
+- **Верификация**: backend 29/29 tests, backend/client/admin `tsc --noEmit` clean.
+- **`referrals-runtime.md`**: полностью переписан под Phase 16. Документирует
+  Prisma contracts, API surface, dual lookup, immutable attribution, partner
+  bonus percent flow, promo reservation lifecycle, web landing/AuthProvider
+  flow, admin analytics, known V1 boundaries.
+- **`module-map.md`**: добавлены `ReferralLink`, `PromoCodeRedemption`,
+  admin `referral-links`, client `/ref/[code]`, обновлён referrals module.
+- **`gotchas.md`**: добавлена gotcha про stale Prisma Client P6001.
+- Phase 16 journal финализирован.
 
 ## Файлы
 

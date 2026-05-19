@@ -566,16 +566,15 @@ export class PaymentsService {
         },
       });
 
-      await tx.order.update({
-        where: { id: params.orderId },
-        data: {
-          status: OrderStatus.CANCELLED,
+      await this.ordersService.markOrderCancelled(
+        params.orderId,
+        {
           errorMessage: params.providerMessage,
         },
-      });
+        'saved_card_fallback',
+        tx,
+      );
     });
-
-    await this.ordersService.releaseBonusSpendHold(params.orderId, 'saved_card_fallback');
   }
 
   private async markRepeatChargeAmbiguous(params: {
@@ -634,16 +633,15 @@ export class PaymentsService {
         },
       });
 
-      await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: OrderStatus.CANCELLED,
+      await this.ordersService.markOrderCancelled(
+        orderId,
+        {
           errorMessage: reason,
         },
-      });
+        'saved_card_fallback',
+        tx,
+      );
     });
-
-    await this.ordersService.releaseBonusSpendHold(orderId, 'saved_card_fallback');
   }
 
   async chargeOrderWithSavedCard(
@@ -1400,7 +1398,7 @@ export class PaymentsService {
     });
 
     // Обновляем статус заказа
-    await this.ordersService.updateStatus(transaction.orderId, OrderStatus.PAID);
+    await this.ordersService.markOrderPaid(transaction.orderId);
 
     this.logger.log(
       `✅ Платеж подтверждён: InvId=${this.maskValue(InvId)} Order=${this.maskValue(transaction.orderId, 6)}`,

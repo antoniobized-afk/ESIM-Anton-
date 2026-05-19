@@ -138,11 +138,24 @@ export class UsersService {
   /**
    * Получить всех пользователей (для админки)
    */
-  async findAll(page = 1, limit = 20) {
+  async findAll(page = 1, limit = 20, search?: string) {
     const skip = (page - 1) * limit;
+
+    const where: Prisma.UserWhereInput = {};
+    if (search?.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { firstName: { contains: q, mode: 'insensitive' } },
+        { username: { contains: q, mode: 'insensitive' } },
+        { email: { contains: q, mode: 'insensitive' } },
+        { phone: { contains: q, mode: 'insensitive' } },
+        { id: { startsWith: q } },
+      ];
+    }
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
+        where,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
@@ -150,7 +163,7 @@ export class UsersService {
           loyaltyLevel: true,
         },
       }),
-      this.prisma.user.count(),
+      this.prisma.user.count({ where }),
     ]);
 
     return {

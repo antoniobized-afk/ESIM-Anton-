@@ -112,8 +112,9 @@
   - `RESERVED` при создании заказа;
   - `CONSUMED` только после successful completion;
   - `RELEASED` при fail/cancel/stale.
-- `PromoCodeRedemptionSource` в V1 содержит только `REFERRAL_LINK_AUTO`; manual
-  promo flow остаётся на legacy `PromoCodesService.use()` без redemption ledger.
+- `PromoCodeRedemptionSource` теперь покрывает и `MANUAL`, и
+  `REFERRAL_LINK_AUTO`; manual promo не должен оставаться на отдельном eager
+  `usedCount++` path без redemption ledger.
 - `reserveForOrder` обязан защищать capacity через row lock / serializable
   transaction. Проверка `usedCount + RESERVED` без lock не считается достаточной.
 - Order status side effects не размазывать по прямым `updateStatus()` вызовам:
@@ -200,6 +201,16 @@
   - centralized order transition helpers для promo release/consume;
   - preflight перед raw partial unique index;
   - immutable attribution для уже привлечённых пользователей.
+- **Steps 01–04** (prior session): schema, migrations, domain logic, bonus
+  award, promo reservation, backend API, DTO validation, analytics queries.
+  29 backend tests, `tsc --noEmit` clean.
+- **Step 05** (current session): client landing `/ref/[code]`,
+  AuthProvider one-shot referral, admin `ReferralLinks.tsx` (table, create/edit
+  modal, stats modal), admin nav item. Client + admin `tsc --noEmit` clean.
+- **Step 06** (current session): end-to-end verification (29/29 tests,
+  backend/client/admin typecheck clean), `referrals-runtime.md` rewritten as
+  source of truth, `module-map.md` updated, `gotchas.md` — stale Prisma Client
+  P6001 documented, phase journal finalized.
 
 ## Ссылки
 

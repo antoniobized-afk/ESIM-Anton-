@@ -17,7 +17,7 @@
     "start:all": "concurrently \"pnpm --filter backend start\" \"pnpm --filter admin start\" \"pnpm --filter bot start\"",
     "lint": "pnpm --parallel lint",
     "test": "pnpm --parallel test",
-    "db:migrate": "pnpm --filter backend prisma migrate dev",
+    "db:migrate": "pnpm --filter backend exec prisma migrate dev",
     "db:studio": "pnpm --filter backend prisma studio"
   },
   "devDependencies": {

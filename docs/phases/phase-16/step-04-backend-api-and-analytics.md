@@ -67,7 +67,7 @@
 
 ## Статус
 
-- `planned`
+- `done`
 
 ## Журнал изменений
 
@@ -75,6 +75,20 @@
 
 - Шаг отделён от UI: сначала API contract и analytics queries, потом
   admin/client surfaces.
+- Реализованы DTO с `class-validator`: `CreateReferralLinkDto`,
+  `UpdateReferralLinkDto`, `ReferralLinksQueryDto`, `RegisterWebReferralDto`.
+- Контроллер расширен на 6 новых routes:
+  - `POST /referrals/links` (JwtAdminGuard);
+  - `GET /referrals/links` (JwtAdminGuard);
+  - `PATCH /referrals/links/:id` (JwtAdminGuard);
+  - `GET /referrals/links/:id/stats` (JwtAdminGuard);
+  - `GET /referrals/links/:code/public` (без JWT, `@Throttle 30/min`,
+    `Cache-Control: public, max-age=60`);
+  - `POST /referrals/register-web` (JwtUserGuard).
+- `registerReferral` уже поддерживает web path через optional `telegramId`.
+- Добавлены 7 targeted unit tests: public info (4), links list (2),
+  web registration (1).
+- Верификация: 47/47 tests passed, `tsc --noEmit` чист.
 
 ## Файлы
 

@@ -8,63 +8,69 @@ datasource db {
 }
 
 model User {
-  id             String              @id @default(cuid())
-  telegramId     BigInt?             @unique
-  username       String?
-  firstName      String?
-  lastName       String?
-  phone          String?             @unique
-  email          String?             @unique
-  authProvider   String?             // 'telegram' | 'phone' | 'google' | 'yandex' | 'vk'
-  providerId     String?             // provider-specific ID
-  balance        Decimal             @default(0) @db.Decimal(10, 2)
-  bonusBalance   Decimal             @default(0) @db.Decimal(10, 2)
-  referralCode   String              @unique @default(cuid())
-  referredById   String?
-  loyaltyLevelId String?
-  totalSpent     Decimal             @default(0) @db.Decimal(10, 2)
-  isBlocked      Boolean             @default(false)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  utmCampaign    String?
-  utmMedium      String?
-  utmSource      String?
-  notifications  Notification[]
-  orders         Order[]
-  repeatChargeAttempts RepeatChargeAttempt[]
-  transactions   Transaction[]
-  pushSubs       PushSubscription[]
+  id                      String                   @id @default(cuid())
+  telegramId              BigInt?                  @unique
+  username                String?
+  firstName               String?
+  lastName                String?
+  phone                   String?                  @unique
+  email                   String?                  @unique
+  authProvider            String? // 'telegram' | 'phone' | 'google' | 'yandex' | 'vk'
+  providerId              String? // provider-specific ID
+  balance                 Decimal                  @default(0) @db.Decimal(10, 2)
+  bonusBalance            Decimal                  @default(0) @db.Decimal(10, 2)
+  referralCode            String                   @unique @default(cuid())
+  referredById            String?
+  referralLinkId          String?
+  pendingPromoCode        String?
+  loyaltyLevelId          String?
+  totalSpent              Decimal                  @default(0) @db.Decimal(10, 2)
+  isBlocked               Boolean                  @default(false)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  utmCampaign             String?
+  utmMedium               String?
+  utmSource               String?
+  notifications           Notification[]
+  orders                  Order[]
+  repeatChargeAttempts    RepeatChargeAttempt[]
+  transactions            Transaction[]
+  referralLinks           ReferralLink[]           @relation("OwnedReferralLinks")
+  referralLink            ReferralLink?            @relation("ReferredViaLink", fields: [referralLinkId], references: [id], onDelete: Restrict)
+  promoCodeRedemptions    PromoCodeRedemption[]
+  pushSubs                PushSubscription[]
   cloudPaymentsCardTokens CloudPaymentsCardToken[]
-  loyaltyLevel   LoyaltyLevel?       @relation(fields: [loyaltyLevelId], references: [id])
-  referredBy     User?               @relation("Referrals", fields: [referredById], references: [id])
-  referrals      User[]              @relation("Referrals")
+  loyaltyLevel            LoyaltyLevel?            @relation(fields: [loyaltyLevelId], references: [id])
+  referredBy              User?                    @relation("Referrals", fields: [referredById], references: [id])
+  referrals               User[]                   @relation("Referrals")
 
   @@index([telegramId])
   @@index([referralCode])
+  @@index([referralLinkId])
   @@index([authProvider, providerId])
   @@map("users")
 }
 
 model CloudPaymentsCardToken {
-  id                   String   @id @default(cuid())
+  id                   String                @id @default(cuid())
   userId               String
   accountId            String
   cloudPaymentsToken   String
-  tokenFingerprint     String   @unique
+  tokenFingerprint     String                @unique
   cardMask             String
   cardBrand            String?
   expMonth             Int?
   expYear              Int?
-  isActive             Boolean  @default(true)
+  isActive             Boolean               @default(true)
   consentCapturedAt    DateTime?
   sourceTransactionId  String?
   sourceInvoiceId      String?
   lastUsedAt           DateTime?
   deactivatedAt        DateTime?
   deactivationReason   String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   repeatChargeAttempts RepeatChargeAttempt[]
 
   @@index([userId, isActive])
@@ -117,9 +123,9 @@ model EsimProduct {
   name          String
   description   String?
   dataAmount    String
-  validityDays  Int      // Для Daily Unlimited = срок действия (180 дней), для обычных = duration
-  duration      Int?     // Для Daily Unlimited = 1 (в день), для обычных = validityDays
-  speed         String?  // Ограничение скорости после лимита (384 Kbps, 1 Mbps и т.д.)
+  validityDays  Int // Для Daily Unlimited = срок действия (180 дней), для обычных = duration
+  duration      Int? // Для Daily Unlimited = 1 (в день), для обычных = validityDays
+  speed         String? // Ограничение скорости после лимита (384 Kbps, 1 Mbps и т.д.)
   providerPrice Decimal  @db.Decimal(10, 2)
   ourPrice      Decimal  @db.Decimal(10, 2)
   providerId    String
@@ -147,58 +153,61 @@ model EsimProduct {
 }
 
 model Order {
-  id               String        @id @default(cuid())
-  userId           String
-  productId        String
-  status           OrderStatus   @default(PENDING)
-  quantity         Int           @default(1)
-  periodNum        Int?
-  productPrice     Decimal       @db.Decimal(10, 2)
-  discount         Decimal       @default(0) @db.Decimal(10, 2)
-  promoCode        String?
-  promoDiscount    Decimal       @default(0) @db.Decimal(10, 2)
-  bonusUsed        Decimal       @default(0) @db.Decimal(10, 2)
-  totalAmount      Decimal       @db.Decimal(10, 2)
-  qrCode           String?
-  iccid            String?
-  activationCode   String?
-  providerOrderId  String?
-  providerResponse Json?
-  errorMessage     String?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  completedAt      DateTime?
+  id                   String               @id @default(cuid())
+  userId               String
+  productId            String
+  status               OrderStatus          @default(PENDING)
+  quantity             Int                  @default(1)
+  periodNum            Int?
+  productPrice         Decimal              @db.Decimal(10, 2)
+  discount             Decimal              @default(0) @db.Decimal(10, 2)
+  promoCode            String?
+  promoCodeSource      PromoCodeSource?
+  promoDiscount        Decimal              @default(0) @db.Decimal(10, 2)
+  bonusUsed            Decimal              @default(0) @db.Decimal(10, 2)
+  totalAmount          Decimal              @db.Decimal(10, 2)
+  qrCode               String?
+  iccid                String?
+  activationCode       String?
+  providerOrderId      String?
+  providerResponse     Json?
+  errorMessage         String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  completedAt          DateTime?
+  completionAccountingAppliedAt DateTime?
   // Кэш последнего известного использования трафика для активной eSIM (в байтах)
-  lastUsageBytes        BigInt?
+  lastUsageBytes       BigInt?
   // Кэш общего объёма трафика (приходит у провайдера вместе с usage),
   // нужен чтобы шкала прогресса работала и без свежего запроса к eSIM Access
-  lastUsageTotalBytes   BigInt?
+  lastUsageTotalBytes  BigInt?
   // Когда usage был последний раз обновлён (для решения, нужно ли перезапрашивать у провайдера)
-  lastUsageAt           DateTime?
+  lastUsageAt          DateTime?
   // Когда было отправлено последнее уведомление о низком остатке — чтобы не спамить
-  lowTrafficNotifiedAt  DateTime?
+  lowTrafficNotifiedAt DateTime?
   // Когда было отправлено уведомление об истечении срока — чтобы не спамить
-  expiryNotifiedAt      DateTime?
+  expiryNotifiedAt     DateTime?
   // Кэш статуса eSIM, нормализованный по EsimStatus enum (см. esim-status.ts)
   // Возможные значения: NOT_INSTALLED | ACTIVE | EXPIRED | USED_UP | CANCELLED | UNKNOWN
-  esimStatus            String?
+  esimStatus           String?
   // SM-DP+ адрес от провайдера (нужен для построения LPA-строки и Universal Link Apple)
-  smdpAddress           String?
+  smdpAddress          String?
   // Когда eSIM была впервые активирована (effectiveTime от провайдера)
-  activatedAt           DateTime?
+  activatedAt          DateTime?
   // Когда eSIM истекает (expiredTime от провайдера) — приоритетнее createdAt+validityDays
-  expiresAt             DateTime?
+  expiresAt            DateTime?
   // Top-up flow: если этот заказ — пополнение существующей eSIM, тут лежит id
   // родительского заказа (по которому изначально куплена eSIM, к этому ICCID идёт topup)
-  parentOrderId         String?
-  parentOrder           Order?   @relation("OrderTopups", fields: [parentOrderId], references: [id])
-  topups                Order[]  @relation("OrderTopups")
+  parentOrderId        String?
+  parentOrder          Order?               @relation("OrderTopups", fields: [parentOrderId], references: [id])
+  topups               Order[]              @relation("OrderTopups")
   // packageCode провайдера, выбранный для пополнения (при выдаче будет передан в /esim/topup)
-  topupPackageCode      String?
-  product          EsimProduct   @relation(fields: [productId], references: [id])
-  user             User          @relation(fields: [userId], references: [id])
-  repeatChargeAttempt RepeatChargeAttempt?
-  transactions     Transaction[]
+  topupPackageCode     String?
+  product              EsimProduct          @relation(fields: [productId], references: [id])
+  user                 User                 @relation(fields: [userId], references: [id])
+  repeatChargeAttempt  RepeatChargeAttempt?
+  promoCodeRedemption  PromoCodeRedemption?
+  transactions         Transaction[]
 
   @@index([userId])
   @@index([status])
@@ -211,6 +220,7 @@ model Transaction {
   id              String            @id @default(cuid())
   userId          String
   orderId         String?
+  referralLinkId  String?
   type            TransactionType
   status          TransactionStatus @default(PENDING)
   amount          Decimal           @db.Decimal(10, 2)
@@ -221,32 +231,55 @@ model Transaction {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   order           Order?            @relation(fields: [orderId], references: [id])
+  referralLink    ReferralLink?     @relation("ReferralLinkTransactions", fields: [referralLinkId], references: [id], onDelete: Restrict)
   user            User              @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([orderId])
+  @@index([referralLinkId])
   @@index([paymentId])
   @@index([status])
   @@map("transactions")
 }
 
+model ReferralLink {
+  id            String        @id @default(cuid())
+  code          String        @unique
+  userId        String
+  label         String?
+  bonusPercent  Decimal       @db.Decimal(5, 2)
+  promoCodeId   String?
+  isActive      Boolean       @default(true)
+  expiresAt     DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User          @relation("OwnedReferralLinks", fields: [userId], references: [id])
+  promoCode     PromoCode?    @relation(fields: [promoCodeId], references: [id])
+  referredUsers User[]        @relation("ReferredViaLink")
+  transactions  Transaction[] @relation("ReferralLinkTransactions")
+
+  @@index([userId])
+  @@index([promoCodeId])
+  @@map("referral_links")
+}
+
 model RepeatChargeAttempt {
-  id                        String                  @id @default(cuid())
-  orderId                   String                  @unique
-  userId                    String
-  savedCardId               String
-  status                    RepeatChargeAttemptStatus @default(IN_PROGRESS)
-  idempotencyKey            String                  @unique
+  id                         String                    @id @default(cuid())
+  orderId                    String                    @unique
+  userId                     String
+  savedCardId                String
+  status                     RepeatChargeAttemptStatus @default(IN_PROGRESS)
+  idempotencyKey             String                    @unique
   cloudPaymentsTransactionId String?
-  providerReasonCode        Int?
-  providerMessage           String?
-  ambiguousReason           String?
-  createdAt                 DateTime                @default(now())
-  updatedAt                 DateTime                @updatedAt
-  finishedAt                DateTime?
-  order                     Order                   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user                      User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  savedCard                 CloudPaymentsCardToken  @relation(fields: [savedCardId], references: [id], onDelete: Restrict)
+  providerReasonCode         Int?
+  providerMessage            String?
+  ambiguousReason            String?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  finishedAt                 DateTime?
+  order                      Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user                       User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedCard                  CloudPaymentsCardToken    @relation(fields: [savedCardId], references: [id], onDelete: Restrict)
 
   @@index([userId, status])
   @@index([savedCardId])
@@ -270,32 +303,53 @@ model Notification {
 }
 
 model EsimWebhookReceipt {
-  id               String                   @id @default(cuid())
-  dedupKey         String                   @unique
+  id               String                     @id @default(cuid())
+  dedupKey         String                     @unique
   authMode         EsimWebhookReceiptAuthMode
   notifyType       String
   notifyId         String?
   orderNo          String?
   eventGeneratedAt DateTime?
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
 
   @@index([authMode, notifyType, createdAt])
   @@map("esim_webhook_receipts")
 }
 
 model PromoCode {
-  id              String    @id @default(cuid())
-  code            String    @unique
-  discountPercent Int       // 1-100
-  maxUses         Int?      // null = безлимит
-  usedCount       Int       @default(0)
-  isActive        Boolean   @default(true)
+  id              String                @id @default(cuid())
+  code            String                @unique
+  discountPercent Int // 1-100
+  maxUses         Int? // null = безлимит
+  usedCount       Int                   @default(0)
+  isActive        Boolean               @default(true)
   expiresAt       DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  referralLinks   ReferralLink[]
+  redemptions     PromoCodeRedemption[]
 
   @@map("promo_codes")
+}
+
+model PromoCodeRedemption {
+  id          String                    @id @default(cuid())
+  promoCodeId String
+  userId      String
+  orderId     String?                   @unique
+  source      PromoCodeRedemptionSource
+  status      PromoCodeRedemptionStatus @default(RESERVED)
+  createdAt   DateTime                  @default(now())
+  consumedAt  DateTime?
+  releasedAt  DateTime?
+  promoCode   PromoCode                 @relation(fields: [promoCodeId], references: [id])
+  user        User                      @relation(fields: [userId], references: [id])
+  order       Order?                    @relation(fields: [orderId], references: [id])
+
+  @@index([promoCodeId, status])
+  @@index([userId, status])
+  @@map("promo_code_redemptions")
 }
 
 model SystemSettings {
@@ -346,6 +400,22 @@ enum TransactionStatus {
   SUCCEEDED
   FAILED
   CANCELLED
+}
+
+enum PromoCodeSource {
+  MANUAL
+  REFERRAL_LINK_AUTO
+}
+
+enum PromoCodeRedemptionSource {
+  MANUAL
+  REFERRAL_LINK_AUTO
+}
+
+enum PromoCodeRedemptionStatus {
+  RESERVED
+  CONSUMED
+  RELEASED
 }
 
 enum RepeatChargeAttemptStatus {

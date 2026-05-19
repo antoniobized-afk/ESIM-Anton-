@@ -424,3 +424,56 @@ export interface AutoUpdateExchangeRateResponse extends ApiMutationResponse {
 export interface SystemSettingsMap {
   [key: string]: string
 }
+
+// ── Partner Referral Links ─────────────────────────────────────────
+
+export interface AdminReferralLink {
+  id: string
+  code: string
+  userId: string
+  label: string | null
+  bonusPercent: NumericLike
+  isActive: boolean
+  expiresAt: string | null
+  createdAt: string
+  updatedAt?: string
+  promoCode: { id: string; code: string; isActive?: boolean; expiresAt?: string | null } | null
+  user: { id: string; referralCode: string; firstName: string | null; username: string | null }
+  _count: { referredUsers: number; transactions: number }
+}
+
+export interface AdminReferralLinkStats {
+  link: AdminReferralLink
+  stats: {
+    registrations: number
+    ordersCount: number
+    commissionableRevenue: NumericLike
+    totalReferrerEarnings: NumericLike
+  }
+  referredUsers: Array<{
+    id: string
+    name: string
+    joinedAt: string
+    totalOrders: number
+    totalSpent: NumericLike
+  }>
+}
+
+export interface CreateReferralLinkDto {
+  code: string
+  userId: string
+  bonusPercent: number
+  label?: string
+  promoCodeId?: string
+  isActive?: boolean
+  expiresAt?: string
+}
+
+export interface UpdateReferralLinkDto {
+  code?: string
+  bonusPercent?: number
+  label?: string | null
+  promoCodeId?: string | null
+  isActive?: boolean
+  expiresAt?: string | null
+}

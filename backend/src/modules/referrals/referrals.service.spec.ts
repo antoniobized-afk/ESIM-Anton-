@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { ReferralsService } from './referrals.service';
 import { TransactionStatus, TransactionType } from '@prisma/client';
 
@@ -7,14 +8,46 @@ function makeService(
   const prisma = {
     user: {
       findUnique: jest.fn(),
-      update: jest.fn().mockResolvedValue(undefined),
+      findFirst: jest.fn(),
       findMany: jest.fn(),
+      update: jest.fn().mockResolvedValue(undefined),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      count: jest.fn(),
+    },
+    order: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      aggregate: jest.fn(),
+      groupBy: jest.fn(),
+    },
+    referralLink: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    promoCode: {
+      findUnique: jest.fn(),
     },
     transaction: {
       findFirst: jest.fn().mockResolvedValue(null),
+      findMany: jest.fn(),
       create: jest.fn().mockResolvedValue(undefined),
       aggregate: jest.fn(),
     },
+    $transaction: jest.fn().mockImplementation(async (callback: any) =>
+      callback({
+        user: {
+          update: prisma.user.update,
+        },
+        transaction: {
+          findFirst: prisma.transaction.findFirst,
+          create: prisma.transaction.create,
+        },
+      }),
+    ),
   };
 
   const systemSettingsService = {
@@ -45,22 +78,196 @@ function makeService(
 describe('ReferralsService', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  describe('createReferralLink', () => {
+    it('создаёт partner referral link после cross-table validation', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findFirst.mockResolvedValue(null);
+      prisma.referralLink.findFirst.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({ id: 'owner_1' });
+      prisma.promoCode.findUnique.mockResolvedValue({ id: 'promo_1' });
+      prisma.referralLink.create.mockResolvedValue({
+        id: 'link_1',
+        code: 'PARTNER123',
+        userId: 'owner_1',
+        bonusPercent: new Prisma.Decimal(12.5),
+      });
+
+      const result = await service.createReferralLink({
+        code: 'PARTNER123',
+        userId: 'owner_1',
+        promoCodeId: 'promo_1',
+        bonusPercent: 12.5,
+      });
+
+      expect(prisma.referralLink.create).toHaveBeenCalledWith({
+        data: {
+          code: 'PARTNER123',
+          userId: 'owner_1',
+          label: null,
+          bonusPercent: new Prisma.Decimal(12.5),
+          promoCodeId: 'promo_1',
+          isActive: true,
+          expiresAt: null,
+        },
+        include: {
+          promoCode: {
+            select: { id: true, code: true },
+          },
+          user: {
+            select: { id: true, referralCode: true, firstName: true, username: true },
+          },
+        },
+      });
+      expect(result).toEqual({
+        id: 'link_1',
+        code: 'PARTNER123',
+        userId: 'owner_1',
+        bonusPercent: new Prisma.Decimal(12.5),
+      });
+    });
+
+    it('канонизирует partner code в upper-case перед сохранением', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findFirst.mockResolvedValue(null);
+      prisma.referralLink.findFirst.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue({ id: 'owner_1' });
+      prisma.referralLink.create.mockResolvedValue({
+        id: 'link_1',
+        code: 'PARTNER_123',
+      });
+
+      await service.createReferralLink({
+        code: ' partner_123 ',
+        userId: 'owner_1',
+        bonusPercent: 10,
+      });
+
+      expect(prisma.referralLink.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            code: 'PARTNER_123',
+          }),
+        }),
+      );
+    });
+
+    it('не даёт создать partner code, совпадающий с User.referralCode', async () => {
+      const { service, prisma } = makeService();
+      prisma.referralLink.findFirst.mockResolvedValue(null);
+      prisma.user.findFirst.mockResolvedValue({ id: 'user_1' });
+
+      await expect(
+        service.createReferralLink({
+          code: 'REF123',
+          userId: 'owner_1',
+          bonusPercent: 10,
+        }),
+      ).rejects.toThrow('конфликтует с существующим user referralCode');
+    });
+  });
+
   describe('registerReferral', () => {
-    it('привязывает пользователя к рефереру, если он ещё не привязан', async () => {
+    it('привязывает пользователя к обычному рефереру, если он ещё не привязан', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique
         .mockResolvedValueOnce({ referredById: null, telegramId: BigInt(123456) })
         .mockResolvedValueOnce({ id: 'referrer_1', referralCode: 'REF123' });
+      prisma.referralLink.findUnique.mockResolvedValue(null);
 
       const result = await service.registerReferral('user_1', 'REF123', BigInt(123456));
 
-      expect(prisma.user.update).toHaveBeenCalledWith({
-        where: { id: 'user_1' },
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'user_1', referredById: null },
         data: {
           referredById: 'referrer_1',
+          referralLinkId: null,
+          pendingPromoCode: null,
         },
       });
       expect(result).toEqual({ id: 'referrer_1', referralCode: 'REF123' });
+    });
+
+    it('привязывает пользователя по active partner link и сохраняет pendingPromoCode', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        referredById: null,
+        telegramId: BigInt(123456),
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        code: 'PARTNER123',
+        userId: 'owner_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'PROMO10' },
+        user: { id: 'owner_1', referralCode: 'OWNERREF' },
+      });
+
+      const result = await service.registerReferral('user_2', 'PARTNER123', BigInt(123456));
+
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'user_2', referredById: null },
+        data: {
+          referredById: 'owner_1',
+          referralLinkId: 'link_1',
+          pendingPromoCode: 'PROMO10',
+        },
+      });
+      expect(result).toEqual({ id: 'owner_1', referralCode: 'OWNERREF' });
+    });
+
+    it('ищет partner link case-insensitive через canonical upper-case code', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        referredById: null,
+        telegramId: BigInt(123456),
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        code: 'PARTNER123',
+        userId: 'owner_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'PROMO10' },
+        user: { id: 'owner_1', referralCode: 'OWNERREF' },
+      });
+
+      await service.registerReferral('user_2', 'partner123', BigInt(123456));
+
+      expect(prisma.referralLink.findUnique).toHaveBeenCalledWith({
+        where: { code: 'PARTNER123' },
+        include: {
+          promoCode: {
+            select: { code: true },
+          },
+          user: {
+            select: { id: true, referralCode: true },
+          },
+        },
+      });
+    });
+
+    it('не fallback-ится на user referral code, если partner link неактивен', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        referredById: null,
+        telegramId: BigInt(123456),
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        code: 'PARTNER123',
+        userId: 'owner_1',
+        isActive: false,
+        expiresAt: null,
+        promoCode: null,
+        user: { id: 'owner_1', referralCode: 'OWNERREF' },
+      });
+
+      const result = await service.registerReferral('user_2', 'PARTNER123', BigInt(123456));
+
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
+      expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+      expect(result).toBeNull();
     });
 
     it('не перепривязывает уже привязанного пользователя', async () => {
@@ -72,19 +279,51 @@ describe('ReferralsService', () => {
 
       const result = await service.registerReferral('user_1', 'REF123', BigInt(123456));
 
-      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
       expect(result).toBeNull();
     });
 
-    it('не допускает self-referral', async () => {
+    it('не допускает self-referral для partner link', async () => {
       const { service, prisma } = makeService();
-      prisma.user.findUnique
-        .mockResolvedValueOnce({ referredById: null, telegramId: BigInt(123456) })
-        .mockResolvedValueOnce({ id: 'user_1', referralCode: 'REF123' });
+      prisma.user.findUnique.mockResolvedValueOnce({
+        referredById: null,
+        telegramId: BigInt(123456),
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        code: 'PARTNER123',
+        userId: 'user_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: null,
+        user: { id: 'user_1', referralCode: 'SELFREF' },
+      });
 
-      const result = await service.registerReferral('user_1', 'REF123', BigInt(123456));
+      const result = await service.registerReferral('user_1', 'PARTNER123', BigInt(123456));
 
-      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
+      expect(result).toBeNull();
+    });
+
+    it('не перезаписывает attribution, если conditional updateMany вернул count=0', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        referredById: null,
+        telegramId: BigInt(123456),
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        code: 'PARTNER123',
+        userId: 'owner_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'PROMO10' },
+        user: { id: 'owner_1', referralCode: 'OWNERREF' },
+      });
+      prisma.user.updateMany.mockResolvedValueOnce({ count: 0 });
+
+      const result = await service.registerReferral('user_2', 'PARTNER123', BigInt(123456));
+
       expect(result).toBeNull();
     });
 
@@ -108,6 +347,7 @@ describe('ReferralsService', () => {
         minPayout: 900,
         enabled: true,
       });
+      prisma.order.findUnique.mockResolvedValue({ user: { referralLinkId: null } });
 
       const result = await service.awardReferralBonus('ref_1', 1200, 'order_1');
 
@@ -124,7 +364,7 @@ describe('ReferralsService', () => {
         where: { id: 'ref_1' },
         data: {
           bonusBalance: {
-            increment: 84,
+            increment: new Prisma.Decimal(84),
           },
         },
       });
@@ -132,9 +372,10 @@ describe('ReferralsService', () => {
         data: {
           userId: 'ref_1',
           orderId: 'order_1',
+          referralLinkId: null,
           type: TransactionType.REFERRAL_BONUS,
           status: TransactionStatus.SUCCEEDED,
-          amount: 84,
+          amount: new Prisma.Decimal(84),
           metadata: {
             orderAmount: 1200,
             bonusPercent: 7,
@@ -143,6 +384,38 @@ describe('ReferralsService', () => {
           },
         },
       });
+      expect(result).toEqual({ awarded: true, bonusAmount: 84 });
+    });
+
+    it('может начислять referral bonus внутри переданной транзакции', async () => {
+      const { service, prisma } = makeService({
+        bonusPercent: 7,
+        minPayout: 900,
+        enabled: true,
+      });
+      const tx = {
+        transaction: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue(undefined),
+        },
+        user: {
+          update: jest.fn().mockResolvedValue(undefined),
+        },
+      };
+
+      const result = await service.awardReferralBonus('ref_1', 1200, 'order_1', null, tx as any);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(tx.transaction.findFirst).toHaveBeenCalledWith({
+        where: {
+          userId: 'ref_1',
+          orderId: 'order_1',
+          type: TransactionType.REFERRAL_BONUS,
+          status: TransactionStatus.SUCCEEDED,
+        },
+      });
+      expect(tx.user.update).toHaveBeenCalled();
+      expect(tx.transaction.create).toHaveBeenCalled();
       expect(result).toEqual({ awarded: true, bonusAmount: 84 });
     });
 
@@ -159,6 +432,7 @@ describe('ReferralsService', () => {
 
     it('не начисляет бонус повторно для того же completed order', async () => {
       const { service, prisma } = makeService();
+      prisma.order.findUnique.mockResolvedValue({ user: { referralLinkId: null } });
       prisma.transaction.findFirst.mockResolvedValue({
         amount: 60,
       });
@@ -172,6 +446,243 @@ describe('ReferralsService', () => {
         reason: 'already-awarded',
         bonusAmount: 60,
       });
+    });
+
+    it('использует individual percent из ReferralLink и пишет referralLinkId в transaction', async () => {
+      const { service, prisma } = makeService({
+        bonusPercent: 5,
+        minPayout: 500,
+        enabled: true,
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        bonusPercent: new Prisma.Decimal(12.5),
+      });
+
+      const result = await service.awardReferralBonus(
+        'ref_1',
+        1200,
+        'order_1',
+        'link_1',
+      );
+
+      expect(prisma.transaction.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          referralLinkId: 'link_1',
+          amount: new Prisma.Decimal(150),
+          metadata: expect.objectContaining({
+            bonusPercent: 12.5,
+          }),
+        }),
+      });
+      expect(result).toEqual({ awarded: true, bonusAmount: 150 });
+    });
+
+    it('не fallback-ится на глобальный процент, если explicit referralLinkId не найден', async () => {
+      const { service, prisma } = makeService({
+        bonusPercent: 5,
+        minPayout: 500,
+        enabled: true,
+      });
+      prisma.referralLink.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.awardReferralBonus('ref_1', 1200, 'order_1', 'missing_link'),
+      ).rejects.toThrow('Referral link для начисления бонуса не найден');
+
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getReferralLinkStats', () => {
+    it('считает primary aggregates через БД и ограничивает список referred users', async () => {
+      const { service, prisma } = makeService();
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        promoCode: null,
+        user: { id: 'owner_1', referralCode: 'OWNERREF', firstName: 'Owner', username: null },
+      });
+      prisma.user.count.mockResolvedValue(1);
+      prisma.order.aggregate.mockResolvedValue({
+        _count: { id: 2 },
+        _sum: { totalAmount: new Prisma.Decimal(350) },
+      });
+      prisma.user.findMany.mockResolvedValue([
+        {
+          id: 'user_2',
+          username: 'alex',
+          firstName: 'Alex',
+          createdAt: new Date('2026-05-01T00:00:00Z'),
+          orders: [
+            { totalAmount: new Prisma.Decimal(100) },
+            { totalAmount: new Prisma.Decimal(250) },
+          ],
+        },
+      ]);
+      prisma.transaction.aggregate.mockResolvedValue({
+        _sum: { amount: new Prisma.Decimal(50) },
+      });
+
+      const result = await service.getReferralLinkStats('link_1');
+
+      expect(prisma.order.aggregate).toHaveBeenCalled();
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { referralLinkId: 'link_1' },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          createdAt: true,
+          orders: {
+            where: {
+              status: 'COMPLETED',
+              parentOrderId: null,
+            },
+            select: {
+              totalAmount: true,
+            },
+          },
+        },
+      });
+      expect(prisma.order.groupBy).not.toHaveBeenCalled();
+      expect(result.stats).toEqual({
+        registrations: 1,
+        ordersCount: 2,
+        commissionableRevenue: new Prisma.Decimal(350),
+        totalReferrerEarnings: new Prisma.Decimal(50),
+      });
+      expect(result.referredUsers).toEqual([
+        {
+          id: 'user_2',
+          name: 'Alex',
+          joinedAt: new Date('2026-05-01T00:00:00Z'),
+          totalOrders: 2,
+          totalSpent: new Prisma.Decimal(350),
+        },
+      ]);
+    });
+  });
+
+  describe('getReferralLinkPublicInfo', () => {
+    it('возвращает isValid=true и promoCode для active link', async () => {
+      const { service, prisma } = makeService();
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'PROMO10' },
+      });
+
+      const result = await service.getReferralLinkPublicInfo('partner123');
+
+      expect(prisma.referralLink.findUnique).toHaveBeenCalledWith({
+        where: { code: 'PARTNER123' },
+        include: {
+          promoCode: { select: { code: true } },
+        },
+      });
+      expect(result).toEqual({ isValid: true, promoCode: 'PROMO10' });
+    });
+
+    it('возвращает isValid=false для неактивной ссылки', async () => {
+      const { service, prisma } = makeService();
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        isActive: false,
+        expiresAt: null,
+        promoCode: { code: 'PROMO10' },
+      });
+
+      const result = await service.getReferralLinkPublicInfo('PARTNER123');
+
+      expect(result).toEqual({ isValid: false, promoCode: null });
+    });
+
+    it('возвращает isValid=false для несуществующего кода', async () => {
+      const { service, prisma } = makeService();
+      prisma.referralLink.findUnique.mockResolvedValue(null);
+
+      const result = await service.getReferralLinkPublicInfo('UNKNOWN');
+
+      expect(result).toEqual({ isValid: false, promoCode: null });
+    });
+
+    it('не отдаёт userId, bonusPercent, label или stats', async () => {
+      const { service, prisma } = makeService();
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        userId: 'owner_1',
+        bonusPercent: 15,
+        label: 'Secret Label',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'PROMO10' },
+      });
+
+      const result = await service.getReferralLinkPublicInfo('PARTNER123');
+
+      expect(result).toEqual({ isValid: true, promoCode: 'PROMO10' });
+      expect(result).not.toHaveProperty('userId');
+      expect(result).not.toHaveProperty('bonusPercent');
+      expect(result).not.toHaveProperty('label');
+    });
+  });
+
+  describe('getReferralLinks', () => {
+    it('возвращает paginated список с meta', async () => {
+      const { service, prisma } = makeService();
+      prisma.referralLink.findMany.mockResolvedValue([
+        { id: 'link_1', code: 'PARTNER1', _count: { referredUsers: 5, transactions: 3 } },
+      ]);
+      prisma.referralLink.count.mockResolvedValue(1);
+
+      const result = await service.getReferralLinks({ page: 1, limit: 20 });
+
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+      });
+      expect(result.data).toHaveLength(1);
+    });
+
+    it('использует _count для summary stats без per-link N+1', async () => {
+      const { service, prisma } = makeService();
+      prisma.referralLink.findMany.mockResolvedValue([]);
+      prisma.referralLink.count.mockResolvedValue(0);
+
+      await service.getReferralLinks({});
+
+      const findManyCall = prisma.referralLink.findMany.mock.calls[0][0];
+      expect(findManyCall.include._count).toEqual({
+        select: { referredUsers: true, transactions: true },
+      });
+    });
+  });
+
+  describe('registerReferral — web path (без telegramId)', () => {
+    it('привязывает пользователя без проверки telegramId', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ referredById: null, telegramId: BigInt(123456) })
+        .mockResolvedValueOnce({ id: 'referrer_1', referralCode: 'REF123' });
+      prisma.referralLink.findUnique.mockResolvedValue(null);
+
+      const result = await service.registerReferral('user_1', 'REF123');
+
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'user_1', referredById: null },
+        data: {
+          referredById: 'referrer_1',
+          referralLinkId: null,
+          pendingPromoCode: null,
+        },
+      });
+      expect(result).toEqual({ id: 'referrer_1', referralCode: 'REF123' });
     });
   });
 

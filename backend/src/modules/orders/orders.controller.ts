@@ -186,7 +186,7 @@ export class OrdersController {
     if (Number(order.totalAmount) > 0) {
       throw new BadRequestException('Заказ не бесплатный');
     }
-    await this.ordersService.updateStatus(id, OrderStatus.PAID);
+    await this.ordersService.markOrderPaid(id);
     return this.ordersService.fulfillOrder(id);
   }
 

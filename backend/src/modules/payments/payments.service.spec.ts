@@ -73,6 +73,7 @@ function makeService() {
   const ordersService = {
     assertOwnership: jest.fn(),
     releaseBonusSpendHold: jest.fn().mockResolvedValue(undefined),
+    markOrderCancelled: jest.fn().mockResolvedValue(undefined),
     fulfillOrder: jest.fn().mockResolvedValue(undefined),
     findById: jest.fn(),
   };
@@ -183,9 +184,13 @@ describe('PaymentsService saved card repeat charge', () => {
 
     const result = await service.chargeOrderWithSavedCard('user_1', 'order_1');
 
-    expect(ordersService.releaseBonusSpendHold).toHaveBeenCalledWith(
+    expect(ordersService.markOrderCancelled).toHaveBeenCalledWith(
       'order_1',
+      {
+        errorMessage: 'Saved card unavailable',
+      },
       'saved_card_fallback',
+      expect.anything(),
     );
     expect(result.success).toBe(false);
     expect(result.chargeState).toBe('declined');
@@ -427,7 +432,7 @@ describe('PaymentsService saved card repeat charge', () => {
     expect(result.fallbackToWidget).toBe(false);
     expect(result.repeatChargeAttemptId).toBe('attempt_1');
     expect(result.message).toContain('еще уточняется');
-    expect(ordersService.releaseBonusSpendHold).not.toHaveBeenCalled();
+    expect(ordersService.markOrderCancelled).not.toHaveBeenCalled();
   });
 
   it('returns declined state and widget fallback on confirmed provider decline', async () => {
@@ -505,9 +510,13 @@ describe('PaymentsService saved card repeat charge', () => {
     expect(result.fallbackToWidget).toBe(true);
     expect(result.repeatChargeAttemptId).toBe('attempt_1');
     expect(result.message).toContain('Откройте оплату новой картой');
-    expect(ordersService.releaseBonusSpendHold).toHaveBeenCalledWith(
+    expect(ordersService.markOrderCancelled).toHaveBeenCalledWith(
       'order_1',
+      {
+        errorMessage: 'Saved card charge failed: Недостаточно средств',
+      },
       'saved_card_fallback',
+      expect.anything(),
     );
   });
 

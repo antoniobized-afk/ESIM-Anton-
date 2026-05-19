@@ -39,8 +39,12 @@ export class UsersController {
   @UseGuards(JwtAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Получить список всех пользователей' })
-  async findAll(@Query('page') page = 1, @Query('limit') limit = 20) {
-    const result = await this.usersService.findAll(+page, +limit);
+  async findAll(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('search') search?: string,
+  ) {
+    const result = await this.usersService.findAll(+page, +limit, search);
     return {
       ...result,
       data: result.data.map(serializeUser),

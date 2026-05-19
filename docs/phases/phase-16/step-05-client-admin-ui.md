@@ -60,7 +60,7 @@
 
 ## Статус
 
-- `planned`
+- `done`
 
 ## Журнал изменений
 
@@ -68,6 +68,22 @@
 
 - Шаг объединяет client/admin surfaces, потому что оба зависят от уже готового
   backend API и не должны диктовать domain contract.
+- **Client API**: `getPublicLinkInfo`, `registerWebReferral` в `referralsApi`.
+- **Client Landing** `/ref/[code]/page.tsx`: public endpoint, localStorage
+  pending code, Telegram + Web CTA, promo copy action.
+- **AuthProvider**: one-shot `useEffect` с ref-guard, вызывает `register-web`
+  при `isBootstrapped && user`, очищает localStorage.
+- **Admin types**: `AdminReferralLink`, `AdminReferralLinkStats`,
+  `CreateReferralLinkDto`, `UpdateReferralLinkDto`.
+- **Admin API**: `referralLinksApi` (getAll, create, update, getStats).
+- **Admin page**: `ReferralLinks.tsx` — table с status badges, copy Telegram/Web
+  links, create/edit Modal, stats Modal с metrics cards и referred users table.
+- Follow-up hardening after audit:
+  - edit PATCH contract поддерживает `null` для `promoCodeId`/`expiresAt` вместо silent `undefined`;
+  - `bonusPercent` хранится строкой и валидируется до submit;
+  - stats modal использует explicit open-state и request invalidation against late response.
+- **Admin nav**: `Link2` icon, «Партнёрские ссылки» перед Analytics.
+- Верификация: `tsc --noEmit` чист (client + admin), 25/25 backend тестов.
 
 ## Файлы
 

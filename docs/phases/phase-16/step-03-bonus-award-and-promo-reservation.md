@@ -51,8 +51,8 @@
     без создания `PromoCodeRedemption` и без расхода лимита partner promo;
   - failed/cancelled/stale attempt не очищает pending только фактом
     неуспешной попытки.
-- Сохранить manual promo flow через текущий `PromoCodesService.use()` в V1, чтобы не
-  расширять blast radius.
+- Перевести manual promo на тот же durable `PromoCodeRedemption` lifecycle, что и
+  auto-promo, чтобы не оставлять второй race-prone consumption path.
 
 ## Результат шага
 
@@ -71,7 +71,7 @@
 
 ## Статус
 
-- `planned`
+- `completed`
 
 ## Журнал изменений
 
@@ -79,6 +79,27 @@
 
 - Шаг выделен как самый рискованный runtime блок фазы: ledger, деньги,
   concurrency и order lifecycle.
+- `ReferralsService.awardReferralBonus(...)` переведён на
+  `awardReferralBonus(referrerId, orderAmount, orderId?, referralLinkId?)` с
+  `Prisma.Decimal`, fallback lookup по `orderId` только при
+  `referralLinkId === undefined`, записью `Transaction.referralLinkId` и
+  duplicate-safe `$transaction`.
+- В `PromoCodesService` добавлены `validateForReservation`,
+  `reserveForOrder`, `consumeReservation`, `releaseReservation`; reservation
+  защищает `maxUses` через PostgreSQL row lock (`SELECT ... FOR UPDATE`) и
+  учёт `usedCount + RESERVED` внутри одной transaction.
+- `OrdersService` теперь:
+  - различает `promoCodeSource = MANUAL | REFERRAL_LINK_AUTO`;
+  - резервирует manual и auto promo при создании заказа без расхода `usedCount`;
+  - consume-ит reservation на successful purchase;
+  - release-ит reservation на fail/cancel/stale paths через
+    `markOrderFailed/markOrderCancelled`;
+  - очищает `pendingPromoCode` после successful auto-promo purchase и после
+    first successful manual-promo purchase.
+- Исходный guardrail "manual promo остаётся на legacy use()" снят после audit follow-up:
+  общий ledger признан меньшим риском, чем поддержка двух разных consumption path.
+- В тестах добавлены кейсы на individual partner percent, auto-promo
+  reservation/consume/release, manual-priority cleanup и stale/cancel paths.
 
 ## Файлы
 
@@ -99,6 +120,6 @@
 - `PENDING -> CANCELLED/FAILED` release-ит reservation без роста `usedCount`.
 - `COMPLETED` consume-ит reservation и увеличивает `usedCount` один раз.
 - Первая successful purchase с ручным промокодом очищает partner
-  `pendingPromoCode` без `PromoCodeRedemption`.
+  `pendingPromoCode`, а manual promo consume проходит через тот же reservation ledger.
 - Повторный consume не увеличивает `usedCount` второй раз.
-- Manual promo flow не ломается.
+- Manual promo flow не ломается и больше не расходует лимит до создания заказа.

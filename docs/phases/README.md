@@ -111,7 +111,7 @@
   - Зафиксировать reconciliation/runbook baseline для payment/webhook security follow-up.
   - Документ: [phase-15-payment-and-webhook-security-hardening.md](./phase-15-payment-and-webhook-security-hardening.md)
 
-- [ ] **Phase 16: Partner Referral Links**
+- [x] **Phase 16: Partner Referral Links**
   - Добавить партнёрские реферальные ссылки с индивидуальным `bonusPercent`, сроком жизни, optional promo code и аналитикой.
   - Сохранить обратную совместимость с текущим user-to-user referral flow: `ReferralLink.code` lookup идёт перед fallback на `User.referralCode`.
   - Реализовать безопасный auto-promo lifecycle через `PromoCodeRedemption(RESERVED -> CONSUMED/RELEASED)` с row-locked capacity check по `maxUses`.

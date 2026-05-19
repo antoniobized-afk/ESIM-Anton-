@@ -27,7 +27,7 @@
 - `products` — каталог, sync, dedupe, bulk activation/badge/markup operations
 - `orders` — заказ, free fulfill, usage, top-up flow, balance purchase flow
 - `payments` — Robokassa flow + CloudPayments webhooks/controllers
-- `referrals` — регистрация рефералов и статистика
+- `referrals` — регистрация рефералов, партнёрские ссылки (CRUD, analytics), статистика
 - `loyalty` — client-facing `/loyalty/me`, admin CRUD уровней лояльности и пересчёт уровня пользователя после purchase completion
 - `analytics` — dashboard, top-products, sales-chart
 - `esim-provider` — eSIM Access integration, health, purchase, order info, webhook handling
@@ -56,6 +56,7 @@ Next.js 15 Admin Panel (App Router, client-first rendering).
 - `users`
 - `products` — декомпозирован: `ProductsPage`, `useProducts` hook, `ProductsFilters`, `ProductsTable`, `ProductEditModal` и др. (12 файлов в `components/products/`)
 - `promo`
+- `referral-links` — партнёрские ссылки (CRUD, copy links, analytics)
 - `settings` — вкладки pricing / referrals / loyalty (URL tab sync)
 
 Вкладки `payments` и `analytics` присутствуют в UI-navigation, но в текущем коде отрисовывают заглушки «в разработке».
@@ -71,6 +72,7 @@ Next.js 15 Admin Panel (App Router, client-first rendering).
 - auth: `/login`, `/login/callback`
 - справка / legal: `/help/*`, `/offer`, `/agreement`
 - referral/device/support pages: `/referrals`, `/devices`
+- partner landing: `/ref/[code]`
 
 ### `bot`
 
@@ -95,6 +97,8 @@ Next.js 15 Admin Panel (App Router, client-first rendering).
 - `EsimProduct`
 - `Order`
 - `Transaction`
+- `ReferralLink`
+- `PromoCodeRedemption`
 - `Notification`
 - `PromoCode`
 - `SystemSettings`

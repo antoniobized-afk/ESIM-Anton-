@@ -4,12 +4,15 @@ import type {
   AdminProduct,
   AdminOrder,
   AdminPayment,
+  AdminReferralLink,
+  AdminReferralLinkStats,
   ApiMutationResponse,
   AuthLoginResponse,
   AutoUpdateExchangeRateResponse,
   CreateLoyaltyLevelDto,
   CreateProductDto,
   CreatePromoCodeDto,
+  CreateReferralLinkDto,
   DashboardStats,
   ExchangeRateInfo,
   ExchangeRateUpdateResponse,
@@ -33,6 +36,7 @@ import type {
   TopReferrer,
   UpdateLoyaltyLevelDto,
   UpdateProductDto,
+  UpdateReferralLinkDto,
   UserStatsResponse,
   AdminUser,
 } from './types'
@@ -79,8 +83,8 @@ export const dashboardApi = {
 }
 
 export const usersApi = {
-  getAll: (page = 1, limit = 20) =>
-    api.get<PaginatedResponse<AdminUser>>(`/users?page=${page}&limit=${limit}`),
+  getAll: (page = 1, limit = 20, search?: string) =>
+    api.get<PaginatedResponse<AdminUser>>(`/users`, { params: { page, limit, search } }),
   getById: (id: string) => api.get<AdminUser>(`/users/${id}`),
   getStats: (id: string) => api.get<UserStatsResponse>(`/users/${id}/stats`),
 }
@@ -133,6 +137,17 @@ export const analyticsApi = {
 export const referralsApi = {
   getStats: (userId: string) => api.get<ReferralStats>(`/referrals/stats/${userId}`),
   getTop: () => api.get<TopReferrer[]>('/referrals/top'),
+}
+
+export const referralLinksApi = {
+  getAll: (params?: { page?: number; limit?: number; userId?: string; isActive?: boolean }) =>
+    api.get<PaginatedResponse<AdminReferralLink>>('/referrals/links', { params }),
+  create: (data: CreateReferralLinkDto) =>
+    api.post<AdminReferralLink>('/referrals/links', data),
+  update: (id: string, data: UpdateReferralLinkDto) =>
+    api.patch<AdminReferralLink>(`/referrals/links/${id}`, data),
+  getStats: (id: string) =>
+    api.get<AdminReferralLinkStats>(`/referrals/links/${id}/stats`),
 }
 
 export const loyaltyApi = {
