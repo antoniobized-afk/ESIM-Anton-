@@ -113,9 +113,6 @@ export default function ReferralLandingPage() {
             <p className="text-sm font-medium text-primary">
               По этому приглашению скидка применится автоматически к вашей первой покупке.
             </p>
-            <p className="mt-2 text-xs text-secondary">
-              Ничего копировать и вводить вручную не нужно. Сначала войдите или зарегистрируйтесь.
-            </p>
           </div>
         )}
 
