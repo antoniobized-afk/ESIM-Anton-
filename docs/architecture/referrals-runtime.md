@@ -148,6 +148,29 @@ Body: `{ userId, referralCode, telegramId }`
 `Transaction.referralLinkId` является индексируемым source of truth для
 партнёрских analytics. JSON metadata не используется как аналитический ключ.
 
+## Когда В Ссылке Заданы И `bonusPercent`, И `promoCode`
+
+Эти поля не конфликтуют и работают одновременно, но на разных сторонах сделки:
+
+- `ReferralLink.bonusPercent` влияет на размер `REFERRAL_BONUS` для владельца
+  партнёрской ссылки
+- `ReferralLink.promoCodeId` влияет на скидку приглашённого пользователя через
+  `pendingPromoCode`
+
+Нормальный happy path выглядит так:
+
+1. Пользователь приходит по partner link
+2. Backend сохраняет `referredById`, `referralLinkId` и `pendingPromoCode`
+3. На первой покупке, если пользователь не ввёл свой manual promo, применяется
+   auto-promo от ссылки
+4. После successful completion владелец ссылки получает `REFERRAL_BONUS`,
+   рассчитанный по `ReferralLink.bonusPercent`
+
+Итог: один и тот же первый успешный заказ может одновременно:
+
+- дать скидку приглашённому пользователю по promo code ссылки
+- начислить партнёру referral reward по bonus percent ссылки
+
 ## Promo Reservation Lifecycle
 
 И manual promo, и auto-promo от партнёрской ссылки работают через единый reservation lifecycle:
@@ -165,6 +188,8 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 **First-purchase semantics**:
 - Manual promo имеет приоритет: если пользователь вводит свой промокод на первую
   успешную покупку, partner `pendingPromoCode` очищается без redemption
+- При этом referral attribution по `referralLinkId` не теряется: manual promo
+  заменяет только скидку покупателя, но не отменяет партнёрский bonus percent
 - Failed/cancelled/stale order не очищает `pendingPromoCode`
 - `reserveForOrder` защищает capacity через serializable transaction
 - Manual promo больше не живёт на eager `usedCount++` до создания заказа: capacity reserve делается внутри order transaction, а consume идёт только на successful completion

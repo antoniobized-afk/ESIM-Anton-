@@ -27,11 +27,9 @@ import Pagination from '@/components/ui/Pagination'
 import { useToast } from '@/components/ui/ToastProvider'
 import {
   Plus,
-  Copy,
   Check,
   Pencil,
   BarChart3,
-  Link2,
   MessageCircle,
   Globe,
 } from 'lucide-react'
@@ -138,6 +136,7 @@ export default function ReferralLinks() {
     setStatsLoading(true)
     setStatsData(null)
     const requestId = ++statsRequestIdRef.current
+    let isLatestRequest = true
     try {
       const { data } = await referralLinksApi.getStats(link.id)
       if (statsRequestIdRef.current !== requestId) return
@@ -146,8 +145,10 @@ export default function ReferralLinks() {
       if (statsRequestIdRef.current !== requestId) return
       toast.error(getErrorMessage(e, 'Не удалось загрузить статистику'))
     } finally {
-      if (statsRequestIdRef.current !== requestId) return
-      setStatsLoading(false)
+      isLatestRequest = statsRequestIdRef.current === requestId
+      if (isLatestRequest) {
+        setStatsLoading(false)
+      }
     }
   }
 
