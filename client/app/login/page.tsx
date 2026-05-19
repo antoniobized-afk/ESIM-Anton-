@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Mail, ArrowRight, ChevronLeft, Loader2, Shield, AlertCircle } from '@/components/icons'
 import { api } from '@/lib/api'
-import { setToken, setStoredUser, isTelegramWebApp, getToken } from '@/lib/auth'
+import { isTelegramWebApp, getToken } from '@/lib/auth'
+import { useAuth } from '@/components/AuthProvider'
 import { sanitizeRedirect } from '@/lib/security'
 import { Suspense } from 'react'
 
@@ -21,6 +22,7 @@ const OAUTH_PROVIDERS = [
 function LoginInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { login } = useAuth()
   const [step, setStep] = useState<Step>('choose')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
@@ -63,11 +65,10 @@ function LoginInner() {
       setError('')
       try {
         const { data } = await api.post('/auth/telegram', userData)
-        setToken(data.access_token)
         const { data: user } = await api.get('/auth/me', {
           headers: { Authorization: `Bearer ${data.access_token}` }
         })
-        setStoredUser(user)
+        login(data.access_token, user)
         const safeReturnTo = sanitizeRedirect(new URLSearchParams(window.location.search).get('returnTo'), '/')
         router.replace(safeReturnTo)
       } catch (e: any) {
@@ -106,11 +107,10 @@ function LoginInner() {
     setError(''); setLoading(true)
     try {
       const { data } = await api.post('/auth/email/verify', { email, code })
-      setToken(data.access_token)
       const { data: user } = await api.get('/auth/me', {
         headers: { Authorization: `Bearer ${data.access_token}` }
       })
-      setStoredUser(user)
+      login(data.access_token, user)
       router.replace(sanitizeRedirect(searchParams.get('returnTo'), '/'))
     } catch (e: any) {
       setError(e.response?.data?.message || 'Неверный код')

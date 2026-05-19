@@ -3,14 +3,15 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, CheckCircle, XCircle } from '@/components/icons'
-import { setToken, setStoredUser } from '@/lib/auth'
 import { api } from '@/lib/api'
+import { useAuth } from '@/components/AuthProvider'
 import { sanitizeRedirect } from '@/lib/security'
 import { Suspense } from 'react'
 
 function CallbackInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { login } = useAuth()
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -35,11 +36,10 @@ function CallbackInner() {
 
     const finish = async () => {
       try {
-        setToken(token)
         const { data: user } = await api.get('/auth/me', {
           headers: { Authorization: `Bearer ${token}` },
         })
-        setStoredUser(user)
+        login(token, user)
         setStatus('success')
         setTimeout(() => router.replace(safeReturnTo), 800)
       } catch {
