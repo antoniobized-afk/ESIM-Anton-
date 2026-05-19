@@ -46,11 +46,10 @@
   - повторный `consumeReservation` по `CONSUMED` не увеличивает `usedCount`.
 - Зафиксировать first-purchase promo semantics:
   - если покупатель вручную передал `promoCode`, manual promo имеет приоритет над
-    `User.pendingPromoCode`;
-  - первая successful purchase с manual promo очищает partner `pendingPromoCode`
-    без создания `PromoCodeRedemption` и без расхода лимита partner promo;
-  - failed/cancelled/stale attempt не очищает pending только фактом
-    неуспешной попытки.
+    auto-promo от текущего `ReferralLink`;
+  - buyer promo до первой successful purchase резолвится из current
+    `ReferralLink.promoCodeId`, а не из user snapshot;
+  - failed/cancelled/stale attempt не меняет referral attribution.
 - Перевести manual promo на тот же durable `PromoCodeRedemption` lifecycle, что и
   auto-promo, чтобы не оставлять второй race-prone consumption path.
 
@@ -61,8 +60,7 @@
 - Auto-promo не тратит `usedCount` на `PENDING` order.
 - `PromoCode.maxUses` защищён от параллельных reservations.
 - Все cancel/fail/stale paths освобождают reservation через centralized helpers.
-- Partner `pendingPromoCode` не зависает после successful first purchase с ручным
-  промокодом.
+- Manual promo override не создаёт отдельного legacy cleanup state.
 
 ## Зависимости
 
@@ -94,8 +92,8 @@
   - consume-ит reservation на successful purchase;
   - release-ит reservation на fail/cancel/stale paths через
     `markOrderFailed/markOrderCancelled`;
-  - очищает `pendingPromoCode` после successful auto-promo purchase и после
-    first successful manual-promo purchase.
+  - не хранит buyer promo snapshot на `User`, а резолвит current `ReferralLink`
+    policy при quote/create.
 - Исходный guardrail "manual promo остаётся на legacy use()" снят после audit follow-up:
   общий ledger признан меньшим риском, чем поддержка двух разных consumption path.
 - В тестах добавлены кейсы на individual partner percent, auto-promo
@@ -119,7 +117,7 @@
   `RESERVED` redemption.
 - `PENDING -> CANCELLED/FAILED` release-ит reservation без роста `usedCount`.
 - `COMPLETED` consume-ит reservation и увеличивает `usedCount` один раз.
-- Первая successful purchase с ручным промокодом очищает partner
-  `pendingPromoCode`, а manual promo consume проходит через тот же reservation ledger.
+- Первая successful purchase с ручным промокодом не ломает referral attribution,
+  а manual promo consume проходит через тот же reservation ledger.
 - Повторный consume не увеличивает `usedCount` второй раз.
 - Manual promo flow не ломается и больше не расходует лимит до создания заказа.

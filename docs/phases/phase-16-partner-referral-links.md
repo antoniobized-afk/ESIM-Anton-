@@ -20,8 +20,7 @@
 ## Результат
 
 - В Prisma появляется `ReferralLink` и связанные поля/ledger-связи:
-  `User.referralLinkId`, `User.pendingPromoCode`,
-  `Transaction.referralLinkId`, `PromoCodeRedemption`,
+  `User.referralLinkId`, `Transaction.referralLinkId`, `PromoCodeRedemption`,
   `Order.promoCodeSource`.
 - `POST /referrals/register` работает как unified lookup:
   сначала `ReferralLink.code`, затем fallback на `User.referralCode`.
@@ -30,7 +29,8 @@
 - `GET /referrals/links/:code/public` отдаёт минимальную public info для лендинга.
 - Referral bonus для покупателя, пришедшего по партнёрской ссылке, считается по
   `ReferralLink.bonusPercent`, а не по глобальному `REFERRAL_BONUS_PERCENT`.
-- Auto-promo от партнёрской ссылки применяется только через reservation lifecycle:
+- Auto-promo от партнёрской ссылки применяется только через reservation lifecycle
+  и резолвится из **текущего** `ReferralLink`, а не из user snapshot:
   `RESERVED -> CONSUMED/RELEASED`.
 - В admin появляется раздел партнёрских ссылок: список, создание/редактирование,
   ссылки Telegram/Web, summary и detail stats.
@@ -90,7 +90,7 @@
 - Referral attribution immutable в V1:
   - если `User.referredById` уже заполнен, партнёрская ссылка не меняет
     attribution;
-  - `pendingPromoCode` также не выдаётся уже привлечённому пользователю.
+  - `registerReferral` больше не материализует buyer promo snapshot на `User`.
 - `minPayout` остаётся глобальным в `SystemSettings`; per-link payout threshold не
   входит в V1.
 - `Transaction.referralLinkId` является индексируемым source of truth для
@@ -103,11 +103,12 @@
 - Деньги и проценты в backend считать через `Prisma.Decimal`.
 - Auto-promo не вызывает существующий `PromoCodesService.use()` на стадии
   `PENDING` order.
-- `pendingPromoCode` является first-purchase acquisition discount:
-  - manual promo имеет приоритет;
-  - первая successful purchase с manual promo очищает partner `pendingPromoCode`;
-  - failed/cancelled/stale attempt не очищает pending только фактом неуспешной
-    попытки.
+- Commercial policy по партнёрской ссылке mutable until first successful
+  purchase:
+  - buyer promo всегда берётся из текущего `ReferralLink.promoCodeId`;
+  - partner bonus percent всегда берётся из текущего `ReferralLink.bonusPercent`;
+  - после successful purchase immutable становятся уже `Order` /
+    `Transaction` ledger snapshot-ы.
 - `PromoCodeRedemption` защищает lifecycle:
   - `RESERVED` при создании заказа;
   - `CONSUMED` только после successful completion;
@@ -150,18 +151,19 @@
   - `/start ref_<partnerCode>` привязывает `referredById` и `referralLinkId`;
   - inactive/expired partner code не fallback-ится на обычный user code;
   - self-referral запрещён и для `User.referralCode`, и для `ReferralLink.userId`;
-  - пользователь с уже заполненным `referredById` не получает новую attribution и
-    `pendingPromoCode` в V1.
+  - пользователь с уже заполненным `referredById` не получает новую attribution.
 - Bonus ledger:
   - `REFERRAL_BONUS` по партнёрской ссылке создаётся с `Transaction.referralLinkId`;
   - два параллельных completion effect не создают два referral bonus по одному
     `userId + orderId`;
   - partial unique index проходит после preflight.
 - Promo lifecycle:
+  - quote/create используют current `ReferralLink.promoCodeId`, а не legacy
+    user snapshot;
   - auto-promo создаёт `PromoCodeRedemption(RESERVED)` без роста `usedCount`;
   - completion переводит reservation в `CONSUMED` и увеличивает `usedCount` один раз;
-  - первая successful purchase с manual promo очищает partner `pendingPromoCode`
-    без `PromoCodeRedemption`;
+  - manual promo override не ломает referral attribution и не требует отдельного
+    cleanup state;
   - fail/cancel/stale paths переводят reservation в `RELEASED`;
   - два параллельных order create с `maxUses = 1` не создают две active
     reservations.

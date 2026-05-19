@@ -35,15 +35,15 @@
 ```typescript
 await prisma.user.updateMany({
   where: { id: userId, referredById: null },
-  data: { referredById, referralLinkId, pendingPromoCode },
+  data: { referredById, referralLinkId },
 });
 ```
 
-- Если `updateMany.count = 0`, не перезаписывать attribution и не выдавать
-  `pendingPromoCode`.
+- Если `updateMany.count = 0`, не перезаписывать attribution.
 - Сохранить immutable attribution policy:
   - уже привлечённый пользователь не получает новый partner attribution;
-  - уже привлечённый пользователь не получает partner `pendingPromoCode` в V1.
+  - buyer promo не materialize-ится на `User`, а будет резолвиться из текущего
+    `ReferralLink` при checkout.
 - Убедиться, что bot prefix handling остаётся в bot layer:
   backend принимает чистый `code`, а не `ref_<code>`.
 
@@ -74,8 +74,8 @@ await prisma.user.updateMany({
 - В `ReferralsService` добавлены CRUD/domain methods для `ReferralLink`,
   dual-lookup registration (`ReferralLink.code -> User.referralCode`) и atomic
   attribution через `user.updateMany({ where: { referredById: null } ... })`.
-- Partner path теперь сохраняет `referralLinkId` и optional `pendingPromoCode`,
-  а inactive/expired link возвращает `null` без fallback на `User.referralCode`.
+- Partner path теперь сохраняет только `referralLinkId`, а inactive/expired link
+  возвращает `null` без fallback на `User.referralCode`.
 - В `referrals.service.spec.ts` добавлены кейсы на partner registration,
   inactive link, self-referral, `updateMany.count = 0` и cross-table validation
   для `ReferralLink.code`.
@@ -94,4 +94,4 @@ await prisma.user.updateMany({
 - Expired/inactive `ReferralLink.code` возвращает null и не fallback-ится.
 - Self-referral запрещён.
 - Два параллельных `registerReferral` не перезаписывают attribution.
-- Уже привлечённый пользователь не получает `pendingPromoCode`.
+- Уже привлечённый пользователь не получает новую partner attribution.

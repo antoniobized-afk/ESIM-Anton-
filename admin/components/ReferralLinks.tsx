@@ -212,6 +212,9 @@ export default function ReferralLinks() {
             {links.filter((l) => getLinkStatus(l).label === 'Активна').length} · Регистраций:{' '}
             {totalRegistrations}
           </p>
+          <p className="text-xs text-slate-400 mt-2">
+            Изменение промокода или процента у ссылки сразу влияет на ещё не купивших пользователей, уже завершённые заказы и начисления не пересчитываются.
+          </p>
         </div>
         <Button onClick={openCreate}>
           <Plus size={18} />

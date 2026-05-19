@@ -47,7 +47,6 @@ export interface User {
   referralCode: string;
   referredById?: string | null;
   referralLinkId?: string | null;
-  pendingPromoCode?: string | null;
   loyaltyLevel?: LoyaltyLevel;
   totalSpent: number;
 }

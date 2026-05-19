@@ -181,13 +181,12 @@ describe('ReferralsService', () => {
         data: {
           referredById: 'referrer_1',
           referralLinkId: null,
-          pendingPromoCode: null,
         },
       });
       expect(result).toEqual({ id: 'referrer_1', referralCode: 'REF123' });
     });
 
-    it('привязывает пользователя по active partner link и сохраняет pendingPromoCode', async () => {
+    it('привязывает пользователя по active partner link без buyer promo snapshot на User', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValueOnce({
         referredById: null,
@@ -199,7 +198,6 @@ describe('ReferralsService', () => {
         userId: 'owner_1',
         isActive: true,
         expiresAt: null,
-        promoCode: { code: 'PROMO10' },
         user: { id: 'owner_1', referralCode: 'OWNERREF' },
       });
 
@@ -210,7 +208,6 @@ describe('ReferralsService', () => {
         data: {
           referredById: 'owner_1',
           referralLinkId: 'link_1',
-          pendingPromoCode: 'PROMO10',
         },
       });
       expect(result).toEqual({ id: 'owner_1', referralCode: 'OWNERREF' });
@@ -228,7 +225,6 @@ describe('ReferralsService', () => {
         userId: 'owner_1',
         isActive: true,
         expiresAt: null,
-        promoCode: { code: 'PROMO10' },
         user: { id: 'owner_1', referralCode: 'OWNERREF' },
       });
 
@@ -237,9 +233,6 @@ describe('ReferralsService', () => {
       expect(prisma.referralLink.findUnique).toHaveBeenCalledWith({
         where: { code: 'PARTNER123' },
         include: {
-          promoCode: {
-            select: { code: true },
-          },
           user: {
             select: { id: true, referralCode: true },
           },
@@ -317,7 +310,6 @@ describe('ReferralsService', () => {
         userId: 'owner_1',
         isActive: true,
         expiresAt: null,
-        promoCode: { code: 'PROMO10' },
         user: { id: 'owner_1', referralCode: 'OWNERREF' },
       });
       prisma.user.updateMany.mockResolvedValueOnce({ count: 0 });
@@ -679,7 +671,6 @@ describe('ReferralsService', () => {
         data: {
           referredById: 'referrer_1',
           referralLinkId: null,
-          pendingPromoCode: null,
         },
       });
       expect(result).toEqual({ id: 'referrer_1', referralCode: 'REF123' });

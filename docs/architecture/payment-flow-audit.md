@@ -159,14 +159,16 @@ Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `
 ### Quote degradation rule for referral auto-promo
 
 - manual promo остаётся strict input: невалидный код должен возвращать `400`;
-- auto-promo из `User.pendingPromoCode`, полученный через partner referral link,
-  не имеет права ломать checkout целиком;
+- auto-promo по partner referral link больше резолвится не из
+  user snapshot, а из **текущего** `User.referralLinkId -> ReferralLink.promoCodeId`;
+- dynamic referral policy действует до первой successful primary purchase:
+  buyer promo и partner bonus percent читаются из текущего `ReferralLink`;
 - `POST /orders/quote` остаётся pure read path: он не делает cleanup/referral-healing,
   а только возвращает pricing metadata (`promoStatus = unavailable`,
   `promoMessage`, `hasReferralAttribution`) для явного UI-сообщения;
-- если такой auto-promo истёк / деактивирован / удалён / исчерпан, mutation path
-  (`create` / `createWithBalance`) очищает `pendingPromoCode` compare-and-set
-  способом и продолжает checkout без этой скидки.
+- если текущий link inactive/expired/missing или его current promo истёк /
+  деактивирован / удалён / исчерпан, checkout продолжает работу без этой
+  скидки, но не мутирует state пользователя.
 
 ## Confirmed Invariants
 

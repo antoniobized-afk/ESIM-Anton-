@@ -14,7 +14,6 @@ export interface AuthUser {
   referralCode: string
   referredById?: string | null
   referralLinkId?: string | null
-  pendingPromoCode?: string | null
   totalSpent: number
   authProvider?: string
 }

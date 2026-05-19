@@ -70,7 +70,6 @@ type OrderPricingSnapshot = {
     balance: Prisma.Decimal | number;
     bonusBalance: Prisma.Decimal | number;
     totalSpent: Prisma.Decimal | number;
-    pendingPromoCode?: string | null;
     referralLinkId?: string | null;
     referredById?: string | null;
   };
@@ -89,7 +88,6 @@ type OrderPricingSnapshot = {
   promoStatus: 'applied' | 'none' | 'unavailable';
   promoMessage: string | null;
   hasReferralAttribution: boolean;
-  pendingPromoCodeToClear: string | null;
   baseAmount: number;
   promoDiscount: number;
   loyaltyDiscount: number;
@@ -438,12 +436,6 @@ export class OrdersService {
     throw new FulfillmentFinalizeException(message, orderId, stage);
   }
 
-  private normalizePendingPromoCode(value?: string | null) {
-    if (!value) return null;
-    const normalized = value.trim().toUpperCase();
-    return normalized || null;
-  }
-
   private isNonBlockingAutoPromoError(error: unknown) {
     return (
       error instanceof NotFoundException ||
@@ -471,42 +463,16 @@ export class OrdersService {
     }
   }
 
-  private async clearPendingPromoCodeIfMatches(
-    userId: string,
-    promoCode: string,
-    client: Prisma.TransactionClient | PrismaService = this.prisma,
-  ) {
-    await client.user.updateMany({
-      where: {
-        id: userId,
-        pendingPromoCode: promoCode,
-      },
-      data: {
-        pendingPromoCode: null,
-      },
-    });
-  }
-
-  private async healUnavailableAutoPromoIfNeeded(
-    userId: string,
-    pricing: OrderPricingSnapshot,
-    client: Prisma.TransactionClient | PrismaService,
-  ) {
-    if (
-      pricing.promoStatus !== 'unavailable' ||
-      pricing.pendingPromoCodeToClear === null
-    ) {
-      return;
+  private getReferralLinkUnavailableMessage(reason: 'inactive' | 'expired' | 'missing') {
+    switch (reason) {
+      case 'inactive':
+        return 'Партнёрская ссылка больше не активна. Покупка продолжится без реферальной скидки.';
+      case 'expired':
+        return 'Срок действия партнёрской ссылки истёк. Покупка продолжится без реферальной скидки.';
+      case 'missing':
+      default:
+        return 'Партнёрская ссылка больше недоступна. Покупка продолжится без реферальной скидки.';
     }
-
-    await this.clearPendingPromoCodeIfMatches(
-      userId,
-      pricing.pendingPromoCodeToClear,
-      client,
-    );
-    this.logger.warn(
-      `Healed unavailable pending promo "${pricing.pendingPromoCodeToClear}" for user ${userId}: ${pricing.promoMessage ?? 'no message'}`,
-    );
   }
 
   private async buildOrderPricingSnapshot(
@@ -541,11 +507,7 @@ export class OrdersService {
     let promoCodeSource: PromoCodeSource | null = null;
     let promoStatus: OrderPricingSnapshot['promoStatus'] = 'none';
     let promoMessage: string | null = null;
-    let pendingPromoCodeToClear: string | null = null;
     const normalizedManualPromoCode = opts?.promoCode?.trim().toUpperCase() || null;
-    const normalizedPendingPromoCode = this.normalizePendingPromoCode(
-      user.pendingPromoCode,
-    );
     const hasReferralAttribution = Boolean(
       user.referredById || user.referralLinkId,
     );
@@ -561,26 +523,47 @@ export class OrdersService {
       const discountPercent = Number(promoPreview.discountPercent);
       promoDiscount = (totalAmount * discountPercent) / 100;
       totalAmount -= promoDiscount;
-    } else if (normalizedPendingPromoCode) {
-      try {
-        const promoPreview = await this.promoCodesService.validateForReservation(
-          normalizedPendingPromoCode,
-        );
-        promoId = promoPreview.promoId;
-        promoCode = promoPreview.code;
-        promoCodeSource = PromoCodeSource.REFERRAL_LINK_AUTO;
-        promoStatus = 'applied';
-        const discountPercent = Number(promoPreview.discountPercent);
-        promoDiscount = (totalAmount * discountPercent) / 100;
-        totalAmount -= promoDiscount;
-      } catch (error) {
-        if (!this.isNonBlockingAutoPromoError(error)) {
-          throw error;
-        }
+    } else if (user.referralLinkId) {
+      const referralLink = await this.prisma.referralLink.findUnique({
+        where: { id: user.referralLinkId },
+        include: {
+          promoCode: {
+            select: {
+              code: true,
+            },
+          },
+        },
+      });
 
+      if (!referralLink) {
         promoStatus = 'unavailable';
-        promoMessage = this.getAutoPromoUnavailableMessage(error);
-        pendingPromoCodeToClear = normalizedPendingPromoCode;
+        promoMessage = this.getReferralLinkUnavailableMessage('missing');
+      } else if (!referralLink.isActive) {
+        promoStatus = 'unavailable';
+        promoMessage = this.getReferralLinkUnavailableMessage('inactive');
+      } else if (referralLink.expiresAt && referralLink.expiresAt <= new Date()) {
+        promoStatus = 'unavailable';
+        promoMessage = this.getReferralLinkUnavailableMessage('expired');
+      } else if (referralLink.promoCode?.code) {
+        try {
+          const promoPreview = await this.promoCodesService.validateForReservation(
+            referralLink.promoCode.code,
+          );
+          promoId = promoPreview.promoId;
+          promoCode = promoPreview.code;
+          promoCodeSource = PromoCodeSource.REFERRAL_LINK_AUTO;
+          promoStatus = 'applied';
+          const discountPercent = Number(promoPreview.discountPercent);
+          promoDiscount = (totalAmount * discountPercent) / 100;
+          totalAmount -= promoDiscount;
+        } catch (error) {
+          if (!this.isNonBlockingAutoPromoError(error)) {
+            throw error;
+          }
+
+          promoStatus = 'unavailable';
+          promoMessage = this.getAutoPromoUnavailableMessage(error);
+        }
       }
     }
 
@@ -615,7 +598,6 @@ export class OrdersService {
       promoStatus,
       promoMessage,
       hasReferralAttribution,
-      pendingPromoCodeToClear,
       baseAmount,
       promoDiscount,
       loyaltyDiscount,
@@ -1015,12 +997,6 @@ export class OrdersService {
           id: true,
           userId: true,
           promoCode: true,
-          promoCodeSource: true,
-          user: {
-            select: {
-              pendingPromoCode: true,
-            },
-          },
         },
       });
 
@@ -1032,37 +1008,6 @@ export class OrdersService {
 
       if (order.promoCode) {
         await this.promoCodesService.consumeReservation(order.id, tx);
-      }
-
-      if (
-        order.promoCodeSource === PromoCodeSource.REFERRAL_LINK_AUTO &&
-        order.promoCode
-      ) {
-        await tx.user.updateMany({
-          where: {
-            id: order.userId,
-            pendingPromoCode: order.promoCode,
-          },
-          data: {
-            pendingPromoCode: null,
-          },
-        });
-      }
-
-      if (
-        order.promoCodeSource === PromoCodeSource.MANUAL &&
-        order.promoCode &&
-        order.user.pendingPromoCode
-      ) {
-        await tx.user.updateMany({
-          where: {
-            id: order.userId,
-            pendingPromoCode: { not: null },
-          },
-          data: {
-            pendingPromoCode: null,
-          },
-        });
       }
 
       return updated;
@@ -1142,8 +1087,6 @@ export class OrdersService {
     });
 
     return this.prisma.$transaction(async (tx) => {
-      await this.healUnavailableAutoPromoIfNeeded(userId, pricing, tx);
-
       const order = await tx.order.create({
         data: {
           userId,
@@ -2060,8 +2003,6 @@ export class OrdersService {
       if (!userFresh || Number(userFresh.balance) < priceRub) {
         throw new BadRequestException('Недостаточно средств на балансе');
       }
-
-      await this.healUnavailableAutoPromoIfNeeded(userId, pricing, tx);
 
       await tx.user.update({
         where: { id: userId },

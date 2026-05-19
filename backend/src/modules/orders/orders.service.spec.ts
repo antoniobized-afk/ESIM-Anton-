@@ -27,7 +27,6 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
       email: 'user@example.com',
       telegramId: null,
       totalSpent: 10000,
-      pendingPromoCode: null,
       referralLinkId: null,
       loyaltyLevel: {
         cashbackPercent: 10,
@@ -63,6 +62,9 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
           user: { id: 'user_1' },
         }),
       ),
+    },
+    referralLink: {
+      findUnique: jest.fn().mockResolvedValue(null),
     },
     user: {
       update: jest.fn().mockResolvedValue(undefined),
@@ -543,19 +545,24 @@ describe('OrdersService', () => {
       );
     });
 
-    it('previewPricing не падает, если auto-promo по реферальной ссылке истёк, и не мутирует pendingPromoCode', async () => {
+    it('previewPricing не падает, если auto-promo по реферальной ссылке истёк', async () => {
       const { service, prisma, usersService } = makeService();
       usersService.findById.mockResolvedValue({
         id: 'user_1',
         balance: 1000,
         bonusBalance: 100,
         totalSpent: 10000,
-        pendingPromoCode: 'MOJO30',
         referralLinkId: 'link_1',
         referredById: 'ref_1',
         loyaltyLevel: {
           discount: 0,
         },
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'MOJO30' },
       });
       const promoCodesService = (service as any).promoCodesService;
       promoCodesService.validateForReservation.mockRejectedValueOnce(
@@ -574,30 +581,69 @@ describe('OrdersService', () => {
         }),
       );
       expect(quote.promoMessage).toContain('истёк');
-      expect(prisma.user.updateMany).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            id: 'user_1',
-            pendingPromoCode: 'MOJO30',
-          }),
-        }),
-      );
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
       expect(prisma.order.create).not.toHaveBeenCalled();
     });
 
-    it('create продолжает checkout без referral auto-promo, если он истёк', async () => {
+    it('previewPricing использует текущий promo у referral link', async () => {
       const { service, prisma, usersService } = makeService();
       usersService.findById.mockResolvedValue({
         id: 'user_1',
         balance: 1000,
         bonusBalance: 100,
         totalSpent: 10000,
-        pendingPromoCode: 'MOJO30',
         referralLinkId: 'link_1',
         referredById: 'ref_1',
         loyaltyLevel: {
           discount: 0,
         },
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'NEW20' },
+      });
+      const promoCodesService = (service as any).promoCodesService;
+      promoCodesService.validateForReservation.mockResolvedValueOnce({
+        valid: true,
+        promoId: 'promo_new_20',
+        code: 'NEW20',
+        discountPercent: 20,
+      });
+
+      const quote = await service.previewPricing('user_1', 'product_1');
+
+      expect(promoCodesService.validateForReservation).toHaveBeenCalledWith('NEW20');
+      expect(quote).toEqual(
+        expect.objectContaining({
+          promoCode: 'NEW20',
+          promoCodeSource: 'REFERRAL_LINK_AUTO',
+          promoStatus: 'applied',
+          promoDiscount: 20,
+          totalAmount: 80,
+        }),
+      );
+    });
+
+    it('create продолжает checkout без referral auto-promo, если текущий promo у referral link истёк', async () => {
+      const { service, prisma, usersService } = makeService();
+      usersService.findById.mockResolvedValue({
+        id: 'user_1',
+        balance: 1000,
+        bonusBalance: 100,
+        totalSpent: 10000,
+        referralLinkId: 'link_1',
+        referredById: 'ref_1',
+        loyaltyLevel: {
+          discount: 0,
+        },
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'MOJO30' },
       });
       const promoCodesService = (service as any).promoCodesService;
       promoCodesService.validateForReservation.mockRejectedValueOnce(
@@ -606,15 +652,7 @@ describe('OrdersService', () => {
 
       await service.create('user_1', 'product_1');
 
-      expect(prisma.user.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: 'user_1',
-          pendingPromoCode: 'MOJO30',
-        },
-        data: {
-          pendingPromoCode: null,
-        },
-      });
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
       expect(prisma.order.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -626,19 +664,24 @@ describe('OrdersService', () => {
       expect(promoCodesService.reserveForOrder).not.toHaveBeenCalled();
     });
 
-    it('createWithBalance healing-ит stale referral auto-promo внутри mutation path', async () => {
+    it('createWithBalance продолжает checkout без referral auto-promo, если текущий promo у referral link истёк', async () => {
       const { service, prisma, usersService } = makeService();
       usersService.findById.mockResolvedValue({
         id: 'user_1',
         balance: 1000,
         bonusBalance: 100,
         totalSpent: 10000,
-        pendingPromoCode: 'MOJO30',
         referralLinkId: 'link_1',
         referredById: 'ref_1',
         loyaltyLevel: {
           discount: 0,
         },
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'MOJO30' },
       });
       const promoCodesService = (service as any).promoCodesService;
       promoCodesService.validateForReservation.mockRejectedValueOnce(
@@ -647,15 +690,7 @@ describe('OrdersService', () => {
 
       await service.createWithBalance('user_1', 'product_1');
 
-      expect(prisma.user.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: 'user_1',
-          pendingPromoCode: 'MOJO30',
-        },
-        data: {
-          pendingPromoCode: null,
-        },
-      });
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
       expect(promoCodesService.reserveForOrder).not.toHaveBeenCalled();
       expect(prisma.order.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -667,7 +702,7 @@ describe('OrdersService', () => {
       );
     });
 
-    it('consume-ит auto-promo reservation и очищает pendingPromoCode после successful purchase', async () => {
+    it('consume-ит auto-promo reservation после successful purchase', async () => {
       const { service, prisma } = makeService({
         promoCode: 'PROMO10',
         promoCodeSource: PromoCodeSource.REFERRAL_LINK_AUTO,
@@ -676,7 +711,6 @@ describe('OrdersService', () => {
           email: 'user@example.com',
           telegramId: null,
           totalSpent: 10000,
-          pendingPromoCode: 'PROMO10',
           referralLinkId: 'link_1',
           loyaltyLevel: {
             cashbackPercent: 10,
@@ -692,18 +726,10 @@ describe('OrdersService', () => {
         'order_1',
         expect.anything(),
       );
-      expect(prisma.user.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: 'user_1',
-          pendingPromoCode: 'PROMO10',
-        },
-        data: {
-          pendingPromoCode: null,
-        },
-      });
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
 
-    it('очищает pendingPromoCode после successful first purchase с manual promo без reservation lifecycle', async () => {
+    it('не делает побочных cleanup-мутаций после successful first purchase с manual promo', async () => {
       const { service, prisma } = makeService({
         promoCode: 'MANUAL10',
         promoCodeSource: PromoCodeSource.MANUAL,
@@ -712,7 +738,6 @@ describe('OrdersService', () => {
           email: 'user@example.com',
           telegramId: null,
           totalSpent: 10000,
-          pendingPromoCode: 'PARTNER10',
           referralLinkId: 'link_1',
           loyaltyLevel: {
             cashbackPercent: 10,
@@ -728,15 +753,7 @@ describe('OrdersService', () => {
         'order_1',
         expect.anything(),
       );
-      expect(prisma.user.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: 'user_1',
-          pendingPromoCode: { not: null },
-        },
-        data: {
-          pendingPromoCode: null,
-        },
-      });
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
 
     it('create резервирует manual promo внутри order transaction вместо eager use()', async () => {
@@ -777,7 +794,6 @@ describe('OrdersService', () => {
           email: 'user@example.com',
           telegramId: null,
           totalSpent: 10000,
-          pendingPromoCode: 'PROMO10',
           referralLinkId: 'link_1',
           loyaltyLevel: {
             cashbackPercent: 10,
@@ -803,20 +819,28 @@ describe('OrdersService', () => {
     });
 
     it('createWithBalance release-ит auto-promo reservation внутри failure transaction path', async () => {
-      const { service, usersService, esimProviderService } = makeService();
+      const { service, prisma, usersService, esimProviderService } = makeService();
       usersService.findById.mockResolvedValue({
         id: 'user_1',
         balance: 1000,
         bonusBalance: 0,
         totalSpent: 10000,
-        pendingPromoCode: 'PARTNER10',
+        referralLinkId: 'link_1',
+        referredById: 'ref_1',
         loyaltyLevel: {
           discount: 0,
         },
       });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'PARTNER10' },
+      });
       const promoCodesService = (service as any).promoCodesService;
       promoCodesService.validateForReservation.mockResolvedValue({
         valid: true,
+        promoId: 'promo_partner_1',
         code: 'PARTNER10',
         discountPercent: 10,
       });
@@ -1008,17 +1032,24 @@ describe('OrdersService', () => {
       });
     });
 
-    it('create резервирует auto-promo без расхода usedCount до completion', async () => {
+    it('create резервирует текущий promo referral link', async () => {
       const { service, prisma, usersService } = makeService();
       usersService.findById.mockResolvedValue({
         id: 'user_1',
         balance: 1000,
         bonusBalance: 100,
         totalSpent: 10000,
-        pendingPromoCode: 'PARTNER10',
+        referralLinkId: 'link_1',
+        referredById: 'ref_1',
         loyaltyLevel: {
           discount: 0,
         },
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'link_1',
+        isActive: true,
+        expiresAt: null,
+        promoCode: { code: 'PARTNER10' },
       });
       const promoCodesService = (service as any).promoCodesService;
       promoCodesService.validateForReservation.mockResolvedValue({

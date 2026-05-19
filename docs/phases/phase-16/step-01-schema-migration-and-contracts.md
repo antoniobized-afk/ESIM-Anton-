@@ -12,7 +12,6 @@
 - В `backend/prisma/schema.prisma` добавить `ReferralLink`.
 - В `User` добавить:
   - `referralLinkId`;
-  - `pendingPromoCode`;
   - `referralLinks`;
   - `referralLink`;
   - `promoCodeRedemptions`.

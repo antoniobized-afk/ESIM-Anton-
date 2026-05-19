@@ -480,9 +480,6 @@ export class ReferralsService {
     const partnerLink = await this.prisma.referralLink.findUnique({
       where: { code: normalizedPartnerCode },
       include: {
-        promoCode: {
-          select: { code: true },
-        },
         user: {
           select: { id: true, referralCode: true },
         },
@@ -503,7 +500,6 @@ export class ReferralsService {
         data: {
           referredById: partnerLink.userId,
           referralLinkId: partnerLink.id,
-          pendingPromoCode: partnerLink.promoCode?.code ?? null,
         },
       });
 
@@ -528,7 +524,6 @@ export class ReferralsService {
       data: {
         referredById: referrer.id,
         referralLinkId: null,
-        pendingPromoCode: null,
       },
     });
 

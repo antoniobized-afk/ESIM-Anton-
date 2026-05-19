@@ -206,7 +206,6 @@ export class AuthService {
         referralCode: true,
         referredById: true,
         referralLinkId: true,
-        pendingPromoCode: true,
         totalSpent: true,
         isBlocked: true,
         createdAt: true,

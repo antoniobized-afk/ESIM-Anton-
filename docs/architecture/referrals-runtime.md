@@ -47,7 +47,6 @@ ReferralLink {
 ### Связи в User
 
 - `referralLinkId` — через какую партнёрскую ссылку пришёл пользователь
-- `pendingPromoCode` — auto-promo от партнёрской ссылки (first-purchase only)
 
 ### Связи в Transaction
 
@@ -134,9 +133,15 @@ Body: `{ userId, referralCode, telegramId }`
 ## Immutable Attribution Policy
 
 - Если `User.referredById` уже заполнен → привязка блокируется
-- `pendingPromoCode` также не выдаётся уже привлечённому пользователю
 - Self-referral запрещён и для `User.referralCode`, и для `ReferralLink.userId`
 - Повторная смена referrer-а не поддерживается в V1
+- Attribution immutable, commercial policy mutable до первой successful primary
+  purchase:
+  - `referredById` / `referralLinkId` фиксируются при регистрации;
+  - buyer promo и partner bonus percent до покупки всегда резолвятся из
+    **текущего** `ReferralLink`;
+  - completed `Order` и `REFERRAL_BONUS` ledger уже immutable и не
+    пересчитываются после edit link.
 
 ## Partner Bonus Percent Flow
 
@@ -155,16 +160,16 @@ Body: `{ userId, referralCode, telegramId }`
 - `ReferralLink.bonusPercent` влияет на размер `REFERRAL_BONUS` для владельца
   партнёрской ссылки
 - `ReferralLink.promoCodeId` влияет на скидку приглашённого пользователя через
-  `pendingPromoCode`
+  checkout pricing resolver
 
 Нормальный happy path выглядит так:
 
 1. Пользователь приходит по partner link
-2. Backend сохраняет `referredById`, `referralLinkId` и `pendingPromoCode`
+2. Backend сохраняет только `referredById` и `referralLinkId`
 3. На первой покупке, если пользователь не ввёл свой manual promo, применяется
-   auto-promo от ссылки
+   **текущий** auto-promo от ссылки
 4. После successful completion владелец ссылки получает `REFERRAL_BONUS`,
-   рассчитанный по `ReferralLink.bonusPercent`
+   рассчитанный по **текущему** `ReferralLink.bonusPercent`
 
 Итог: один и тот же первый успешный заказ может одновременно:
 
@@ -173,29 +178,32 @@ Body: `{ userId, referralCode, telegramId }`
 
 ## Promo Reservation Lifecycle
 
-И manual promo, и auto-promo от партнёрской ссылки работают через единый reservation lifecycle:
+И manual promo, и auto-promo от партнёрской ссылки работают через единый
+reservation lifecycle:
 
 ```
-User registered → pendingPromoCode set
+User registered → referral attribution set
+  ↓
+Quote/create resolve current ReferralLink.promoCode
   ↓
 Order created with auto-promo → PromoCodeRedemption(RESERVED)
   ↓
-  ├─ Order completed → CONSUMED, usedCount++, pendingPromoCode cleared if needed
+  ├─ Order completed → CONSUMED, usedCount++
   ├─ Order failed/cancelled → RELEASED
   └─ Order stale (cleanup) → RELEASED
 ```
 
 **First-purchase semantics**:
 - Manual promo имеет приоритет: если пользователь вводит свой промокод на первую
-  успешную покупку, partner `pendingPromoCode` очищается без redemption
+  успешную покупку, referral auto-promo не применяется
 - При этом referral attribution по `referralLinkId` не теряется: manual promo
   заменяет только скидку покупателя, но не отменяет партнёрский bonus percent
-- Если auto-promo от partner link к моменту checkout уже невалиден
-  (`expired` / `deactivated` / `not found` / `exhausted`), checkout не должен
-  падать на `400`: `quote` возвращает `promoStatus=unavailable` и pricing
-  message для UI без мутаций, а cleanup `pendingPromoCode` выполняется уже в
-  mutation path (`create` / `createWithBalance`) compare-and-set способом
-- Failed/cancelled/stale order не очищает `pendingPromoCode`
+- Если текущий `ReferralLink` inactive/expired/missing или его текущий promo
+  уже невалиден (`expired` / `deactivated` / `not found` / `exhausted`),
+  checkout не должен падать на `400`: `quote` возвращает
+  `promoStatus=unavailable` и pricing message для UI без мутаций
+- `quote` — чистый read path: он не лечит referral state и не читает legacy
+  user snapshots
 - `reserveForOrder` защищает capacity через serializable transaction
 - Manual promo больше не живёт на eager `usedCount++` до создания заказа: capacity reserve делается внутри order transaction, а consume идёт только на successful completion
 
@@ -215,6 +223,10 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 5. Очищает `localStorage` только при success
 6. При transient error код остаётся в `localStorage`, а one-shot guard сбрасывается для retry после следующего auth/bootstrap pass
 7. Backend `registerReferral()` возвращает `200/null` для terminal no-op исходов (`already referred`, self-referral, inactive code, not found), поэтому success-path можно безопасно считать подтверждённым завершением one-shot без клиентской классификации статусов
+
+Важно:
+- product page обязана опираться только на `POST /orders/quote`;
+- landing promo code остаётся informational hint, а не snapshot обещанной скидки.
 
 ## Admin Analytics Surface
 
@@ -265,6 +277,10 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 
 - `minPayout` остаётся глобальным; per-link payout threshold не входит в V1
 - Immutable attribution: смена referrer-а не поддерживается
+- Commercial policy mutable until first successful purchase:
+  - изменение `ReferralLink.promoCodeId` или `bonusPercent` сразу влияет на ещё
+    не купивших пользователей;
+  - completed orders / rewards не пересчитываются
 - `PromoCodeRedemptionSource` содержит только `REFERRAL_LINK_AUTO`
 - Top-up revenue не комиссионируемый; LTV с top-up — secondary metric
 - `ReferralLink.code` не может совпадать с `User.referralCode` (validation guard)

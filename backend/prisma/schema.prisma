@@ -22,7 +22,6 @@ model User {
   referralCode            String                   @unique @default(cuid())
   referredById            String?
   referralLinkId          String?
-  pendingPromoCode        String?
   loyaltyLevelId          String?
   totalSpent              Decimal                  @default(0) @db.Decimal(10, 2)
   isBlocked               Boolean                  @default(false)
