@@ -78,6 +78,7 @@ function ProductPageInner() {
   const [promoLoading, setPromoLoading] = useState(false)
   const [pricingQuote, setPricingQuote] = useState<OrderQuote | null>(null)
   const [pricingLoading, setPricingLoading] = useState(false)
+  const [pricingError, setPricingError] = useState('')
   const [selectedDays, setSelectedDays] = useState(7)
   const [email, setEmail] = useState('')
   const [emailSaved, setEmailSaved] = useState(false)
@@ -105,9 +106,11 @@ function ProductPageInner() {
   const manualPromoActive = promoApplied && Boolean(promoCode.trim())
   const autoPromoActive = Boolean(effectivePromoCode && promoDiscountAmount > 0 && !manualPromoActive)
   const hasAnyPromoDiscount = Boolean(effectivePromoCode && promoDiscountAmount > 0)
-  const showDiscountSummary = hasAnyPromoDiscount || loyaltyDiscountAmount > 0
   const displayedBasePrice = pricingQuote?.baseAmount ?? basePrice
   const isReferralPurchase = Boolean(authUser?.referralLinkId || pendingReferralPromoCode)
+  const hasPricingContext = Boolean(authUser?.id || authToken)
+  const pricingResolved = !hasPricingContext || Boolean(pricingQuote)
+  const pricingPending = hasPricingContext && (pricingLoading || !pricingResolved)
   const coverageSummary = product ? getCoverageSummary(product) : ''
   const safeReturnTo = sanitizeRedirect(searchParams.get('returnTo'), '')
 
@@ -192,6 +195,7 @@ function ProductPageInner() {
       if (!product) {
         if (!cancelled) {
           setPricingQuote(null)
+          setPricingError('')
           setPricingLoading(false)
         }
         return
@@ -202,12 +206,16 @@ function ProductPageInner() {
       if (!authUser?.id && !authToken) {
         if (!cancelled) {
           setPricingQuote(null)
+          setPricingError('')
           setPricingLoading(false)
         }
         return
       }
 
       setPricingLoading(true)
+      if (!cancelled) {
+        setPricingError('')
+      }
       try {
         const quote = await ordersApi.quote({
           productId: product.id,
@@ -217,10 +225,12 @@ function ProductPageInner() {
         })
         if (!cancelled) {
           setPricingQuote(quote)
+          setPricingError('')
         }
       } catch {
         if (!cancelled) {
           setPricingQuote(null)
+          setPricingError('Не удалось подтвердить итоговую стоимость. Обновите страницу или попробуйте ещё раз.')
         }
       } finally {
         if (!cancelled) {
@@ -621,15 +631,8 @@ function ProductPageInner() {
           <span className="font-semibold text-primary text-right max-w-[60%]">{coverageSummary}</span>
         </div>
         <div className="flex items-center justify-between pt-3 mt-1 border-t border-gray-100 dark:border-gray-800/50">
-          <span className="text-sm font-medium text-secondary">
-            {showDiscountSummary ? 'К оплате' : 'Стоимость'}
-          </span>
-          <div className="text-right">
-            {showDiscountSummary && displayedBasePrice > payableTotal ? (
-              <p className="text-xs text-gray-400 line-through">₽{formatPrice(displayedBasePrice)}</p>
-            ) : null}
-            <p className="text-lg font-bold text-primary">₽{formatPrice(payableTotal)}</p>
-          </div>
+          <span className="text-sm font-medium text-secondary">Базовая стоимость тарифа</span>
+          <p className="text-lg font-bold text-primary">₽{formatPrice(displayedBasePrice)}</p>
         </div>
       </div>
 
@@ -796,38 +799,67 @@ function ProductPageInner() {
         )}
       </div>
 
-      {/* Discount summary */}
-      {showDiscountSummary ? (
-        <div className="card-neutral p-4 mb-4 animate-slide-up bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900/30">
+      {/* Final pricing summary */}
+      <div className="card-neutral p-4 mb-4 animate-slide-up bg-slate-50 dark:bg-slate-900/30 border border-slate-200 dark:border-slate-800">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Итог к оплате</p>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+              Сумма списания при оплате этим заказом
+            </p>
+          </div>
+          <div className="text-right">
+            {pricingPending ? (
+              <p className="text-lg font-bold text-primary">...</p>
+            ) : (
+              <p className="text-2xl font-bold text-primary">₽{formatPrice(payableTotal)}</p>
+            )}
+          </div>
+        </div>
+        <div className="mt-4 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">Без скидки</span>
-            <span className="text-sm text-gray-400 line-through">₽{formatPrice(displayedBasePrice)}</span>
+            <span className="text-sm text-gray-600 dark:text-gray-300">Тариф</span>
+            <span className="text-sm font-medium text-primary">₽{formatPrice(displayedBasePrice)}</span>
           </div>
           {hasAnyPromoDiscount && (
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-sm text-green-700 font-medium">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-green-700 dark:text-green-400">
                 {manualPromoActive
                   ? `Промокод ${quotePromoCode || promoCode.trim()} (${promoDiscount}%)`
                   : `Промокод ${effectivePromoCode}`}
               </span>
-              <span className="text-sm text-green-700 font-medium">−₽{formatPrice(promoDiscountAmount)}</span>
+              <span className="text-sm font-medium text-green-700 dark:text-green-400">−₽{formatPrice(promoDiscountAmount)}</span>
             </div>
           )}
           {loyaltyDiscountAmount > 0 && (
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-sm text-green-700 font-medium">Скидка лояльности</span>
-              <span className="text-sm text-green-700 font-medium">−₽{formatPrice(loyaltyDiscountAmount)}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-green-700 dark:text-green-400">Скидка лояльности</span>
+              <span className="text-sm font-medium text-green-700 dark:text-green-400">−₽{formatPrice(loyaltyDiscountAmount)}</span>
             </div>
           )}
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-green-200">
-            <span className="text-sm font-bold text-primary">Итого</span>
-            <span className="text-lg font-bold text-primary">₽{formatPrice(payableTotal)}</span>
-          </div>
-          {pricingLoading && (
-            <p className="text-xs text-gray-500 mt-2">Уточняем итоговую сумму по вашему уровню лояльности…</p>
+        </div>
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+          <span className="text-sm font-semibold text-primary">К списанию</span>
+          {pricingPending ? (
+            <span className="text-sm text-gray-500">Пересчитываем...</span>
+          ) : (
+            <span className="text-xl font-bold text-primary">₽{formatPrice(payableTotal)}</span>
           )}
         </div>
-      ) : null}
+        {pricingPending && (
+          <p className="text-xs text-gray-500 mt-2">
+            Подтверждаем цену на сервере с учётом промокода, реферальной ссылки и уровня лояльности.
+          </p>
+        )}
+        {!pricingPending && isReferralPurchase && hasAnyPromoDiscount && (
+          <p className="text-xs text-green-700 dark:text-green-400 mt-2">
+            Это реферальная покупка. Скидка уже включена в сумму списания.
+          </p>
+        )}
+        {pricingError && (
+          <p className="text-xs text-red-500 mt-2">{pricingError}</p>
+        )}
+      </div>
 
       {/* Email for eSIM delivery */}
       <div className="card-neutral p-4 mb-4 animate-slide-up" style={{ animationDelay: '0.18s' }}>
@@ -1022,9 +1054,9 @@ function ProductPageInner() {
             const showTopupCta = paymentMethod === 'balance' && !enoughBalance && payableTotal > 0 && balance !== null
             const need = Math.max(0, Math.ceil(payableTotal - userBalance))
             return (
-              <button
+                <button
                 onClick={() => handlePurchase()}
-                disabled={purchasing || !agreedEsim || !agreedOnlyInternet || !agreedTerms}
+                disabled={purchasing || pricingPending || Boolean(pricingError) || !agreedEsim || !agreedOnlyInternet || !agreedTerms}
                 className="w-full py-4 rounded-2xl bg-[#f77430] hover:bg-[#f2622a] text-white font-semibold text-lg transition-colors shadow-lg shadow-orange-500/30 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
               >
                 {purchasing ? (
@@ -1032,6 +1064,8 @@ function ProductPageInner() {
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     <span>Обработка...</span>
                   </>
+                ) : pricingPending ? (
+                  <span>Уточняем итоговую стоимость...</span>
                 ) : showTopupCta ? (
                   <span>Пополнить на ₽{formatPrice(need)} и купить</span>
                 ) : paymentMethod === 'balance' ? (
