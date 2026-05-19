@@ -12,6 +12,7 @@ import {
 import BottomNav from '@/components/BottomNav'
 import { useAuth } from '@/components/AuthProvider'
 import { useTheme } from '@/components/ThemeProvider'
+import packageJson from '@/package.json'
 
 interface UserProfile {
   id: string
@@ -442,7 +443,7 @@ export default function ProfilePage() {
 
       {/* App Version */}
       <p className="text-center text-gray-400 dark:text-gray-600 text-sm">
-        Версия 1.0.0
+        Версия {packageJson.version}
       </p>
 
       {/* Language Modal */}
