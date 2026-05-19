@@ -45,6 +45,9 @@ export interface User {
   balance: number;
   bonusBalance: number;
   referralCode: string;
+  referredById?: string | null;
+  referralLinkId?: string | null;
+  pendingPromoCode?: string | null;
   loyaltyLevel?: LoyaltyLevel;
   totalSpent: number;
 }

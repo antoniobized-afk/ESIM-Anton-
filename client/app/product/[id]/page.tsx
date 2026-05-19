@@ -99,12 +99,15 @@ function ProductPageInner() {
   const promoDiscountAmount = pricingQuote?.promoDiscount ?? estimatedPromoDiscount
   const loyaltyDiscountAmount = pricingQuote?.loyaltyDiscount ?? 0
   const payableTotal = pricingQuote?.totalAmount ?? estimatedTotalPrice
+  const pendingReferralPromoCode = authUser?.pendingPromoCode?.trim() || null
   const quotePromoCode = pricingQuote?.promoCode?.trim() || null
+  const effectivePromoCode = quotePromoCode ?? pendingReferralPromoCode
   const manualPromoActive = promoApplied && Boolean(promoCode.trim())
-  const autoPromoActive = Boolean(quotePromoCode && promoDiscountAmount > 0 && !manualPromoActive)
-  const hasAnyPromoDiscount = Boolean(quotePromoCode && promoDiscountAmount > 0)
+  const autoPromoActive = Boolean(effectivePromoCode && promoDiscountAmount > 0 && !manualPromoActive)
+  const hasAnyPromoDiscount = Boolean(effectivePromoCode && promoDiscountAmount > 0)
   const showDiscountSummary = hasAnyPromoDiscount || loyaltyDiscountAmount > 0
   const displayedBasePrice = pricingQuote?.baseAmount ?? basePrice
+  const isReferralPurchase = Boolean(authUser?.referralLinkId || pendingReferralPromoCode)
   const coverageSummary = product ? getCoverageSummary(product) : ''
   const safeReturnTo = sanitizeRedirect(searchParams.get('returnTo'), '')
 
@@ -231,7 +234,7 @@ function ProductPageInner() {
     return () => {
       cancelled = true
     }
-  }, [authLoading, authToken, authUser?.id, isDaily, product, promoApplied, promoCode, selectedDays])
+  }, [authLoading, authToken, authUser?.id, authUser?.pendingPromoCode, isDaily, product, promoApplied, promoCode, selectedDays])
 
   const loadProduct = useCallback(async () => {
     try {
@@ -721,6 +724,18 @@ function ProductPageInner() {
       {/* Promo code */}
       <div className="card-neutral p-4 mb-4 animate-slide-up" style={{ animationDelay: '0.15s' }}>
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Промокод</h3>
+        {isReferralPurchase && !manualPromoActive && (
+          <div className="mb-3 rounded-xl border border-green-200 bg-green-50 px-3 py-2 dark:border-green-900/40 dark:bg-green-900/20">
+            <p className="text-xs font-medium text-green-700 dark:text-green-400">
+              Покупка по партнёрской ссылке
+            </p>
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">
+              {pendingReferralPromoCode
+                ? `Промокод ${pendingReferralPromoCode} будет применён автоматически к первой покупке.`
+                : 'Скидка по партнёрской ссылке будет применена автоматически после пересчёта цены.'}
+            </p>
+          </div>
+        )}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Tag size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -766,10 +781,10 @@ function ProductPageInner() {
             Скидка {promoDiscount}% применена! Вы экономите ₽{formatPrice(promoDiscountAmount)}
           </p>
         )}
-        {autoPromoActive && quotePromoCode && (
+        {autoPromoActive && effectivePromoCode && (
           <>
             <p className="text-xs text-green-600 mt-2 font-medium">
-              Промокод {quotePromoCode} по партнёрской ссылке применится автоматически.
+              Промокод {effectivePromoCode} по партнёрской ссылке применится автоматически.
             </p>
             <p className="text-xs text-gray-500 mt-1">
               Итоговая сумма уже пересчитана. Если ввести другой промокод, он заменит автоматический.
@@ -793,7 +808,7 @@ function ProductPageInner() {
               <span className="text-sm text-green-700 font-medium">
                 {manualPromoActive
                   ? `Промокод ${quotePromoCode || promoCode.trim()} (${promoDiscount}%)`
-                  : `Промокод ${quotePromoCode}`}
+                  : `Промокод ${effectivePromoCode}`}
               </span>
               <span className="text-sm text-green-700 font-medium">−₽{formatPrice(promoDiscountAmount)}</span>
             </div>
