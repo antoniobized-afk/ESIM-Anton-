@@ -99,6 +99,12 @@ function ProductPageInner() {
   const promoDiscountAmount = pricingQuote?.promoDiscount ?? estimatedPromoDiscount
   const loyaltyDiscountAmount = pricingQuote?.loyaltyDiscount ?? 0
   const payableTotal = pricingQuote?.totalAmount ?? estimatedTotalPrice
+  const quotePromoCode = pricingQuote?.promoCode?.trim() || null
+  const manualPromoActive = promoApplied && Boolean(promoCode.trim())
+  const autoPromoActive = Boolean(quotePromoCode && promoDiscountAmount > 0 && !manualPromoActive)
+  const hasAnyPromoDiscount = Boolean(quotePromoCode && promoDiscountAmount > 0)
+  const showDiscountSummary = hasAnyPromoDiscount || loyaltyDiscountAmount > 0
+  const displayedBasePrice = pricingQuote?.baseAmount ?? basePrice
   const coverageSummary = product ? getCoverageSummary(product) : ''
   const safeReturnTo = sanitizeRedirect(searchParams.get('returnTo'), '')
 
@@ -611,6 +617,17 @@ function ProductPageInner() {
           </div>
           <span className="font-semibold text-primary text-right max-w-[60%]">{coverageSummary}</span>
         </div>
+        <div className="flex items-center justify-between pt-3 mt-1 border-t border-gray-100 dark:border-gray-800/50">
+          <span className="text-sm font-medium text-secondary">
+            {showDiscountSummary ? 'К оплате' : 'Стоимость'}
+          </span>
+          <div className="text-right">
+            {showDiscountSummary && displayedBasePrice > payableTotal ? (
+              <p className="text-xs text-gray-400 line-through">₽{formatPrice(displayedBasePrice)}</p>
+            ) : null}
+            <p className="text-lg font-bold text-primary">₽{formatPrice(payableTotal)}</p>
+          </div>
+        </div>
       </div>
 
       {/* Примечание из админки */}
@@ -717,7 +734,7 @@ function ProductPageInner() {
                 setPromoError('')
               }}
               placeholder="Введите промокод"
-              className={`w-full pl-9 pr-3 py-2.5 rounded-xl border text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f77430]/25 ${promoApplied ? 'border-green-400 bg-green-50 dark:bg-green-900/20' : promoError ? 'border-red-300 bg-red-50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+              className={`w-full pl-9 pr-3 py-2.5 rounded-xl border text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f77430]/25 ${manualPromoActive || autoPromoActive ? 'border-green-400 bg-green-50 dark:bg-green-900/20' : promoError ? 'border-red-300 bg-red-50 dark:bg-red-900/20' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
                 }`}
             />
           </div>
@@ -744,10 +761,20 @@ function ProductPageInner() {
             {promoLoading ? '...' : promoApplied ? '✓' : 'Применить'}
           </button>
         </div>
-        {promoApplied && (
+        {manualPromoActive && promoDiscountAmount > 0 && (
           <p className="text-xs text-green-600 mt-2 font-medium">
             Скидка {promoDiscount}% применена! Вы экономите ₽{formatPrice(promoDiscountAmount)}
           </p>
+        )}
+        {autoPromoActive && quotePromoCode && (
+          <>
+            <p className="text-xs text-green-600 mt-2 font-medium">
+              Промокод {quotePromoCode} по партнёрской ссылке применится автоматически.
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Итоговая сумма уже пересчитана. Если ввести другой промокод, он заменит автоматический.
+            </p>
+          </>
         )}
         {promoError && (
           <p className="text-xs text-red-500 mt-2">{promoError}</p>
@@ -755,15 +782,19 @@ function ProductPageInner() {
       </div>
 
       {/* Discount summary */}
-      {(promoApplied && promoDiscountAmount > 0) || loyaltyDiscountAmount > 0 ? (
+      {showDiscountSummary ? (
         <div className="card-neutral p-4 mb-4 animate-slide-up bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900/30">
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-600">Без скидки</span>
-            <span className="text-sm text-gray-400 line-through">₽{formatPrice(basePrice)}</span>
+            <span className="text-sm text-gray-400 line-through">₽{formatPrice(displayedBasePrice)}</span>
           </div>
-          {promoApplied && promoDiscountAmount > 0 && (
+          {hasAnyPromoDiscount && (
             <div className="flex items-center justify-between mt-1">
-              <span className="text-sm text-green-700 font-medium">Промокод ({promoDiscount}%)</span>
+              <span className="text-sm text-green-700 font-medium">
+                {manualPromoActive
+                  ? `Промокод ${quotePromoCode || promoCode.trim()} (${promoDiscount}%)`
+                  : `Промокод ${quotePromoCode}`}
+              </span>
               <span className="text-sm text-green-700 font-medium">−₽{formatPrice(promoDiscountAmount)}</span>
             </div>
           )}
