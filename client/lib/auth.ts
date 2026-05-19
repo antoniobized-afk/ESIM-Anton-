@@ -67,3 +67,15 @@ export function getTelegramUserId(): string | null {
   const userId = tg?.initDataUnsafe?.user?.id
   return userId ? String(userId) : null
 }
+
+export function getTelegramStartParam(): string | null {
+  if (typeof window === 'undefined') return null
+
+  const tgStartParam = (window as any).Telegram?.WebApp?.initDataUnsafe?.start_param
+  if (typeof tgStartParam === 'string' && tgStartParam.trim()) {
+    return tgStartParam.trim()
+  }
+
+  const urlStartParam = new URLSearchParams(window.location.search).get('tgWebAppStartParam')
+  return urlStartParam?.trim() || null
+}

@@ -34,7 +34,7 @@ export default function ReferralLandingPage() {
       .finally(() => setLoading(false))
   }, [code])
 
-  const telegramLink = `https://t.me/${BOT_USERNAME}?start=ref_${code}`
+  const telegramLink = `https://t.me/${BOT_USERNAME}?startapp=ref_${code}`
 
   // ── Loading ────────────────────────────────────────────────────────
   if (loading) {

@@ -5,6 +5,7 @@ declare global {
         initData: string;
         initDataUnsafe: {
           query_id?: string;
+          start_param?: string;
           user?: {
             id: number;
             first_name: string;

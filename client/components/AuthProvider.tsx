@@ -1,7 +1,17 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, useRef } from 'react'
-import { AuthUser, getToken, setToken as saveToken, getStoredUser, setStoredUser, clearToken, isTelegramEnvironment, hasTelegramLaunchParams } from '@/lib/auth'
+import {
+  AuthUser,
+  getToken,
+  setToken as saveToken,
+  getStoredUser,
+  setStoredUser,
+  clearToken,
+  isTelegramEnvironment,
+  hasTelegramLaunchParams,
+  getTelegramStartParam,
+} from '@/lib/auth'
 import { api, referralsApi } from '@/lib/api'
 
 interface AuthContextValue {
@@ -31,6 +41,22 @@ const AuthContext = createContext<AuthContextValue>({
 })
 
 const PENDING_REFERRAL_KEY = 'pendingReferralCode'
+
+function extractReferralCodeCandidate(): string | null {
+  if (typeof window === 'undefined') return null
+
+  const pendingCode = localStorage.getItem(PENDING_REFERRAL_KEY)?.trim() || null
+  if (pendingCode) {
+    return pendingCode
+  }
+
+  const telegramStartParam = getTelegramStartParam()
+  if (telegramStartParam?.startsWith('ref_')) {
+    return telegramStartParam.slice(4).trim() || null
+  }
+
+  return null
+}
 
 export function AuthProvider({ children }: { children: any }) {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -156,17 +182,15 @@ export function AuthProvider({ children }: { children: any }) {
     init()
   }, [])
 
-  // One-shot: отправить pending referral code после авторизации
+  // One-shot: отправить pending referral code / Telegram start_param после авторизации
   const referralAttemptedRef = useRef(false)
   useEffect(() => {
     if (!isBootstrapped || !user || referralAttemptedRef.current) return
-    const pendingCode = typeof window !== 'undefined'
-      ? localStorage.getItem(PENDING_REFERRAL_KEY)
-      : null
-    if (!pendingCode) return
+    const referralCode = extractReferralCodeCandidate()
+    if (!referralCode) return
     referralAttemptedRef.current = true
     referralsApi
-      .registerWebReferral(pendingCode)
+      .registerWebReferral(referralCode)
       .then(() => {
         localStorage.removeItem(PENDING_REFERRAL_KEY)
         return refreshUser()

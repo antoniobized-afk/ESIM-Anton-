@@ -41,8 +41,10 @@
 
 ### Referral runtime
 
-- Запустить `/start ref_<code>` для нового пользователя.
-- Проверить, что registration проходит один раз.
+- Открыть partner Telegram referral link c `startapp=ref_<partnerCode>` для нового пользователя.
+- Проверить, что после auth bootstrap registration проходит один раз.
+- Проверить обычный user-to-user bot flow: `/start ref_<userCode>`.
+- Дополнительно проверить partner bot fallback: `/start ref_<partnerCode>`.
 - Повторить и убедиться, что anti-rebind не даёт перепривязать пользователя.
 - Проверить `GET /referrals/me`:
   - `referralLink`

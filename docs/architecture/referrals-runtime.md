@@ -107,13 +107,17 @@ One-shot привязка pending referral code к текущему JWT-поль
 Throttle: 30 req/min. Cache: `public, max-age=60`.
 Не отдаёт `userId`, `bonusPercent`, `label`, stats или internal ids.
 
-### Bot registration route
+### Telegram acquisition paths
 
-| Route | Guard | Consumer |
-|-------|-------|----------|
-| `POST /referrals/register` | `ServiceTokenGuard` | `bot/src/api.ts` |
+- `startapp=ref_<partnerCode>` — Telegram Mini App path именно для partner links
+  из admin/public landing. `start_param` приходит в
+  `Telegram.WebApp.initDataUnsafe.start_param` и подхватывается `AuthProvider`
+  после auth bootstrap через `POST /referrals/register-web`.
+- `/start ref_<code>` — основной bot path для обычной user-to-user referral
+  программы и fallback path для прямого bot-start сценария. Registration идёт
+  через `POST /referrals/register` с `ServiceTokenGuard`.
 
-Body: `{ userId, referralCode, telegramId }`
+Для bot path body остаётся: `{ userId, referralCode, telegramId }`
 
 ### Admin routes
 
@@ -232,7 +236,7 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 **Landing** (`/ref/[code]`):
 1. Fetch `GET /referrals/links/:code/public`
 2. Если `isValid=true` → сохранить `pendingReferralCode` в `localStorage`
-3. Показать Telegram deep link CTA + Web CTA на `/login`
+3. Показать Telegram Mini App deep link CTA (`startapp=ref_<partnerCode>`) + Web CTA на `/login`
 4. Если `promoCode` есть → показать с copy action
 5. Web flow не ведёт анонимного пользователя сразу в каталог: сначала login/register,
    затем `AuthProvider` привязывает referral и только после этого пользователь
@@ -240,10 +244,11 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 
 **AuthProvider** integration:
 1. One-shot `useEffect` с `useRef` guard после `isBootstrapped && user`
-2. Читает `pendingReferralCode` из `localStorage`
+2. Читает referral code либо из `pendingReferralCode` в `localStorage`, либо из
+   `Telegram.WebApp.initDataUnsafe.start_param` / `tgWebAppStartParam`
 3. Вызывает `POST /referrals/register-web { referralCode }`
 4. После success → `refreshUser()`
-5. Очищает `localStorage` только при success
+5. Очищает `localStorage` только при success; `start_param` остаётся read-only
 6. При transient error код остаётся в `localStorage`, а one-shot guard сбрасывается для retry после следующего auth/bootstrap pass
 7. Backend `registerReferral()` возвращает `200/null` для terminal no-op исходов (`already referred`, self-referral, inactive code, not found), поэтому success-path можно безопасно считать подтверждённым завершением one-shot без клиентской классификации статусов
 
@@ -337,8 +342,9 @@ Runtime smoke:
 
 - web login → `/referrals`
 - Telegram Mini App cold start → `/referrals`
-- `/start ref_<userCode>` для нового пользователя (legacy path)
-- `/start ref_<partnerCode>` для нового пользователя (partner path)
+- `startapp=ref_<partnerCode>` для partner Telegram Mini App links
+- `/start ref_<userCode>` для обычной user-to-user referral программы
+- `/start ref_<partnerCode>` для bot fallback path
 - web `/ref/<partnerCode>` → auth → verify attribution
 - admin create partner link → copy Telegram/Web URL
 - admin detail stats → verify registrations/revenue
