@@ -6,6 +6,7 @@ import { referralsApi } from '@/lib/api'
 
 const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || 'mojo_mobile_bot'
 const PENDING_REFERRAL_KEY = 'pendingReferralCode'
+const WEB_REFERRAL_RETURN_TO = '/'
 
 export default function ReferralLandingPage() {
   const params = useParams<{ code: string }>()
@@ -139,6 +140,17 @@ export default function ReferralLandingPage() {
                 {promoCopied ? '✓ Скопировано' : 'Копировать'}
               </button>
             </div>
+            <p className="mt-3 text-xs text-secondary">
+              Скидка активируется после входа или регистрации и появится в расчёте первой покупки.
+            </p>
+          </div>
+        )}
+
+        {!promoCode && (
+          <div className="card-neutral p-4 mb-4 animate-slide-up" style={{ animationDelay: '0.05s' }}>
+            <p className="text-sm text-primary">
+              Чтобы активировать условия по приглашению, сначала войдите или зарегистрируйтесь.
+            </p>
           </div>
         )}
 
@@ -157,10 +169,12 @@ export default function ReferralLandingPage() {
           </a>
 
           <button
-            onClick={() => router.push('/')}
+            onClick={() =>
+              router.push(`/login?returnTo=${encodeURIComponent(WEB_REFERRAL_RETURN_TO)}`)
+            }
             className="w-full py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-white/5 text-primary font-semibold hover:bg-white/80 dark:hover:bg-white/10 transition-colors"
           >
-            Продолжить на сайте
+            Войти и активировать скидку
           </button>
         </div>
 

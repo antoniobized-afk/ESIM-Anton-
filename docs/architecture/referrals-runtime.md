@@ -232,8 +232,11 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 **Landing** (`/ref/[code]`):
 1. Fetch `GET /referrals/links/:code/public`
 2. Если `isValid=true` → сохранить `pendingReferralCode` в `localStorage`
-3. Показать Telegram deep link CTA + Web CTA
+3. Показать Telegram deep link CTA + Web CTA на `/login`
 4. Если `promoCode` есть → показать с copy action
+5. Web flow не ведёт анонимного пользователя сразу в каталог: сначала login/register,
+   затем `AuthProvider` привязывает referral и только после этого пользователь
+   видит серверный pricing
 
 **AuthProvider** integration:
 1. One-shot `useEffect` с `useRef` guard после `isBootstrapped && user`
