@@ -655,11 +655,11 @@ function StatsModal({ data, loading, onClose }: StatsModalProps) {
         <StatCard label="Покупки" value={stats.ordersCount} />
         <StatCard
           label="Выручка (primary)"
-          value={`${num(stats.commissionableRevenue).toFixed(0)} ₽`}
+          value={`${num(stats.commissionableRevenue).toFixed(2)} ₽`}
         />
         <StatCard
           label="Заработок партнёра"
-          value={`${num(stats.totalReferrerEarnings).toFixed(0)} ₽`}
+          value={`${num(stats.totalReferrerEarnings).toFixed(2)} ₽`}
         />
       </div>
 
@@ -695,7 +695,7 @@ function StatsModal({ data, loading, onClose }: StatsModalProps) {
                     </TableCell>
                     <TableCell className="text-sm text-slate-600">{u.totalOrders}</TableCell>
                     <TableCell className="text-sm text-slate-600">
-                      {num(u.totalSpent).toFixed(0)} ₽
+                      {num(u.totalSpent).toFixed(2)} ₽
                     </TableCell>
                   </TableRow>
                 ))}
