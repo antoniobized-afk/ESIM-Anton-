@@ -330,15 +330,7 @@ function ProductPageInner() {
         if (userEmail) payload.email = userEmail
         return payload
       }
-      if (userEmail && !user.email) {
-        try {
-          const { api: apiClient } = await import('@/lib/api')
-          const token = authToken || (await import('@/lib/auth')).getToken()
-          await apiClient.patch('/users/me/email', { email: userEmail }, {
-            headers: token ? { Authorization: `Bearer ${token}` } : {}
-          })
-        } catch { /* non-critical */ }
-      }
+      // email передаётся в payload заказа — контроллер сохранит его синхронно
 
       const tg = isTelegramWebApp() ? (window as any).Telegram.WebApp : null
       const finishSuccessfulPurchase = async (message: string) => {

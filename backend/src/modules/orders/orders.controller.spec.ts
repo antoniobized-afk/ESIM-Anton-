@@ -17,7 +17,11 @@ describe('OrdersController', () => {
     fulfillOrder: jest.fn(),
   };
 
-  const controller = new OrdersController(ordersService as any);
+  const usersService = {
+    updateEmail: jest.fn(),
+  };
+
+  const controller = new OrdersController(ordersService as any, usersService as any);
 
   beforeEach(() => jest.clearAllMocks());
 

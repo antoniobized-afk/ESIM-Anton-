@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
+import { UsersService } from '../users/users.service';
 import { OrderStatus } from '@prisma/client';
 import { JwtUserGuard, JwtAdminGuard, CurrentUser, AuthUser } from '@/common/auth/jwt-user.guard';
 import { OrGuard } from '@/common/auth/or.guard';
@@ -31,7 +32,10 @@ const OrdersAccessGuard = OrGuard(JwtAdminGuard, JwtUserGuard);
 @ApiBearerAuth()
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly usersService: UsersService,
+  ) {}
 
   private toCheckoutOrder(order: any): CheckoutOrder {
     return {
@@ -147,6 +151,12 @@ export class OrdersController {
     @CurrentUser() user: AuthUser,
     @Body() createDto: CreateOrderDto,
   ): Promise<CreateOrderResponse> {
+    // Синхронно сохраняем email до создания заказа,
+    // чтобы fulfillOrder гарантированно видел его при отправке уведомления
+    if (createDto.email) {
+      await this.usersService.updateEmail(user.id, createDto.email);
+    }
+
     if (createDto.paymentMethod === 'balance') {
       const result = await this.ordersService.createWithBalance(user.id, createDto.productId, {
         quantity: createDto.quantity,
