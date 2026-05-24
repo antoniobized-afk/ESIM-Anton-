@@ -1190,6 +1190,33 @@ export class OrdersService {
     order: PurchaseAccountingOrder,
     client?: Prisma.TransactionClient | PrismaService,
   ) {
+    // ── Pre-fetch read-only data OUTSIDE the transaction ──
+    // Prisma interactive tx holds a connection from the pool.
+    // Queries via this.prisma inside the tx need ANOTHER connection.
+    // On Railway (small pool) this causes connection pool deadlock.
+    const currentLoyaltyLevel = await this.getEffectiveLoyaltyLevel(
+      Number(order.user.totalSpent),
+    );
+
+    let referralContext: {
+      settings: { enabled: boolean; bonusPercent: number; minPayout: number };
+      referralLink: { id: string; bonusPercent: any; payoutMode: any } | null;
+    } | null = null;
+
+    if (order.user.referredById) {
+      const [settings, referralLink] = await Promise.all([
+        this.systemSettingsService.getReferralSettings(),
+        order.user.referralLinkId
+          ? this.prisma.referralLink.findUnique({
+              where: { id: order.user.referralLinkId },
+              select: { id: true, bonusPercent: true, payoutMode: true },
+            })
+          : Promise.resolve(null),
+      ]);
+      referralContext = { settings, referralLink };
+    }
+
+    // ── Transaction: only tx-bound writes ──
     const run = async (tx: Prisma.TransactionClient | PrismaService) => {
       const claimed = await tx.order.updateMany({
         where: {
@@ -1205,10 +1232,6 @@ export class OrdersService {
       if (claimed.count !== 1) {
         return false;
       }
-
-      const currentLoyaltyLevel = await this.getEffectiveLoyaltyLevel(
-        Number(order.user.totalSpent),
-      );
 
       if (currentLoyaltyLevel) {
         const cashback =
@@ -1243,13 +1266,14 @@ export class OrdersService {
         data: { totalSpent: { increment: order.totalAmount } },
       });
 
-      if (order.user.referredById) {
+      if (order.user.referredById && referralContext) {
         await this.referralsService.awardReferralBonus(
           order.user.referredById,
           Number(order.totalAmount),
           order.id,
           order.user.referralLinkId ?? null,
           tx,
+          referralContext,
         );
       }
 

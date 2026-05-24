@@ -293,6 +293,10 @@ describe('OrdersService', () => {
         'order_1',
         null,
         expect.anything(),
+        expect.objectContaining({
+          settings: expect.objectContaining({ enabled: true }),
+          referralLink: null,
+        }),
       );
       expect(loyaltyService.updateUserLevel).toHaveBeenCalledWith('user_1');
       expect(loyaltyService.getEffectiveLevelForSpent).toHaveBeenCalledWith(10000);

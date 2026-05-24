@@ -556,7 +556,11 @@ export class ReferralsService {
   }
 
   /**
-   * Начислить реферальный бонус
+   * Начислить реферальный бонус.
+   *
+   * @param prefetched — если вызывается внутри interactive tx,
+   *   передайте заранее загруженные settings и referralLink,
+   *   чтобы не обращаться к this.prisma (connection pool deadlock).
    */
   async awardReferralBonus(
     referrerId: string,
@@ -564,40 +568,53 @@ export class ReferralsService {
     orderId?: string,
     referralLinkId?: string | null,
     client: Prisma.TransactionClient | PrismaService = this.prisma,
+    prefetched?: {
+      settings: { enabled: boolean; bonusPercent: number; minPayout: number };
+      referralLink: { id: string; bonusPercent: any; payoutMode: any } | null;
+    },
   ) {
-    const settings = await this.systemSettingsService.getReferralSettings();
+    const settings = prefetched?.settings
+      ?? await this.systemSettingsService.getReferralSettings();
 
     if (!settings.enabled) {
       return { awarded: false, reason: 'disabled', bonusAmount: 0 };
     }
 
-    let resolvedReferralLinkId = referralLinkId;
+    let referralLink: { id: string; bonusPercent: any; payoutMode: any } | null;
 
-    if (resolvedReferralLinkId === undefined && orderId) {
-      const order = await client.order.findUnique({
-        where: { id: orderId },
-        select: {
-          user: {
-            select: {
-              referralLinkId: true,
+    if (prefetched !== undefined) {
+      // Pre-fetched path: data already resolved, skip all reads
+      referralLink = prefetched.referralLink;
+    } else {
+      // Standalone path (admin/manual): resolve referralLink from DB
+      let resolvedReferralLinkId = referralLinkId;
+
+      if (resolvedReferralLinkId === undefined && orderId) {
+        const order = await client.order.findUnique({
+          where: { id: orderId },
+          select: {
+            user: {
+              select: {
+                referralLinkId: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      resolvedReferralLinkId = order?.user?.referralLinkId ?? null;
-    }
+        resolvedReferralLinkId = order?.user?.referralLinkId ?? null;
+      }
 
-    const referralLink =
-      resolvedReferralLinkId === null || resolvedReferralLinkId === undefined
-        ? null
-        : await client.referralLink.findUnique({
-            where: { id: resolvedReferralLinkId },
-            select: { id: true, bonusPercent: true, payoutMode: true },
-          });
+      referralLink =
+        resolvedReferralLinkId === null || resolvedReferralLinkId === undefined
+          ? null
+          : await client.referralLink.findUnique({
+              where: { id: resolvedReferralLinkId },
+              select: { id: true, bonusPercent: true, payoutMode: true },
+            });
 
-    if (resolvedReferralLinkId && !referralLink) {
-      throw new NotFoundException('Referral link для начисления бонуса не найден');
+      if (resolvedReferralLinkId && !referralLink) {
+        throw new NotFoundException('Referral link для начисления бонуса не найден');
+      }
     }
 
     const bonusPercent = referralLink
