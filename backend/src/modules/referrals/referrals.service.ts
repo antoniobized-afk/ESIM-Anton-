@@ -574,7 +574,7 @@ export class ReferralsService {
     let resolvedReferralLinkId = referralLinkId;
 
     if (resolvedReferralLinkId === undefined && orderId) {
-      const order = await this.prisma.order.findUnique({
+      const order = await client.order.findUnique({
         where: { id: orderId },
         select: {
           user: {
@@ -591,7 +591,7 @@ export class ReferralsService {
     const referralLink =
       resolvedReferralLinkId === null || resolvedReferralLinkId === undefined
         ? null
-        : await this.prisma.referralLink.findUnique({
+        : await client.referralLink.findUnique({
             where: { id: resolvedReferralLinkId },
             select: { id: true, bonusPercent: true, payoutMode: true },
           });

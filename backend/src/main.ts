@@ -3,6 +3,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { FulfillmentExceptionFilter } from '@/common/filters/fulfillment-exception.filter';
 
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
@@ -32,6 +33,9 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+
+  // Exception filters
+  app.useGlobalFilters(new FulfillmentExceptionFilter());
 
   // Swagger Documentation
   const config = new DocumentBuilder()

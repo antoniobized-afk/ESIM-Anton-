@@ -131,7 +131,7 @@ type PurchaseAccountingOrder = {
   };
 };
 
-class FulfillmentFinalizeException extends Error {
+export class FulfillmentFinalizeException extends Error {
   readonly kind = 'fulfillment_finalize_failed';
 
   constructor(
@@ -1414,7 +1414,7 @@ export class OrdersService {
           const completedOrder = await this.markOrderCompleted(orderId, issuedEsimSnapshot, tx);
           await this.applyPurchaseCompletionEffects(order, tx);
           return completedOrder;
-        });
+        }, { timeout: 60_000 });
       } catch (error: any) {
         await this.persistProviderIssuedButFinalizeFailed(
           orderId,
