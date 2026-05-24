@@ -144,6 +144,9 @@ Throttle: 30 req/min. Cache: `public, max-age=60`.
 ## Immutable Attribution Policy
 
 - Если `User.referredById` уже заполнен → привязка блокируется
+- Если у пользователя уже есть хотя бы один completed primary order
+  (`status='COMPLETED'` и `parentOrderId IS NULL`) → привязка блокируется,
+  даже если `referredById` ещё пустой
 - Self-referral запрещён и для `User.referralCode`, и для `ReferralLink.userId`
 - Повторная смена referrer-а не поддерживается в V1
 - Attribution immutable, commercial policy mutable до первой successful primary

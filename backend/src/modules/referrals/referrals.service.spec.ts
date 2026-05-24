@@ -15,6 +15,7 @@ function makeService(
       count: jest.fn(),
     },
     order: {
+      findFirst: jest.fn().mockResolvedValue(null),
       findUnique: jest.fn(),
       findMany: jest.fn(),
       aggregate: jest.fn(),
@@ -212,6 +213,29 @@ describe('ReferralsService', () => {
         },
       });
       expect(result).toEqual({ id: 'owner_1', referralCode: 'OWNERREF' });
+    });
+
+    it('не привязывает по partner link пользователя с completed primary order', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        referredById: null,
+        telegramId: BigInt(123456),
+      });
+      prisma.order.findFirst.mockResolvedValueOnce({ id: 'order_1' });
+
+      const result = await service.registerReferral('user_2', 'PARTNER123', BigInt(123456));
+
+      expect(prisma.order.findFirst).toHaveBeenCalledWith({
+        where: {
+          userId: 'user_2',
+          status: 'COMPLETED',
+          parentOrderId: null,
+        },
+        select: { id: true },
+      });
+      expect(prisma.referralLink.findUnique).not.toHaveBeenCalled();
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
+      expect(result).toBeNull();
     });
 
     it('ищет partner link case-insensitive через canonical upper-case code', async () => {
@@ -755,6 +779,29 @@ describe('ReferralsService', () => {
         },
       });
       expect(result).toEqual({ id: 'referrer_1', referralCode: 'REF123' });
+    });
+
+    it('не привязывает legacy referral code, если уже есть completed primary order', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        referredById: null,
+        telegramId: BigInt(123456),
+      });
+      prisma.order.findFirst.mockResolvedValueOnce({ id: 'order_1' });
+
+      const result = await service.registerReferral('user_1', 'REF123');
+
+      expect(prisma.order.findFirst).toHaveBeenCalledWith({
+        where: {
+          userId: 'user_1',
+          status: 'COMPLETED',
+          parentOrderId: null,
+        },
+        select: { id: true },
+      });
+      expect(prisma.referralLink.findUnique).not.toHaveBeenCalled();
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
+      expect(result).toBeNull();
     });
   });
 

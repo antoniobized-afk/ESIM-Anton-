@@ -485,6 +485,19 @@ export class ReferralsService {
       return null;
     }
 
+    const existingCompletedPrimaryOrder = await this.prisma.order.findFirst({
+      where: {
+        userId,
+        status: 'COMPLETED',
+        parentOrderId: null,
+      },
+      select: { id: true },
+    });
+
+    if (existingCompletedPrimaryOrder) {
+      return null;
+    }
+
     const partnerLink = await this.prisma.referralLink.findUnique({
       where: { code: normalizedPartnerCode },
       include: {
