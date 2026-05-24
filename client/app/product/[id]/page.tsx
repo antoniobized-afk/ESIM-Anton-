@@ -592,7 +592,19 @@ function ProductPageInner() {
           </div>
           <div className="min-w-0">
             <h1 className="text-xl font-bold text-primary leading-tight truncate">{getCountryName(product.country)}</h1>
-            <p className="text-sm text-secondary truncate">{product.name}</p>
+            {/* Теги тарифа вместо провайдерского имени */}
+            {(product.tags ?? []).length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {(product.tags ?? []).map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-[10px] font-medium px-1.5 py-0.5 rounded border bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
             <p className="text-sm text-gray-500 mt-2 leading-snug">
               {product.isUnlimited
                 ? 'Лимит обновляется каждый день в течение выбранного периода.'

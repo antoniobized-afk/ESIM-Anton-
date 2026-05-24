@@ -54,6 +54,30 @@ export class ProductsService implements OnModuleInit {
     const name = `${pkg.name || ''} ${pkg.slug || ''} ${pkg.description || ''}`.toLowerCase();
     const countryLc = (country || '').toLowerCase();
     const locationLc = (pkg.location || '').toString().toLowerCase();
+
+    // ──────────────────────────────────────────────────────────
+    // Маркеры HK IP — провайдер (eSIM Access) роутит трафик через
+    // Гонконг для дешёвых пакетов ЛЮБЫХ стран (не только Китая).
+    // Маркер nonhkip/non-hk/etc. означает, что трафик идёт напрямую
+    // через сеть страны назначения → IP страны, нет блокировок
+    // TikTok/Facebook и т.д. Такие пакеты дороже.
+    // ──────────────────────────────────────────────────────────
+    const isNonHkIp =
+      name.includes('nonhkip') ||
+      name.includes('non-hk') ||
+      name.includes('non hk') ||
+      name.includes('no hk') ||
+      name.includes('no hong kong') ||
+      name.includes('excluding hk') ||
+      name.includes('exclude hk') ||
+      name.includes('mainland');
+
+    const hasHkExplicit =
+      name.includes('hk ip') ||
+      name.includes('hong kong ip') ||
+      name.includes('via hk') ||
+      name.includes('via hong kong');
+
     const looksLikeChina =
       countryLc.includes('china') ||
       countryLc === 'cn' ||
@@ -61,32 +85,13 @@ export class ProductsService implements OnModuleInit {
       name.includes('china') ||
       name.includes('cn ');
 
-    if (looksLikeChina) {
-      // Материковый Китай — выделяем как отдельную пометку, чтобы клиенты видели
-      // что трафик идёт через материковую сеть, а не через Гонконг.
-      const isMainland =
-        name.includes('mainland') ||
-        name.includes('материков') ||
-        // Названия eSIM Access вида "China(no Hong Kong)" / "China Excluding HK"
-        name.includes('no hong kong') ||
-        name.includes('excluding hk') ||
-        name.includes('exclude hk') ||
-        name.includes('non-hk') ||
-        name.includes('non hk') ||
-        name.includes('no hk');
-
-      const hasHkExplicit =
-        name.includes('hk ip') ||
-        name.includes('hong kong ip') ||
-        name.includes('via hk') ||
-        name.includes('via hong kong');
-
-      if (isMainland) {
+    if (isNonHkIp) {
+      tags.add('Не гонконгский IP');
+      if (looksLikeChina) {
         tags.add('Материковый Китай');
-        tags.add('Не гонконгский IP');
-      } else if (hasHkExplicit) {
-        tags.add('Гонконгский IP');
       }
+    } else if (hasHkExplicit) {
+      tags.add('Гонконгский IP');
     }
 
     // Скоростные пометки. Используем регекс с границами, чтобы не путать

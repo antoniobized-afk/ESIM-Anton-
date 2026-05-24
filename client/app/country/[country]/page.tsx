@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState, useEffect, useMemo, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
@@ -64,24 +64,8 @@ function CountryPageInner() {
     activeTab === 'unlimited' ? p.isUnlimited : !p.isUnlimited
   )
 
-  // Определяем тарифы-«дубли»: одинаковые dataAmount + validityDays + isUnlimited,
-  // но разные по цене/провайдеру. Для таких показываем provider name, чтобы
-  // пользователь мог их различить. Работает универсально для любой страны.
-  const duplicateGroupKeys = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const p of products) {
-      const key = `${p.dataAmount}|${p.validityDays}|${p.isUnlimited}`
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    }
-    const dups = new Set<string>()
-    for (const [key, count] of counts) {
-      if (count > 1) dups.add(key)
-    }
-    return dups
-  }, [products])
 
-  const isDuplicate = (p: Product) =>
-    duplicateGroupKeys.has(`${p.dataAmount}|${p.validityDays}|${p.isUnlimited}`)
+
   const firstProd = products[0] || null
   const selectedCoverageItems = firstProd ? getCoverageItems(firstProd).map(getCountryName) : []
   const selectedCoverageCount = firstProd ? getCoverageCount(firstProd) : 1
@@ -284,31 +268,19 @@ function CountryPageInner() {
                     {getCoverageScopeLabel(product)}: {getCoverageSummary(product)}
                   </p>
                 )}
-                {/* Для дублей (одинаковые объём+срок) — показываем теги от backend,
-                      чтобы пользователь видел чем тарифы отличаются.
-                      Если тегов нет — fallback на провайдерское название. */}
-                {isDuplicate(product) && (() => {
-                  const tags = product.tags ?? []
-                  if (tags.length > 0) {
-                    return (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="text-[10px] font-medium px-1.5 py-0.5 rounded border bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )
-                  }
-                  return (
-                    <p className="text-xs text-gray-400 mt-0.5 italic">
-                      {product.name}
-                    </p>
-                  )
-                })()}
+                {/* Теги тарифа (Материковый Китай, Не гонконгский IP, 5G и т.д.) */}
+                {(product.tags ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(product.tags ?? []).map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-[10px] font-medium px-1.5 py-0.5 rounded border bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {/* Скорость после лимита для Daily Unlimited */}
                 {product.isUnlimited && product.speed && (
                   <p className="text-xs text-gray-400 mt-0.5">

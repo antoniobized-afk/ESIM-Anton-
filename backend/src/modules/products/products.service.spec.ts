@@ -62,6 +62,44 @@ describe('ProductsService.inferTagsFromPackage', () => {
     });
   });
 
+  describe('Не гонконгский IP (любая страна)', () => {
+    it('Таиланд с (nonhkip) получает «Не гонконгский IP»', () => {
+      const tags = service.inferTagsFromPackage(
+        { name: 'Thailand 1GB 7Days (nonhkip)' },
+        'TH',
+      );
+      expect(tags).toContain('Не гонконгский IP');
+      expect(tags).not.toContain('Материковый Китай');
+    });
+
+    it('другая страна с non-hk маркером тоже получает тег', () => {
+      const tags = service.inferTagsFromPackage(
+        { name: 'Vietnam 3GB non-hk 30days' },
+        'VN',
+      );
+      expect(tags).toContain('Не гонконгский IP');
+      expect(tags).not.toContain('Материковый Китай');
+    });
+
+    it('«via HK» для любой страны → «Гонконгский IP»', () => {
+      const tags = service.inferTagsFromPackage(
+        { name: 'Thailand 5GB via HK IP' },
+        'TH',
+      );
+      expect(tags).toContain('Гонконгский IP');
+      expect(tags).not.toContain('Не гонконгский IP');
+    });
+
+    it('обычный пакет без HK-маркеров не получает тегов IP', () => {
+      const tags = service.inferTagsFromPackage(
+        { name: 'Thailand 5GB 30 days' },
+        'TH',
+      );
+      expect(tags).not.toContain('Не гонконгский IP');
+      expect(tags).not.toContain('Гонконгский IP');
+    });
+  });
+
   describe('Скоростные/функциональные пометки', () => {
     it('распознаёт 5G', () => {
       expect(
