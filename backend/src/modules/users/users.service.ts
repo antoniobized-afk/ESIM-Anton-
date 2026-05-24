@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 
@@ -126,13 +126,47 @@ export class UsersService {
   }
 
   /**
-   * Сохранить email пользователя
+   * Сохранить email пользователя.
+   *
+   * - Идемпотентно: если email уже принадлежит этому пользователю — возвращает без записи.
+   * - Конфликт: если email занят другим аккаунтом — бросает ConflictException
+   *   с понятным сообщением для UI.
    */
   async updateEmail(userId: string, email: string) {
-    return this.prisma.user.update({
-      where: { id: userId },
-      data: { email },
+    const normalized = email.trim().toLowerCase();
+
+    const existing = await this.prisma.user.findUnique({
+      where: { email: normalized },
+      select: { id: true },
     });
+
+    if (existing) {
+      if (existing.id === userId) {
+        // Email уже привязан к этому пользователю — ничего делать не нужно
+        return this.prisma.user.findUnique({ where: { id: userId } });
+      }
+      throw new ConflictException(
+        'Этот email уже привязан к другому аккаунту. Укажите другой адрес или войдите через этот email.',
+      );
+    }
+
+    try {
+      return await this.prisma.user.update({
+        where: { id: userId },
+        data: { email: normalized },
+      });
+    } catch (error) {
+      // TOCTOU safety: между findUnique и update другой запрос мог занять email
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException(
+          'Этот email уже привязан к другому аккаунту. Укажите другой адрес или войдите через этот email.',
+        );
+      }
+      throw error;
+    }
   }
 
   /**
