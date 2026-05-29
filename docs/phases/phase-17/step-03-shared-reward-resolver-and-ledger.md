@@ -43,7 +43,53 @@
 
 ## Статус
 
-- `planned`
+- `done`
+
+## Реализация
+
+- Добавлен `PartnerRewardsService` в
+  `backend/src/modules/referrals/partner-rewards.service.ts`.
+- `ReferralsModule` экспортирует `PartnerRewardsService`, чтобы следующий шаг
+  мог подключить partner promo reward в order completion без дублирования
+  ledger-логики.
+- `ReferralsService.awardReferralBonus()` сохранён как compatibility wrapper
+  для Phase 16 и теперь только резолвит referral context:
+  - `referral_link` source, если есть `ReferralLink`;
+  - `legacy_referral` source для старого user-to-user referral без link;
+  - `manual_award` source для ручного начисления без order.
+- Единая точка начисления теперь владеет:
+  - расчётом `Prisma.Decimal` суммы;
+  - `BALANCE` / `EXTERNAL` payout semantics;
+  - order-level idempotency guard;
+  - ledger записью `TransactionType.REFERRAL_BONUS`;
+  - аналитическими ключами `referralLinkId` / `promoCodeId`;
+  - `metadata.source` (`referral_link`, `legacy_referral`,
+    `partner_promo_code`, `manual_award`).
+- Partner promo reward уже поддержан сервисом через source
+  `partner_promo_code`: создаётся `REFERRAL_BONUS` transaction с `promoCodeId`,
+  snapshot percent и `metadata.source='partner_promo_code'`.
+- `EXTERNAL` для partner promo создаёт только ledger transaction и не
+  увеличивает `bonusBalance`.
+- `BALANCE` для referral link / partner promo увеличивает `bonusBalance`
+  владельца и создаёт ledger transaction.
+
+## Idempotency contract
+
+- Для любого `orderId` создаётся максимум один successful
+  `REFERRAL_BONUS`, независимо от owner/source.
+- Service-level precheck ищет существующий successful reward по
+  `orderId + type + status`.
+- DB-level guard из Step 2 (`transactions_referral_bonus_once_per_order`)
+  остаётся последней линией защиты при гонках.
+- Повторный completion accounting остаётся no-op через существующий
+  `Order.completionAccountingAppliedAt`, а reward service дополнительно
+  защищает ledger от прямого повторного вызова.
+
+## Deferred to Step 4
+
+- Подключить resolver в `OrdersService.applyPurchaseCompletionEffects()`:
+  сначала manual partner promo snapshot, затем fallback на referral attribution.
+- Добавить checkout self-reward rejection, когда есть buyer/order context.
 
 ## Журнал изменений
 
@@ -51,6 +97,9 @@
 
 - Step создан как guardrail против копирования `awardReferralBonus()` в
   `PromoCodesService` или `OrdersService`.
+- Step выполнен: общий `PartnerRewardsService` добавлен, referral behavior
+  сохранён через wrapper, partner promo ledger готов к подключению в completion
+  flow на Step 4.
 
 ## Файлы
 

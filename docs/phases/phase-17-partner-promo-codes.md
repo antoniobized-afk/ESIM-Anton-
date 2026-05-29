@@ -213,6 +213,11 @@
   validation и migration
   `20260529163000_add_partner_promo_policy_snapshots`. Reward начисление ещё не
   подключено: выбор partner promo vs referral link остаётся scope Step 3.
+- Step 3 выполнен: добавлен общий `PartnerRewardsService`, который владеет
+  `BALANCE/EXTERNAL` semantics, order-level idempotency, `referralLinkId` /
+  `promoCodeId` ledger keys и `metadata.source`. `ReferralsService` сохранён
+  как compatibility wrapper; partner promo reward готов к подключению в
+  `OrdersService` на Step 4.
 
 ## Ссылки
 

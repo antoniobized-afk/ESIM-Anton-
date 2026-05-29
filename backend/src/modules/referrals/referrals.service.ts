@@ -12,8 +12,8 @@ import {
   TransactionStatus,
   TransactionType,
 } from '@prisma/client';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { SystemSettingsService } from '../system-settings/system-settings.service';
+import { PartnerRewardsService, PartnerRewardSettings } from './partner-rewards.service';
 
 type ReferralLinkCreateInput = {
   code?: string;
@@ -49,6 +49,7 @@ export class ReferralsService {
     private prisma: PrismaService,
     private systemSettingsService: SystemSettingsService,
     private configService: ConfigService,
+    private partnerRewardsService: PartnerRewardsService,
   ) { }
 
   private normalizeLookupCode(code: string) {
@@ -586,7 +587,7 @@ export class ReferralsService {
     referralLinkId?: string | null,
     client: Prisma.TransactionClient | PrismaService = this.prisma,
     prefetched?: {
-      settings: { enabled: boolean; bonusPercent: number; minPayout: number };
+      settings: PartnerRewardSettings;
       referralLink: { id: string; bonusPercent: any; payoutMode: any } | null;
     },
   ) {
@@ -634,106 +635,25 @@ export class ReferralsService {
       }
     }
 
-    const bonusPercent = referralLink
-      ? new Prisma.Decimal(referralLink.bonusPercent)
-      : new Prisma.Decimal(settings.bonusPercent);
-    const bonusAmount = new Prisma.Decimal(orderAmount)
-      .mul(bonusPercent)
-      .div(100)
-      .toDecimalPlaces(2);
-
-    if (bonusAmount.lte(0)) {
-      return { awarded: false, reason: 'zero-bonus', bonusAmount: 0 };
-    }
-
-    try {
-      const run = async (tx: Prisma.TransactionClient | PrismaService) => {
-        if (orderId) {
-          const existingBonus = await tx.transaction.findFirst({
-            where: {
-              userId: referrerId,
-              orderId,
-              type: TransactionType.REFERRAL_BONUS,
-              status: TransactionStatus.SUCCEEDED,
-            },
-          });
-
-          if (existingBonus) {
-            return {
-              awarded: false,
-              reason: 'already-awarded',
-              bonusAmount: Number(existingBonus.amount),
-            };
+    return this.partnerRewardsService.award({
+      ownerId: referrerId,
+      orderAmount,
+      orderId,
+      settings,
+      client,
+      source: referralLink
+        ? {
+            kind: 'referral_link',
+            referralLinkId: referralLink.id,
+            bonusPercent: referralLink.bonusPercent,
+            payoutMode: referralLink.payoutMode ?? ReferralPayoutMode.BALANCE,
           }
-        }
-
-        const payoutMode = referralLink?.payoutMode ?? ReferralPayoutMode.BALANCE;
-
-        if (payoutMode === ReferralPayoutMode.BALANCE) {
-          await tx.user.update({
-            where: { id: referrerId },
-            data: {
-              bonusBalance: {
-                increment: bonusAmount,
-              },
-            },
-          });
-        }
-
-        await tx.transaction.create({
-          data: {
-            userId: referrerId,
-            orderId,
-            referralLinkId: referralLink?.id ?? null,
-            type: TransactionType.REFERRAL_BONUS,
-            status: TransactionStatus.SUCCEEDED,
-            amount: bonusAmount,
-            metadata: {
-              orderAmount,
-              bonusPercent: Number(bonusPercent),
-              minPayout: settings.minPayout,
-              payoutMode,
-              source: orderId ? 'completed_order' : 'manual_award',
-            },
+        : {
+            kind: orderId ? 'legacy_referral' : 'manual_award',
+            bonusPercent: settings.bonusPercent,
+            payoutMode: ReferralPayoutMode.BALANCE,
           },
-        });
-
-        return {
-          awarded: true,
-          bonusAmount: Number(bonusAmount),
-        };
-      };
-
-      if (client === this.prisma) {
-        return await this.prisma.$transaction((tx) => run(tx));
-      }
-
-      return await run(client);
-    } catch (error) {
-      if (
-        error instanceof PrismaClientKnownRequestError &&
-        error.code === 'P2002'
-      ) {
-        const existingBonus = orderId
-          ? await client.transaction.findFirst({
-              where: {
-                userId: referrerId,
-                orderId,
-                type: TransactionType.REFERRAL_BONUS,
-                status: TransactionStatus.SUCCEEDED,
-              },
-            })
-          : null;
-
-        return {
-          awarded: false,
-          reason: 'already-awarded',
-          bonusAmount: existingBonus ? Number(existingBonus.amount) : Number(bonusAmount),
-        };
-      }
-
-      throw error;
-    }
+    });
   }
 
   /**

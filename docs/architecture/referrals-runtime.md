@@ -169,7 +169,8 @@ purchase: если пользователь уже был привязан к д
 
 ## Partner Bonus Percent And PayoutMode Flow
 
-`awardReferralBonus()` определяет процент по каскаду:
+`awardReferralBonus()` сохранён как совместимый wrapper над
+`PartnerRewardsService`. Wrapper определяет процент по каскаду:
 
 1. `ReferralLink.bonusPercent` (если `Transaction.referralLinkId` → link exists)
 2. Fallback на глобальный `REFERRAL_BONUS_PERCENT` из `SystemSettings`
@@ -189,6 +190,18 @@ purchase: если пользователь уже был привязан к д
 `Transaction.referralLinkId` является индексируемым source of truth для
 партнёрских analytics. JSON metadata не используется как аналитический ключ,
 но содержит `payoutMode` для аудита.
+
+После Phase 17 Step 3 `PartnerRewardsService` владеет единым ledger contract:
+
+- `metadata.source='referral_link'` для partner referral link rewards;
+- `metadata.source='legacy_referral'` для старого user-to-user referral без
+  `ReferralLink`;
+- `metadata.source='partner_promo_code'` для partner promo rewards;
+- `metadata.source='manual_award'` для ручных начислений без order;
+- `Transaction.promoCodeId` является индексируемым ключом для partner promo
+  reward analytics;
+- один `orderId` может иметь максимум один successful `REFERRAL_BONUS`,
+  независимо от owner/source.
 
 ## Когда В Ссылке Заданы И `bonusPercent`, И `promoCode`
 

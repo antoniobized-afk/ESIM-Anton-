@@ -77,6 +77,22 @@ Analytics key для partner promo rewards — `Transaction.promoCodeId`.
 Raw partial unique index `transactions_referral_bonus_once_per_order` закрепляет
 one partner reward per primary order на уровне БД.
 
+### PartnerRewardsService
+
+`backend/src/modules/referrals/partner-rewards.service.ts` — единая точка
+создания partner reward ledger.
+
+Поддерживаемые source:
+
+- `referral_link` — пишет `referralLinkId`, `metadata.source='referral_link'`;
+- `legacy_referral` — старый user-to-user referral без link;
+- `partner_promo_code` — пишет `promoCodeId`,
+  `metadata.source='partner_promo_code'`;
+- `manual_award` — ручное начисление без order.
+
+Service-level и DB-level idempotency работают на уровне order: один
+successful primary order может иметь максимум один `REFERRAL_BONUS`.
+
 ## API Surface
 
 ### Admin promo routes
@@ -191,10 +207,10 @@ order cancellation boundary.
 
 ## Remaining Implementation Gaps For Phase 17
 
-- Introduce shared reward resolver before calling the current referral award
-  path.
 - Extend admin typed API/UI after backend contracts are stable.
 - Integrate checkout self-reward rejection when buyer context is available.
+- Connect `OrdersService.applyPurchaseCompletionEffects()` to choose manual
+  partner promo snapshot before referral fallback.
 
 ## Verification Baseline
 

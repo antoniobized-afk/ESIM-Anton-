@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { ReferralsService } from './referrals.service';
 import { TransactionStatus, TransactionType } from '@prisma/client';
+import { PartnerRewardsService } from './partner-rewards.service';
 
 function makeService(
   settingsOverride?: Partial<{ bonusPercent: number; minPayout: number; enabled: boolean }>,
@@ -67,13 +68,19 @@ function makeService(
     }),
   };
 
+  const partnerRewardsService = new PartnerRewardsService(
+    prisma as any,
+    systemSettingsService as any,
+  );
+
   const service = new ReferralsService(
     prisma as any,
     systemSettingsService as any,
     configService as any,
+    partnerRewardsService,
   );
 
-  return { service, prisma, systemSettingsService, configService };
+  return { service, prisma, systemSettingsService, configService, partnerRewardsService };
 }
 
 describe('ReferralsService', () => {
@@ -419,7 +426,6 @@ describe('ReferralsService', () => {
       expect(systemSettingsService.getReferralSettings).toHaveBeenCalledTimes(1);
       expect(prisma.transaction.findFirst).toHaveBeenCalledWith({
         where: {
-          userId: 'ref_1',
           orderId: 'order_1',
           type: TransactionType.REFERRAL_BONUS,
           status: TransactionStatus.SUCCEEDED,
@@ -438,6 +444,7 @@ describe('ReferralsService', () => {
           userId: 'ref_1',
           orderId: 'order_1',
           referralLinkId: null,
+          promoCodeId: null,
           type: TransactionType.REFERRAL_BONUS,
           status: TransactionStatus.SUCCEEDED,
           amount: new Prisma.Decimal(84),
@@ -446,7 +453,7 @@ describe('ReferralsService', () => {
             bonusPercent: 7,
             minPayout: 900,
             payoutMode: 'BALANCE',
-            source: 'completed_order',
+            source: 'legacy_referral',
           },
         },
       });
@@ -474,7 +481,6 @@ describe('ReferralsService', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
       expect(tx.transaction.findFirst).toHaveBeenCalledWith({
         where: {
-          userId: 'ref_1',
           orderId: 'order_1',
           type: TransactionType.REFERRAL_BONUS,
           status: TransactionStatus.SUCCEEDED,
