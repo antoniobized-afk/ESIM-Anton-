@@ -53,13 +53,30 @@
 
 ## Статус
 
-- `planned`
+- `done`
 
 ## Журнал изменений
 
 ### 2026-05-29
 
 - Step создан для отдельного admin/UI contour.
+- Backend admin promo response shape выровнен для `GET/POST/PATCH/toggle`:
+  возвращаются `referralOwner` и `totalReferrerEarnings`, где earnings считаются
+  по successful `REFERRAL_BONUS` transactions с `promoCodeId`.
+- `DELETE /promo-codes/:id` защищён от потери audit trail: промокод с
+  `redemptions`, `transactions` или связанными `referralLinks` нельзя удалить,
+  его нужно отключать через `isActive=false`.
+- Admin `PromoCodes` переведён с inline create form на typed `Modal` create/edit
+  flow с `UserPicker`, partner reward block, payout select, `clear owner/policy`
+  и без `any`.
+- Таблица промокодов показывает owner, payout mode, reward percent и начислено;
+  обычные промокоды остаются discount-only и показываются как `Обычный`.
+- `UserPicker` теперь синхронизирует внутренний selected state с внешним `value`,
+  чтобы clear owner/policy корректно очищал UI.
+- Verification:
+  - `npx jest src/modules/promo-codes/ --runInBand` — pass, 17 tests;
+  - `npx tsc --noEmit -p tsconfig.json` в `backend` — pass;
+  - `npx tsc --noEmit` в `admin` — pass.
 
 ## Файлы
 

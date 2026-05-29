@@ -1,10 +1,13 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import {
+  OrderStatus,
   Prisma,
   PromoCodeRedemptionSource,
   PromoCodeRedemptionStatus,
   ReferralPayoutMode,
+  TransactionStatus,
+  TransactionType,
 } from '@prisma/client';
 import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
 import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
@@ -20,6 +23,29 @@ type ReservationRewardPolicy = {
   bonusPercent: Prisma.Decimal;
   payoutMode: ReferralPayoutMode;
 } | null;
+
+const promoCodeAdminInclude = {
+  referralOwner: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      username: true,
+      email: true,
+      referralCode: true,
+    },
+  },
+} satisfies Prisma.PromoCodeInclude;
+
+type PromoCodeAdminRecord = Prisma.PromoCodeGetPayload<{
+  include: typeof promoCodeAdminInclude;
+}>;
+
+type PromoCodePayoutSplitRow = {
+  payoutMode: ReferralPayoutMode | null;
+  rewardsCount: bigint;
+  totalEarnings: Prisma.Decimal | null;
+};
 
 @Injectable()
 export class PromoCodesService {
@@ -125,6 +151,39 @@ export class PromoCodesService {
     };
   }
 
+  private async attachRewardSummaries(promoCodes: PromoCodeAdminRecord[]) {
+    if (promoCodes.length === 0) {
+      return [];
+    }
+
+    const rewardSums = await this.prisma.transaction.groupBy({
+      by: ['promoCodeId'],
+      where: {
+        promoCodeId: { in: promoCodes.map((promoCode) => promoCode.id) },
+        type: TransactionType.REFERRAL_BONUS,
+        status: TransactionStatus.SUCCEEDED,
+      },
+      _sum: { amount: true },
+    });
+
+    const rewardsByPromoId = new Map(
+      rewardSums
+        .filter((item) => item.promoCodeId)
+        .map((item) => [item.promoCodeId!, item._sum.amount ?? new Prisma.Decimal(0)]),
+    );
+
+    return promoCodes.map((promoCode) => ({
+      ...promoCode,
+      totalReferrerEarnings:
+        rewardsByPromoId.get(promoCode.id) ?? new Prisma.Decimal(0),
+    }));
+  }
+
+  private async attachRewardSummary(promoCode: PromoCodeAdminRecord) {
+    const [decorated] = await this.attachRewardSummaries([promoCode]);
+    return decorated;
+  }
+
   async create(data: CreatePromoCodeDto) {
     const normalized = this.normalizeCode(data.code);
     const rewardPolicy = this.validatePartnerRewardPolicyBlock(data, 'create');
@@ -140,7 +199,7 @@ export class PromoCodesService {
       await this.assertRewardOwnerExists(data.referralOwnerId!);
     }
 
-    return this.prisma.promoCode.create({
+    const promoCode = await this.prisma.promoCode.create({
       data: {
         code: normalized,
         discountPercent: data.discountPercent,
@@ -158,25 +217,99 @@ export class PromoCodesService {
             ? data.referralPayoutMode!
             : null,
       },
+      include: promoCodeAdminInclude,
     });
+
+    return this.attachRewardSummary(promoCode);
   }
 
   async findAll() {
-    return this.prisma.promoCode.findMany({
-      include: {
-        referralOwner: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            username: true,
-            email: true,
-            referralCode: true,
-          },
-        },
-      },
+    const promoCodes = await this.prisma.promoCode.findMany({
+      include: promoCodeAdminInclude,
       orderBy: { createdAt: 'desc' },
     });
+
+    return this.attachRewardSummaries(promoCodes);
+  }
+
+  async getStats(id: string) {
+    const promoCode = await this.prisma.promoCode.findUnique({
+      where: { id },
+      include: promoCodeAdminInclude,
+    });
+
+    if (!promoCode) {
+      throw new NotFoundException('Промокод не найден');
+    }
+
+    const [uses, primaryOrders, totalReferrerEarnings, payoutSplitRows] =
+      await Promise.all([
+        this.prisma.promoCodeRedemption.aggregate({
+          where: {
+            promoCodeId: id,
+            status: PromoCodeRedemptionStatus.CONSUMED,
+          },
+          _count: { id: true },
+        }),
+        this.prisma.order.aggregate({
+          where: {
+            status: OrderStatus.COMPLETED,
+            parentOrderId: null,
+            promoCodeRedemption: {
+              is: {
+                promoCodeId: id,
+                status: PromoCodeRedemptionStatus.CONSUMED,
+              },
+            },
+          },
+          _count: { id: true },
+          _sum: { totalAmount: true },
+        }),
+        this.prisma.transaction.aggregate({
+          where: {
+            promoCodeId: id,
+            type: TransactionType.REFERRAL_BONUS,
+            status: TransactionStatus.SUCCEEDED,
+          },
+          _sum: { amount: true },
+        }),
+        this.prisma.$queryRaw<PromoCodePayoutSplitRow[]>(Prisma.sql`
+          SELECT r."rewardPayoutModeSnapshot" AS "payoutMode",
+                 COUNT(t.id)                   AS "rewardsCount",
+                 SUM(t.amount)                 AS "totalEarnings"
+          FROM transactions t
+          JOIN promo_code_redemptions r
+            ON r."orderId" = t."orderId"
+           AND r."promoCodeId" = t."promoCodeId"
+          WHERE t."promoCodeId" = ${id}
+            AND t.type = 'REFERRAL_BONUS'
+            AND t.status = 'SUCCEEDED'
+          GROUP BY r."rewardPayoutModeSnapshot"
+          ORDER BY r."rewardPayoutModeSnapshot"
+        `),
+      ]);
+
+    const totalEarnings =
+      totalReferrerEarnings._sum.amount ?? new Prisma.Decimal(0);
+
+    return {
+      promoCode: {
+        ...promoCode,
+        totalReferrerEarnings: totalEarnings,
+      },
+      stats: {
+        uses: uses._count.id,
+        completedPrimaryOrders: primaryOrders._count.id,
+        commissionableRevenue:
+          primaryOrders._sum.totalAmount ?? new Prisma.Decimal(0),
+        totalReferrerEarnings: totalEarnings,
+      },
+      payoutModeSplit: payoutSplitRows.map((row) => ({
+        payoutMode: row.payoutMode,
+        rewardsCount: Number(row.rewardsCount),
+        totalEarnings: row.totalEarnings ?? new Prisma.Decimal(0),
+      })),
+    };
   }
 
   async validate(code: string) {
@@ -347,10 +480,13 @@ export class PromoCodesService {
   }
 
   async toggleActive(id: string, isActive: boolean) {
-    return this.prisma.promoCode.update({
+    const promoCode = await this.prisma.promoCode.update({
       where: { id },
       data: { isActive },
+      include: promoCodeAdminInclude,
     });
+
+    return this.attachRewardSummary(promoCode);
   }
 
   async update(id: string, data: UpdatePromoCodeDto) {
@@ -414,25 +550,45 @@ export class PromoCodesService {
         data.referralPayoutMode ?? ReferralPayoutMode.BALANCE;
     }
 
-    return this.prisma.promoCode.update({
+    const promoCode = await this.prisma.promoCode.update({
       where: { id },
       data: updateData,
-      include: {
-        referralOwner: {
+      include: promoCodeAdminInclude,
+    });
+
+    return this.attachRewardSummary(promoCode);
+  }
+
+  async delete(id: string) {
+    const usage = await this.prisma.promoCode.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        _count: {
           select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            username: true,
-            email: true,
-            referralCode: true,
+            redemptions: true,
+            transactions: true,
+            referralLinks: true,
           },
         },
       },
     });
-  }
 
-  async delete(id: string) {
+    if (!usage) {
+      throw new NotFoundException('Промокод не найден');
+    }
+
+    const hasHistory =
+      usage._count.redemptions > 0 ||
+      usage._count.transactions > 0 ||
+      usage._count.referralLinks > 0;
+
+    if (hasHistory) {
+      throw new BadRequestException(
+        'Промокод уже связан с заказами, начислениями или партнёрскими ссылками. Отключите его вместо удаления.',
+      );
+    }
+
     return this.prisma.promoCode.delete({ where: { id } });
   }
 }

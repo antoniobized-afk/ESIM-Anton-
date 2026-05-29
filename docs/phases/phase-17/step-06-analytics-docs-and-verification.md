@@ -44,13 +44,25 @@
 
 ## Статус
 
-- `planned`
+- `completed`
 
 ## Журнал изменений
 
 ### 2026-05-29
 
 - Step создан как closure/verification gate фазы.
+- Добавлен admin endpoint `GET /promo-codes/:id/stats` и typed admin modal для
+  detail analytics партнёрских промокодов.
+- Stats contract фиксирует `uses` как consumed redemptions,
+  `completedPrimaryOrders`/`commissionableRevenue` как completed primary orders
+  с `parentOrderId=null`, `totalReferrerEarnings` как successful
+  `REFERRAL_BONUS` по `Transaction.promoCodeId`.
+- Payout split считается на backend по snapshot
+  `PromoCodeRedemption.rewardPayoutModeSnapshot`, чтобы правки текущего
+  `PromoCode.referralPayoutMode` не переписывали историю.
+- Runtime wiki обновлена: `promo-codes-runtime.md`, cross-link в
+  `referrals-runtime.md`, устаревшее утверждение про
+  `PromoCodeRedemptionSource` исправлено.
 
 ## Файлы
 
@@ -59,7 +71,12 @@
 - `docs/architecture/README.md`
 - `docs/phases/phase-17-partner-promo-codes.md`
 - `docs/plans/plan_promocodes.md`
-- backend/admin analytics files discovered during implementation
+- `backend/src/modules/promo-codes/promo-codes.service.ts`
+- `backend/src/modules/promo-codes/promo-codes.controller.ts`
+- `backend/src/modules/promo-codes/promo-codes.service.spec.ts`
+- `admin/lib/types.ts`
+- `admin/lib/api.ts`
+- `admin/components/PromoCodes.tsx`
 
 ## Тестирование / Верификация
 

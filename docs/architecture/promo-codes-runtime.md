@@ -99,15 +99,41 @@ successful primary order может иметь максимум один `REFERR
 
 | Route | Guard | Current contract |
 |-------|-------|------------------|
-| `GET /promo-codes` | `JwtAdminGuard` | list all promo codes |
+| `GET /promo-codes` | `JwtAdminGuard` | list all promo codes with owner and `totalReferrerEarnings` summary |
+| `GET /promo-codes/:id/stats` | `JwtAdminGuard` | detail analytics for promo uses, completed primary orders, commissionable revenue, owner earnings and payout split |
 | `POST /promo-codes` | `JwtAdminGuard` | create обычный или partner promo через DTO |
 | `PATCH /promo-codes/:id` | `JwtAdminGuard` | update promo и optional partner policy |
 | `PATCH /promo-codes/:id/toggle` | `JwtAdminGuard` | toggle `{ isActive }` |
-| `DELETE /promo-codes/:id` | `JwtAdminGuard` | delete promo |
+| `DELETE /promo-codes/:id` | `JwtAdminGuard` | delete only promo without redemptions/transactions/referral links |
 
 Partner reward DTO rule: `referralOwnerId`, `referralBonusPercent` и
 `referralPayoutMode` передаются вместе. Для снятия owner в update передаётся
 `referralOwnerId=null`; backend очищает reward fields.
+
+Admin response shape для `GET/POST/PATCH/toggle` содержит `referralOwner` и
+`totalReferrerEarnings`. Summary считается по `Transaction` с
+`promoCodeId=<promo.id>`, `type=REFERRAL_BONUS`, `status=SUCCEEDED`. Обычные
+промокоды получают `totalReferrerEarnings=0`.
+
+Detail stats `GET /promo-codes/:id/stats` возвращает:
+
+- `uses` — количество `PromoCodeRedemption` со статусом `CONSUMED`;
+- `completedPrimaryOrders` — completed orders с `parentOrderId=null`, связанные
+  с consumed redemption этого промокода;
+- `commissionableRevenue` — сумма `Order.totalAmount` по этим primary orders;
+- `totalReferrerEarnings` — сумма successful `REFERRAL_BONUS` ledger с
+  `Transaction.promoCodeId`;
+- `payoutModeSplit[]` — разбивка начислений по
+  `PromoCodeRedemption.rewardPayoutModeSnapshot`, а не по mutable
+  `PromoCode.referralPayoutMode`.
+
+Admin UI показывает stats modal из строки промокода. Он использует тот же money
+formatting contract, что и list, но не разбирает `Transaction.metadata` на
+клиенте: payout split приходит типизированным backend response.
+
+Удаление — только для промокода без истории. Если есть `PromoCodeRedemption`,
+partner reward `Transaction` или связанная `ReferralLink`, admin должен отключить
+промокод через `isActive=false`; это сохраняет audit trail и избегает FK-drifts.
 
 ### Public/client promo validation
 
@@ -219,8 +245,29 @@ order cancellation boundary.
 
 ## Remaining Implementation Gaps For Phase 17
 
-- Extend admin typed API/UI after backend contracts are stable.
-- Add admin analytics surface for partner promo earnings in Step 5/6.
+- Нет известных code gaps для Phase 17 runtime на момент Step 6. Future work:
+  partner-facing личный кабинет может переиспользовать тот же ledger contract,
+  но это отдельное продуктовое требование вне Phase 17.
+
+## Manual Smoke Checklist
+
+- Ordinary promo discount only: create promo without owner, complete primary
+  order, verify no `REFERRAL_BONUS.promoCodeId` transaction.
+- Partner promo `BALANCE`: create owner policy, complete primary order, verify
+  consumed redemption snapshot, successful `REFERRAL_BONUS.promoCodeId`, owner
+  `bonusBalance` increment and stats `payoutModeSplit(BALANCE)`.
+- Partner promo `EXTERNAL`: complete primary order, verify ledger exists, owner
+  `bonusBalance` is unchanged and stats `payoutModeSplit(EXTERNAL)`.
+- Referral precedence: user attributed by referral link A manually enters partner
+  promo B, verify reward goes to promo owner B and no referral-link reward is
+  created for the order.
+- Ordinary promo plus referral link: manual promo without owner keeps referral
+  link reward fallback.
+- Idempotency: repeated completion/accounting pass does not create duplicate
+  `REFERRAL_BONUS`.
+- Failure/cancel/stale payment: reservation becomes `RELEASED`, `usedCount` is
+  not incremented, reward is not created.
+- Top-up order with promo context remains non-commissionable.
 
 ## Verification Baseline
 
@@ -228,6 +275,7 @@ Backend:
 
 ```bash
 npx jest src/modules/promo-codes/ --runInBand
+npx jest src/modules/referrals/partner-rewards.service.spec.ts --runInBand
 npx jest src/modules/orders/orders.service.spec.ts --runInBand
 npx jest src/modules/referrals/referrals.service.spec.ts --runInBand
 npx tsc --noEmit -p tsconfig.json

@@ -226,6 +226,19 @@
   затем fallback-ится в referral link / legacy referral flow. Self-owned
   historical snapshot не создаёт reward и не даёт referral fallback по тому же
   order.
+- Step 5 выполнен: admin-facing promo API возвращает owner и
+  `totalReferrerEarnings` summary по successful `REFERRAL_BONUS` с
+  `promoCodeId`; create/update/toggle response shape выровнен с list. Admin
+  `PromoCodes` получил typed Modal create/edit flow с `UserPicker`, payout mode,
+  reward percent и clear owner/policy. Delete защищён от потери audit trail:
+  промокод с redemptions/transactions/referralLinks можно только отключить.
+- Step 6 выполнен: добавлен `GET /promo-codes/:id/stats` и admin stats modal для
+  uses, completed primary orders, commissionable revenue, total owner earnings и
+  payout mode split. Analytics не опирается на mutable promo policy:
+  `commissionableRevenue` считается по completed primary orders через
+  `PromoCodeRedemption`, owner earnings — по `Transaction.promoCodeId`, split —
+  по `rewardPayoutModeSnapshot`. Runtime wiki и discovery note синхронизированы,
+  manual smoke checklist зафиксирован.
 
 ## Ссылки
 

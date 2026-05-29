@@ -4,6 +4,7 @@ import type {
   AdminProduct,
   AdminOrder,
   AdminPayment,
+  AdminPromoCodeStats,
   AdminReferralLink,
   AdminReferralLinkStats,
   ApiMutationResponse,
@@ -161,6 +162,7 @@ export const loyaltyApi = {
 
 export const promoCodesApi = {
   getAll: () => api.get<PromoCode[]>('/promo-codes'),
+  getStats: (id: string) => api.get<AdminPromoCodeStats>(`/promo-codes/${id}/stats`),
   create: (data: CreatePromoCodeDto) => api.post<PromoCode>('/promo-codes', data),
   update: (id: string, data: UpdatePromoCodeDto) =>
     api.patch<PromoCode>(`/promo-codes/${id}`, data),

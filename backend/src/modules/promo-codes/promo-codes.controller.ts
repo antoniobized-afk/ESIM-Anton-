@@ -30,6 +30,13 @@ export class PromoCodesController {
     return this.promoCodesService.validate(code);
   }
 
+  @Get(':id/stats')
+  @UseGuards(JwtAdminGuard)
+  @ApiOperation({ summary: 'Статистика партнёрского промокода' })
+  async getStats(@Param('id') id: string) {
+    return this.promoCodesService.getStats(id);
+  }
+
   @Patch(':id/toggle')
   @UseGuards(JwtAdminGuard)
   @ApiOperation({ summary: 'Включить/выключить промокод' })

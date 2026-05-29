@@ -203,6 +203,12 @@ purchase: если пользователь уже был привязан к д
 - один `orderId` может иметь максимум один successful `REFERRAL_BONUS`,
   независимо от owner/source.
 
+Phase 17 добавляет отдельную admin analytics surface для партнёрских
+промокодов: `GET /promo-codes/:id/stats` считает uses, completed primary orders,
+commissionable revenue и payout split через `Transaction.promoCodeId` и snapshot
+`PromoCodeRedemption.rewardPayoutModeSnapshot`. Referral link analytics остаётся
+на `Transaction.referralLinkId`; сущности не объединяются.
+
 ## Когда В Ссылке Заданы И `bonusPercent`, И `promoCode`
 
 Эти поля не конфликтуют и работают одновременно, но на разных сторонах сделки:
@@ -342,7 +348,9 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
   - изменение `ReferralLink.promoCodeId` или `bonusPercent` сразу влияет на ещё
     не купивших пользователей;
   - completed orders / rewards не пересчитываются
-- `PromoCodeRedemptionSource` содержит только `REFERRAL_LINK_AUTO`
+- `PromoCodeRedemptionSource` содержит `MANUAL` и `REFERRAL_LINK_AUTO`; manual
+  source используется для введённых пользователем промокодов, включая partner
+  promo code flow.
 - Top-up revenue не комиссионируемый; LTV с top-up — secondary metric
 - `ReferralLink.code` не может совпадать с `User.referralCode` (validation guard)
 

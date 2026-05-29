@@ -394,7 +394,23 @@ export interface PromoCode {
     email: string | null
     referralCode: string
   } | null
+  totalReferrerEarnings: NumericLike
   createdAt: string
+}
+
+export interface AdminPromoCodeStats {
+  promoCode: PromoCode
+  stats: {
+    uses: number
+    completedPrimaryOrders: number
+    commissionableRevenue: NumericLike
+    totalReferrerEarnings: NumericLike
+  }
+  payoutModeSplit: Array<{
+    payoutMode: ReferralPayoutMode | null
+    rewardsCount: number
+    totalEarnings: NumericLike
+  }>
 }
 
 export interface CreatePromoCodeDto {

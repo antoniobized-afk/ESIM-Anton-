@@ -41,11 +41,27 @@ export default function UserPicker({
   const wrapperRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
-  // Resolve initial value → display name
+  // Resolve current value → display name
   useEffect(() => {
-    if (!value) return
-    usersApi.getById(value).then(({ data }) => setSelected(data)).catch(() => {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!value) {
+      setSelected(null)
+      return
+    }
+
+    let cancelled = false
+    usersApi
+      .getById(value)
+      .then(({ data }) => {
+        if (!cancelled) setSelected(data)
+      })
+      .catch(() => {
+        if (!cancelled) setSelected(null)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [value])
 
   // Debounced search
   const search = useCallback((q: string) => {
