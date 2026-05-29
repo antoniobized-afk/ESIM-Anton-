@@ -33,6 +33,7 @@ dist/
 *.swo
 .agent
 task.md
+.playwright-mcp
 *~
 
 # OS
