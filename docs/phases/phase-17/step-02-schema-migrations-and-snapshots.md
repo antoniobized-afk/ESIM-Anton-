@@ -46,13 +46,67 @@
 
 ## Статус
 
-- `planned`
+- `done`
+
+## Реализация
+
+- `PromoCode` расширен nullable partner reward policy:
+  - `referralOwnerId`;
+  - `referralBonusPercent`;
+  - `referralPayoutMode`.
+- `PromoCode.referralOwnerId` связан с `User` через `onDelete: Restrict`, чтобы
+  партнёрская policy не терялась при наличии исторических/активных контрактов.
+- `Transaction` получил nullable `promoCodeId` и relation на `PromoCode` для
+  индексируемой аналитики partner promo rewards.
+- `PromoCodeRedemption` получил immutable snapshot поля:
+  - `rewardOwnerIdSnapshot`;
+  - `rewardBonusPercentSnapshot`;
+  - `rewardPayoutModeSnapshot`.
+- `PromoCodesService.reserveForOrder()` snapshot-ит reward policy с
+  залоченной строки `promo_codes`, поэтому последующие admin edits не меняют
+  pending/historical order contract.
+- Добавлена migration
+  `20260529163000_add_partner_promo_policy_snapshots` с nullable полями,
+  FK, analytics indexes и raw partial unique index
+  `transactions_referral_bonus_once_per_order` для order-level one reward guard.
+- Добавлены DTO:
+  - `CreatePromoCodeDto`;
+  - `UpdatePromoCodeDto`;
+  - `PartnerRewardPolicyComplete` validator.
+- Backend create/update contract теперь запрещает частично заполненную reward
+  policy. Снятие owner в update очищает `referralBonusPercent` и
+  `referralPayoutMode`.
+- `GET /promo-codes` и update response включают безопасный owner summary для
+  будущего admin UI.
+- `admin/lib/types.ts` и `admin/lib/api.ts` получили typed partner promo fields
+  и `promoCodesApi.update(...)`.
+
+## Backward compatibility
+
+- Существующие `promo_codes` остаются обычными промокодами, потому что все
+  partner fields nullable.
+- Существующие `promo_code_redemptions` не получают fake snapshots.
+- Существующие `transactions` остаются без `promoCodeId`.
+- Public/client validation не отдаёт owner metadata; user-context decisions
+  остаются в `orders/quote` и `orders` paths.
+
+## Deferred to Step 3/4
+
+- Resolver, который выбирает `manual partner promo -> referral link fallback`,
+  будет добавлен на Step 3.
+- Фактическое создание `REFERRAL_BONUS` transaction с `promoCodeId` и payout
+  semantics будет добавлено на Step 3.
+- Checkout self-reward rejection будет добавлен вместе с resolver/order
+  integration, когда есть buyer/order context.
 
 ## Журнал изменений
 
 ### 2026-05-29
 
 - Step создан с обязательным snapshot-контрактом на `PromoCodeRedemption`.
+- Step выполнен: schema/migration/DTO contracts добавлены, reservation snapshot
+  работает на уровне `PromoCodesService.reserveForOrder()`, обычные промокоды
+  остаются backward-compatible.
 
 ## Файлы
 

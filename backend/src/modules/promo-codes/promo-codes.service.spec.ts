@@ -1,7 +1,13 @@
+import 'reflect-metadata';
 import {
   PromoCodeRedemptionSource,
   PromoCodeRedemptionStatus,
+  ReferralPayoutMode,
 } from '@prisma/client';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
+import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
 import { PromoCodesService } from './promo-codes.service';
 
 function makeService() {
@@ -33,6 +39,9 @@ function makeService() {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    user: {
+      findUnique: jest.fn(),
+    },
     $transaction: jest.fn().mockImplementation(async (callback: any) => callback(tx)),
   };
 
@@ -43,6 +52,76 @@ function makeService() {
 
 describe('PromoCodesService', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  describe('DTO reward policy validation', () => {
+    it('принимает обычный промокод без owner/reward policy', async () => {
+      const dto = plainToInstance(CreatePromoCodeDto, {
+        code: 'PROMO10',
+        discountPercent: 10,
+      });
+
+      await expect(validate(dto)).resolves.toHaveLength(0);
+    });
+
+    it('отклоняет owner без percent/payout mode', async () => {
+      const dto = plainToInstance(CreatePromoCodeDto, {
+        code: 'PARTNER10',
+        discountPercent: 10,
+        referralOwnerId: 'user_1',
+      });
+
+      await expect(validate(dto)).resolves.not.toHaveLength(0);
+    });
+
+    it('разрешает update removal только через referralOwnerId=null без reward-полей', async () => {
+      const dto = plainToInstance(UpdatePromoCodeDto, {
+        referralOwnerId: null,
+      });
+
+      await expect(validate(dto)).resolves.toHaveLength(0);
+    });
+  });
+
+  it('create создаёт обычный промокод без partner policy', async () => {
+    const { service, prisma } = makeService();
+    prisma.promoCode.findUnique.mockResolvedValue(null);
+    prisma.promoCode.create.mockResolvedValue({ id: 'promo_1' });
+
+    await service.create({
+      code: 'promo10',
+      discountPercent: 10,
+    } as CreatePromoCodeDto);
+
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.promoCode.create).toHaveBeenCalledWith({
+      data: {
+        code: 'PROMO10',
+        discountPercent: 10,
+        maxUses: null,
+        expiresAt: null,
+        isActive: true,
+        referralOwnerId: null,
+        referralBonusPercent: null,
+        referralPayoutMode: null,
+      },
+    });
+  });
+
+  it('create требует существующего owner для partner promo policy', async () => {
+    const { service, prisma } = makeService();
+    prisma.promoCode.findUnique.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.create({
+        code: 'partner10',
+        discountPercent: 10,
+        referralOwnerId: 'missing_user',
+        referralBonusPercent: 15,
+        referralPayoutMode: ReferralPayoutMode.EXTERNAL,
+      } as CreatePromoCodeDto),
+    ).rejects.toThrow('Владелец партнёрского промокода не найден');
+  });
 
   it('reserveForOrder создаёт RESERVED redemption при наличии capacity', async () => {
     const { service, tx } = makeService();
@@ -87,7 +166,79 @@ describe('PromoCodesService', () => {
         orderId: 'order_1',
         source: PromoCodeRedemptionSource.REFERRAL_LINK_AUTO,
         status: PromoCodeRedemptionStatus.RESERVED,
+        rewardOwnerIdSnapshot: null,
+        rewardBonusPercentSnapshot: null,
+        rewardPayoutModeSnapshot: null,
       },
+    });
+  });
+
+  it('reserveForOrder snapshot-ит partner reward policy с залоченного promo row', async () => {
+    const { service, tx } = makeService();
+    tx.promoCode.findUnique
+      .mockResolvedValueOnce({
+        id: 'promo_1',
+        code: 'PARTNER10',
+        isActive: true,
+        expiresAt: null,
+        maxUses: null,
+        usedCount: 0,
+        discountPercent: 10,
+      })
+      .mockResolvedValueOnce({
+        id: 'promo_1',
+        code: 'PARTNER10',
+        isActive: true,
+        expiresAt: null,
+        maxUses: null,
+        usedCount: 0,
+        discountPercent: 10,
+        referralOwnerId: 'owner_1',
+        referralBonusPercent: '12.5',
+        referralPayoutMode: ReferralPayoutMode.EXTERNAL,
+      });
+
+    await service.reserveForOrder(
+      'partner10',
+      'buyer_1',
+      'order_1',
+      PromoCodeRedemptionSource.MANUAL,
+    );
+
+    expect(tx.promoCodeRedemption.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        promoCodeId: 'promo_1',
+        userId: 'buyer_1',
+        orderId: 'order_1',
+        source: PromoCodeRedemptionSource.MANUAL,
+        status: PromoCodeRedemptionStatus.RESERVED,
+        rewardOwnerIdSnapshot: 'owner_1',
+        rewardBonusPercentSnapshot: '12.5',
+        rewardPayoutModeSnapshot: ReferralPayoutMode.EXTERNAL,
+      }),
+    });
+  });
+
+  it('update очищает reward policy при снятии owner', async () => {
+    const { service, prisma } = makeService();
+    prisma.promoCode.findUnique.mockResolvedValueOnce({
+      id: 'promo_1',
+      code: 'PARTNER10',
+    });
+    prisma.promoCode.update.mockResolvedValue({ id: 'promo_1' });
+
+    await service.update('promo_1', {
+      referralOwnerId: null,
+    } as UpdatePromoCodeDto);
+
+    expect(prisma.promoCode.update).toHaveBeenCalledWith({
+      where: { id: 'promo_1' },
+      data: {
+        referralOwner: { disconnect: true },
+        referralBonusPercent: null,
+        referralPayoutMode: null,
+      },
+      include: expect.any(Object),
     });
   });
 

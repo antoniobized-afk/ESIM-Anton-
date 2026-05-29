@@ -208,6 +208,11 @@
   Создана wiki-страница [Promo Codes Runtime](../architecture/promo-codes-runtime.md).
   Блокера для Step 2 нет; schema gaps (`Transaction.promoCodeId`, owner/reward
   fields, redemption snapshots) являются целевым scope следующих шагов.
+- Step 2 выполнен: добавлены nullable partner policy поля в `PromoCode`,
+  snapshot поля в `PromoCodeRedemption`, `Transaction.promoCodeId`, DTO
+  validation и migration
+  `20260529163000_add_partner_promo_policy_snapshots`. Reward начисление ещё не
+  подключено: выбор partner promo vs referral link остаётся scope Step 3.
 
 ## Ссылки
 

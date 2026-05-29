@@ -2,6 +2,8 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } f
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PromoCodesService } from './promo-codes.service';
 import { JwtAdminGuard } from '@/common/auth/jwt-user.guard';
+import { CreatePromoCodeDto } from './dto/create-promo-code.dto';
+import { UpdatePromoCodeDto } from './dto/update-promo-code.dto';
 
 @ApiTags('promo-codes')
 @Controller('promo-codes')
@@ -18,16 +20,8 @@ export class PromoCodesController {
   @Post()
   @UseGuards(JwtAdminGuard)
   @ApiOperation({ summary: 'Создать промокод' })
-  async create(
-    @Body()
-    body: {
-      code: string;
-      discountPercent: number;
-      maxUses?: number;
-      expiresAt?: string;
-    },
-  ) {
-    return this.promoCodesService.create(body);
+  async create(@Body() dto: CreatePromoCodeDto) {
+    return this.promoCodesService.create(dto);
   }
 
   @Get('validate')
@@ -41,6 +35,13 @@ export class PromoCodesController {
   @ApiOperation({ summary: 'Включить/выключить промокод' })
   async toggle(@Param('id') id: string, @Body() body: { isActive: boolean }) {
     return this.promoCodesService.toggleActive(id, body.isActive);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAdminGuard)
+  @ApiOperation({ summary: 'Обновить промокод' })
+  async update(@Param('id') id: string, @Body() dto: UpdatePromoCodeDto) {
+    return this.promoCodesService.update(id, dto);
   }
 
   @Delete(':id')

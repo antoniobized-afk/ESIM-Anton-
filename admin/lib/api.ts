@@ -35,6 +35,7 @@ import type {
   TopProductsParams,
   TopReferrer,
   UpdateLoyaltyLevelDto,
+  UpdatePromoCodeDto,
   UpdateProductDto,
   UpdateReferralLinkDto,
   UserStatsResponse,
@@ -161,6 +162,8 @@ export const loyaltyApi = {
 export const promoCodesApi = {
   getAll: () => api.get<PromoCode[]>('/promo-codes'),
   create: (data: CreatePromoCodeDto) => api.post<PromoCode>('/promo-codes', data),
+  update: (id: string, data: UpdatePromoCodeDto) =>
+    api.patch<PromoCode>(`/promo-codes/${id}`, data),
   toggle: (id: string, isActive: boolean) =>
     api.patch<PromoCode>(`/promo-codes/${id}/toggle`, { isActive }),
   delete: (id: string) => api.delete<PromoCode>(`/promo-codes/${id}`),

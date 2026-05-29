@@ -35,19 +35,21 @@
 
 ### PromoCode
 
-`PromoCode` сейчас является discount/capacity сущностью:
+`PromoCode` является discount/capacity сущностью с optional partner reward
+policy:
 
 ```prisma
 PromoCode {
   id, code (unique), discountPercent, maxUses?, usedCount,
-  isActive, expiresAt?, createdAt, updatedAt,
-  referralLinks[], redemptions[]
+  isActive, expiresAt?,
+  referralOwnerId?, referralBonusPercent?, referralPayoutMode?,
+  createdAt, updatedAt,
+  referralOwner?, referralLinks[], redemptions[], transactions[]
 }
 ```
 
-В текущем baseline нет owner/reward policy. Phase 17 добавляет эти поля
-опционально, чтобы обычные промокоды продолжили работать без partner side
-effects.
+Если `referralOwnerId` отсутствует, промокод остаётся обычным и не создаёт
+partner reward side effects.
 
 ### PromoCodeRedemption
 
@@ -56,22 +58,24 @@ PromoCodeRedemption {
   id, promoCodeId, userId, orderId? (unique),
   source (MANUAL | REFERRAL_LINK_AUTO),
   status (RESERVED | CONSUMED | RELEASED),
+  rewardOwnerIdSnapshot?, rewardBonusPercentSnapshot?,
+  rewardPayoutModeSnapshot?,
   createdAt, consumedAt?, releasedAt?
 }
 ```
 
-В текущем baseline нет snapshot полей reward policy. Phase 17 должна добавить
-snapshot на reservation/order create, потому что quote является read-only
-preview и не мутирует БД.
+Snapshot создаётся на reservation/order create из залоченной строки
+`promo_codes`. Quote остаётся read-only preview и не мутирует БД.
 
 ### Transaction
 
 `Transaction` уже используется как финансовый ledger для `PAYMENT`, `REFUND`,
 `BONUS_ACCRUAL`, `BONUS_SPENT`, `REFERRAL_BONUS`.
 
-Текущий analytics key для partner referral links — `Transaction.referralLinkId`.
-Для partner promo rewards Phase 17 должна добавить nullable `promoCodeId`, а не
-полагаться только на `metadata`.
+Analytics key для partner referral links — `Transaction.referralLinkId`.
+Analytics key для partner promo rewards — `Transaction.promoCodeId`.
+Raw partial unique index `transactions_referral_bonus_once_per_order` закрепляет
+one partner reward per primary order на уровне БД.
 
 ## API Surface
 
@@ -80,12 +84,14 @@ preview и не мутирует БД.
 | Route | Guard | Current contract |
 |-------|-------|------------------|
 | `GET /promo-codes` | `JwtAdminGuard` | list all promo codes |
-| `POST /promo-codes` | `JwtAdminGuard` | create `{ code, discountPercent, maxUses?, expiresAt? }` |
+| `POST /promo-codes` | `JwtAdminGuard` | create обычный или partner promo через DTO |
+| `PATCH /promo-codes/:id` | `JwtAdminGuard` | update promo и optional partner policy |
 | `PATCH /promo-codes/:id/toggle` | `JwtAdminGuard` | toggle `{ isActive }` |
 | `DELETE /promo-codes/:id` | `JwtAdminGuard` | delete promo |
 
-Phase 17 admin write contracts must be moved to DTO classes with validation
-before partner owner/reward fields are accepted.
+Partner reward DTO rule: `referralOwnerId`, `referralBonusPercent` и
+`referralPayoutMode` передаются вместе. Для снятия owner в update передаётся
+`referralOwnerId=null`; backend очищает reward fields.
 
 ### Public/client promo validation
 
@@ -119,7 +125,7 @@ Behavior:
 2. Creates `Order(PENDING)`.
 3. Creates `BONUS_SPENT(PENDING)` hold if bonuses are used.
 4. Creates `PromoCodeRedemption(RESERVED)` when pricing has manual or auto
-   promo.
+   promo, including partner reward snapshot when promo has owner policy.
 5. CloudPayments widget later moves the order to `PAID`.
 6. Payment winner calls `OrdersService.fulfillOrder()`.
 
@@ -183,17 +189,12 @@ order cancellation boundary.
 - `BALANCE` payout increments owner `bonusBalance`; `EXTERNAL` payout creates
   ledger transaction only.
 
-## Implementation Gaps For Phase 17
+## Remaining Implementation Gaps For Phase 17
 
-- Add optional owner/reward fields to `PromoCode`.
-- Add snapshot fields to `PromoCodeRedemption`.
-- Add nullable `Transaction.promoCodeId` relation for analytics.
 - Introduce shared reward resolver before calling the current referral award
   path.
-- Strengthen duplicate guard from `referrerId + orderId` to order-level
-  one-partner-reward semantics.
-- Replace inline promo admin write bodies with DTO validation.
 - Extend admin typed API/UI after backend contracts are stable.
+- Integrate checkout self-reward rejection when buyer context is available.
 
 ## Verification Baseline
 

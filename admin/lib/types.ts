@@ -383,6 +383,17 @@ export interface PromoCode {
   usedCount: number
   isActive: boolean
   expiresAt: string | null
+  referralOwnerId: string | null
+  referralBonusPercent: NumericLike | null
+  referralPayoutMode: ReferralPayoutMode | null
+  referralOwner?: {
+    id: string
+    firstName: string | null
+    lastName: string | null
+    username: string | null
+    email: string | null
+    referralCode: string
+  } | null
   createdAt: string
 }
 
@@ -391,6 +402,21 @@ export interface CreatePromoCodeDto {
   discountPercent: number
   maxUses?: number
   expiresAt?: string
+  isActive?: boolean
+  referralOwnerId?: string | null
+  referralBonusPercent?: number | null
+  referralPayoutMode?: ReferralPayoutMode | null
+}
+
+export interface UpdatePromoCodeDto {
+  code?: string
+  discountPercent?: number
+  maxUses?: number | null
+  expiresAt?: string | null
+  isActive?: boolean
+  referralOwnerId?: string | null
+  referralBonusPercent?: number | null
+  referralPayoutMode?: ReferralPayoutMode | null
 }
 
 export interface ReferralSettings {

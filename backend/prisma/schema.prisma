@@ -36,7 +36,9 @@ model User {
   transactions            Transaction[]
   referralLinks           ReferralLink[]           @relation("OwnedReferralLinks")
   referralLink            ReferralLink?            @relation("ReferredViaLink", fields: [referralLinkId], references: [id], onDelete: Restrict)
+  ownedPromoCodes         PromoCode[]              @relation("OwnedPromoCodes")
   promoCodeRedemptions    PromoCodeRedemption[]
+  promoRewardSnapshots    PromoCodeRedemption[]    @relation("PromoRewardOwnerSnapshots")
   pushSubs                PushSubscription[]
   cloudPaymentsCardTokens CloudPaymentsCardToken[]
   loyaltyLevel            LoyaltyLevel?            @relation(fields: [loyaltyLevelId], references: [id])
@@ -220,6 +222,7 @@ model Transaction {
   userId          String
   orderId         String?
   referralLinkId  String?
+  promoCodeId     String?
   type            TransactionType
   status          TransactionStatus @default(PENDING)
   amount          Decimal           @db.Decimal(10, 2)
@@ -231,11 +234,14 @@ model Transaction {
   updatedAt       DateTime          @updatedAt
   order           Order?            @relation(fields: [orderId], references: [id])
   referralLink    ReferralLink?     @relation("ReferralLinkTransactions", fields: [referralLinkId], references: [id], onDelete: Restrict)
+  promoCode       PromoCode?        @relation("PromoCodeTransactions", fields: [promoCodeId], references: [id], onDelete: Restrict)
   user            User              @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([orderId])
   @@index([referralLinkId])
+  @@index([promoCodeId])
+  @@index([promoCodeId, type, status])
   @@index([paymentId])
   @@index([status])
   @@map("transactions")
@@ -318,37 +324,48 @@ model EsimWebhookReceipt {
 }
 
 model PromoCode {
-  id              String                @id @default(cuid())
-  code            String                @unique
-  discountPercent Int // 1-100
-  maxUses         Int? // null = безлимит
-  usedCount       Int                   @default(0)
-  isActive        Boolean               @default(true)
-  expiresAt       DateTime?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  referralLinks   ReferralLink[]
-  redemptions     PromoCodeRedemption[]
+  id                   String                @id @default(cuid())
+  code                 String                @unique
+  discountPercent      Int // 1-100
+  maxUses              Int? // null = безлимит
+  usedCount            Int                   @default(0)
+  isActive             Boolean               @default(true)
+  expiresAt            DateTime?
+  referralOwnerId      String?
+  referralBonusPercent Decimal?              @db.Decimal(5, 2)
+  referralPayoutMode   ReferralPayoutMode?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  referralOwner        User?                 @relation("OwnedPromoCodes", fields: [referralOwnerId], references: [id], onDelete: Restrict)
+  referralLinks        ReferralLink[]
+  redemptions          PromoCodeRedemption[]
+  transactions         Transaction[]         @relation("PromoCodeTransactions")
 
+  @@index([referralOwnerId])
   @@map("promo_codes")
 }
 
 model PromoCodeRedemption {
-  id          String                    @id @default(cuid())
-  promoCodeId String
-  userId      String
-  orderId     String?                   @unique
-  source      PromoCodeRedemptionSource
-  status      PromoCodeRedemptionStatus @default(RESERVED)
-  createdAt   DateTime                  @default(now())
-  consumedAt  DateTime?
-  releasedAt  DateTime?
-  promoCode   PromoCode                 @relation(fields: [promoCodeId], references: [id])
-  user        User                      @relation(fields: [userId], references: [id])
-  order       Order?                    @relation(fields: [orderId], references: [id])
+  id                         String                    @id @default(cuid())
+  promoCodeId                String
+  userId                     String
+  orderId                    String?                   @unique
+  source                     PromoCodeRedemptionSource
+  status                     PromoCodeRedemptionStatus @default(RESERVED)
+  rewardOwnerIdSnapshot      String?
+  rewardBonusPercentSnapshot Decimal?                  @db.Decimal(5, 2)
+  rewardPayoutModeSnapshot   ReferralPayoutMode?
+  createdAt                  DateTime                  @default(now())
+  consumedAt                 DateTime?
+  releasedAt                 DateTime?
+  promoCode                  PromoCode                 @relation(fields: [promoCodeId], references: [id])
+  user                       User                      @relation(fields: [userId], references: [id])
+  order                      Order?                    @relation(fields: [orderId], references: [id])
+  rewardOwnerSnapshot        User?                     @relation("PromoRewardOwnerSnapshots", fields: [rewardOwnerIdSnapshot], references: [id], onDelete: Restrict)
 
   @@index([promoCodeId, status])
   @@index([userId, status])
+  @@index([rewardOwnerIdSnapshot, status])
   @@map("promo_code_redemptions")
 }
 
