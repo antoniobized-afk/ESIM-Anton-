@@ -141,17 +141,27 @@ Throttle: 30 req/min. Cache: `public, max-age=60`.
 **Важно**: если `ReferralLink` найден но inactive/expired — fallback запрещён.
 Метод возвращает `null`, не пытаясь интерпретировать код как legacy user code.
 
-## Immutable Attribution Policy
+Для partner links действует last-click policy до первой successful primary
+purchase: если пользователь уже был привязан к другой `ReferralLink`, но ещё не
+имеет completed primary order, новый active partner code заменяет
+`referredById/referralLinkId`. Legacy user-to-user attribution не
+перезаписывается partner link-ом.
 
-- Если `User.referredById` уже заполнен → привязка блокируется
+## Attribution Policy
+
+- Если `User.referredById` уже заполнен legacy user-to-user flow →
+  привязка блокируется
 - Если у пользователя уже есть хотя бы один completed primary order
   (`status='COMPLETED'` и `parentOrderId IS NULL`) → привязка блокируется,
   даже если `referredById` ещё пустой
+- Если `User.referralLinkId` уже заполнен partner link-ом и completed primary
+  order ещё нет → новая active partner link может заменить старую
 - Self-referral запрещён и для `User.referralCode`, и для `ReferralLink.userId`
-- Повторная смена referrer-а не поддерживается в V1
-- Attribution immutable, commercial policy mutable до первой successful primary
+- Для partner links attribution mutable до первой successful primary purchase,
+  затем immutable; commercial policy mutable до первой successful primary
   purchase:
-  - `referredById` / `referralLinkId` фиксируются при регистрации;
+  - `referredById` / `referralLinkId` фиксируются на момент первой successful
+    primary purchase;
   - buyer promo и partner bonus percent до покупки всегда резолвятся из
     **текущего** `ReferralLink`;
   - completed `Order` и `REFERRAL_BONUS` ledger уже immutable и не
@@ -247,8 +257,9 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 
 **AuthProvider** integration:
 1. One-shot `useEffect` с `useRef` guard после `isBootstrapped && user`
-2. Читает referral code либо из `pendingReferralCode` в `localStorage`, либо из
-   `Telegram.WebApp.initDataUnsafe.start_param` / `tgWebAppStartParam`
+2. Читает referral code сначала из
+   `Telegram.WebApp.initDataUnsafe.start_param` / `tgWebAppStartParam`, затем
+   из `pendingReferralCode` в `localStorage`
 3. Вызывает `POST /referrals/register-web { referralCode }`
 4. После success → `refreshUser()`
 5. Очищает `localStorage` только при success; `start_param` остаётся read-only
@@ -312,7 +323,8 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 
 ## Known Boundaries V1
 
-- Immutable attribution: смена referrer-а не поддерживается
+- Legacy user-to-user attribution immutable; partner-link attribution можно
+  сменить только до первой successful primary purchase
 - Commercial policy mutable until first successful purchase:
   - изменение `ReferralLink.promoCodeId` или `bonusPercent` сразу влияет на ещё
     не купивших пользователей;

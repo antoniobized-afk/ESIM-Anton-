@@ -45,14 +45,14 @@ const PENDING_REFERRAL_KEY = 'pendingReferralCode'
 function extractReferralCodeCandidate(): string | null {
   if (typeof window === 'undefined') return null
 
-  const pendingCode = localStorage.getItem(PENDING_REFERRAL_KEY)?.trim() || null
-  if (pendingCode) {
-    return pendingCode
-  }
-
   const telegramStartParam = getTelegramStartParam()
   if (telegramStartParam?.startsWith('ref_')) {
     return telegramStartParam.slice(4).trim() || null
+  }
+
+  const pendingCode = localStorage.getItem(PENDING_REFERRAL_KEY)?.trim() || null
+  if (pendingCode) {
+    return pendingCode
   }
 
   return null

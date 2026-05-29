@@ -206,13 +206,61 @@ describe('ReferralsService', () => {
       const result = await service.registerReferral('user_2', 'PARTNER123', BigInt(123456));
 
       expect(prisma.user.updateMany).toHaveBeenCalledWith({
-        where: { id: 'user_2', referredById: null },
+        where: {
+          id: 'user_2',
+          OR: [
+            { referredById: null },
+            { referralLinkId: { not: null } },
+          ],
+        },
         data: {
           referredById: 'owner_1',
           referralLinkId: 'link_1',
         },
       });
       expect(result).toEqual({ id: 'owner_1', referralCode: 'OWNERREF' });
+    });
+
+    it('перепривязывает пользователя с одной partner link на другую до первой покупки', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        referredById: 'old_owner',
+        referralLinkId: 'old_link',
+        telegramId: BigInt(123456),
+      });
+      prisma.referralLink.findUnique.mockResolvedValue({
+        id: 'new_link',
+        code: 'NEWPARTNER',
+        userId: 'new_owner',
+        isActive: true,
+        expiresAt: null,
+        user: { id: 'new_owner', referralCode: 'NEWOWNER' },
+      });
+
+      const result = await service.registerReferral('user_2', 'NEWPARTNER', BigInt(123456));
+
+      expect(prisma.order.findFirst).toHaveBeenCalledWith({
+        where: {
+          userId: 'user_2',
+          status: 'COMPLETED',
+          parentOrderId: null,
+        },
+        select: { id: true },
+      });
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'user_2',
+          OR: [
+            { referredById: null },
+            { referralLinkId: { not: null } },
+          ],
+        },
+        data: {
+          referredById: 'new_owner',
+          referralLinkId: 'new_link',
+        },
+      });
+      expect(result).toEqual({ id: 'new_owner', referralCode: 'NEWOWNER' });
     });
 
     it('не привязывает по partner link пользователя с completed primary order', async () => {

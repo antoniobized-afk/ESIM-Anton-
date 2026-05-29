@@ -467,7 +467,7 @@ export class ReferralsService {
 
     const currentUser = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { referredById: true, telegramId: true },
+      select: { referredById: true, referralLinkId: true, telegramId: true },
     });
 
     if (!currentUser) {
@@ -481,7 +481,7 @@ export class ReferralsService {
       throw new ForbiddenException('Telegram identity mismatch');
     }
 
-    if (currentUser.referredById) {
+    if (currentUser.referredById && !currentUser.referralLinkId) {
       return null;
     }
 
@@ -516,8 +516,21 @@ export class ReferralsService {
         return null;
       }
 
+      if (
+        currentUser.referredById === partnerLink.userId &&
+        currentUser.referralLinkId === partnerLink.id
+      ) {
+        return partnerLink.user;
+      }
+
       const result = await this.prisma.user.updateMany({
-        where: { id: userId, referredById: null },
+        where: {
+          id: userId,
+          OR: [
+            { referredById: null },
+            { referralLinkId: { not: null } },
+          ],
+        },
         data: {
           referredById: partnerLink.userId,
           referralLinkId: partnerLink.id,
@@ -529,6 +542,10 @@ export class ReferralsService {
       }
 
       return partnerLink.user;
+    }
+
+    if (currentUser.referredById) {
+      return null;
     }
 
     const referrer = await this.prisma.user.findUnique({
