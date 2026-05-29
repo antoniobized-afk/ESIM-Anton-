@@ -202,6 +202,12 @@
   - no self-reward;
   - no top-up commission;
   - balance/external payout через тот же ledger contract.
+- Step 1 выполнен: runtime audit подтвердил, что все payment/provider entrypoints
+  сходятся в `OrdersService.fulfillOrder()`, promo reservation уже живёт в
+  order creation, а consume/release идут через completion/failure boundaries.
+  Создана wiki-страница [Promo Codes Runtime](../architecture/promo-codes-runtime.md).
+  Блокера для Step 2 нет; schema gaps (`Transaction.promoCodeId`, owner/reward
+  fields, redemption snapshots) являются целевым scope следующих шагов.
 
 ## Ссылки
 
