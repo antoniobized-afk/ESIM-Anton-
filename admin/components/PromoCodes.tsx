@@ -180,173 +180,173 @@ export default function PromoCodes() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="glass-card p-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Промокоды</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Всего: {codes.length} · Активных: {codes.filter((c) => c.isActive).length} · Партнёрских:{' '}
-            {codes.filter((c) => c.referralOwnerId).length}
-          </p>
-          <p className="text-xs text-slate-400 mt-2">
-            Партнёрская policy snapshot-ится на заказе: правки здесь не меняют pending/historical начисления.
-          </p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus size={18} />
-          Создать
-        </Button>
-      </div>
-
-      {codes.length === 0 ? (
-        <div className="glass-card p-8 text-center text-slate-500">
-          Нет промокодов. Нажмите «Создать» чтобы добавить.
-        </div>
-      ) : (
-        <div className="glass-card glass-card--static overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHead>
-                <TableRow className="bg-slate-50/50">
-                  <TableHeaderCell className="px-6">Код</TableHeaderCell>
-                  <TableHeaderCell className="px-6">Скидка</TableHeaderCell>
-                  <TableHeaderCell className="px-6">Использовано</TableHeaderCell>
-                  <TableHeaderCell className="px-6">Владелец</TableHeaderCell>
-                  <TableHeaderCell className="px-6">Выплата</TableHeaderCell>
-                  <TableHeaderCell className="px-6">Reward</TableHeaderCell>
-                  <TableHeaderCell className="px-6">Начислено</TableHeaderCell>
-                  <TableHeaderCell className="px-6">Годен до</TableHeaderCell>
-                  <TableHeaderCell className="px-6">Статус</TableHeaderCell>
-                  <TableHeaderCell className="px-6 text-right">Действия</TableHeaderCell>
-                </TableRow>
-              </TableHead>
-              <TableBody className="divide-y divide-slate-100">
-                {codes.map((c) => {
-                  const payout = c.referralPayoutMode ? getPayoutModeLabel(c.referralPayoutMode) : null
-                  return (
-                    <TableRow key={c.id} className="hover:bg-slate-50/50">
-                      <TableCell className="px-6 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-slate-800">{c.code}</span>
-                          <Button
-                            onClick={() => handleCopy(c.code, c.id)}
-                            variant="ghost"
-                            size="sm"
-                            iconOnly
-                            aria-label="Скопировать промокод"
-                            className="text-slate-400 hover:bg-transparent hover:text-slate-600"
-                          >
-                            {copiedId === c.id ? (
-                              <Check size={14} className="text-green-500" />
-                            ) : (
-                              <Copy size={14} />
-                            )}
-                          </Button>
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-6 py-3">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">
-                          {c.discountPercent}%
-                        </span>
-                      </TableCell>
-                      <TableCell className="px-6 py-3 text-slate-600">
-                        {c.usedCount}
-                        {c.maxUses !== null ? ` / ${c.maxUses}` : ' / ∞'}
-                      </TableCell>
-                      <TableCell className="px-6 py-3 text-slate-700">
-                        {c.referralOwner ? (
-                          <div>
-                            <p className="text-sm font-medium">{ownerName(c)}</p>
-                            <p className="text-xs text-slate-400 font-mono">{c.referralOwner.referralCode}</p>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400">Обычный</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="px-6 py-3">
-                        {payout ? (
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${payout.className}`}>
-                            {payout.label}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="px-6 py-3 text-slate-600">
-                        {c.referralBonusPercent !== null ? `${num(c.referralBonusPercent)}%` : '—'}
-                      </TableCell>
-                      <TableCell className="px-6 py-3 text-slate-700">
-                        {num(c.totalReferrerEarnings).toFixed(2)} ₽
-                      </TableCell>
-                      <TableCell className="px-6 py-3 text-slate-600">
-                        {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('ru-RU') : '—'}
-                      </TableCell>
-                      <TableCell className="px-6 py-3">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            c.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          }`}
-                        >
-                          {c.isActive ? 'Активен' : 'Выключен'}
-                        </span>
-                      </TableCell>
-                      <TableCell className="px-6 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            onClick={() => openStats(c)}
-                            variant="ghost"
-                            size="sm"
-                            iconOnly
-                            aria-label="Статистика промокода"
-                            className="text-slate-500 hover:text-indigo-600"
-                          >
-                            <BarChart3 size={16} />
-                          </Button>
-                          <Button
-                            onClick={() => openEdit(c)}
-                            variant="ghost"
-                            size="sm"
-                            iconOnly
-                            aria-label="Редактировать промокод"
-                            className="text-slate-500 hover:text-blue-600"
-                          >
-                            <Pencil size={16} />
-                          </Button>
-                          <Button
-                            onClick={() => handleToggle(c.id, c.isActive)}
-                            variant="ghost"
-                            size="sm"
-                            iconOnly
-                            aria-label={c.isActive ? 'Выключить промокод' : 'Включить промокод'}
-                            className="text-slate-500 hover:text-slate-700"
-                          >
-                            {c.isActive ? (
-                              <ToggleRight size={20} className="text-green-600" />
-                            ) : (
-                              <ToggleLeft size={20} />
-                            )}
-                          </Button>
-                          <Button
-                            onClick={() => handleDelete(c.id)}
-                            variant="ghost"
-                            size="sm"
-                            iconOnly
-                            aria-label="Удалить промокод"
-                            className="text-slate-500 hover:bg-red-50 hover:text-red-600"
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+    <div>
+      <div className="space-y-6">
+        <div className="glass-card p-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-slate-800">Промокоды</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Всего: {codes.length} · Активных: {codes.filter((c) => c.isActive).length} · Партнёрских:{' '}
+              {codes.filter((c) => c.referralOwnerId).length}
+            </p>
+            <p className="text-xs text-slate-400 mt-2">
+              Условия партнёрской программы фиксируются в момент оформления заказа: изменения настроек здесь не повлияют на уже созданные или ожидающие выплаты начисления.
+            </p>
           </div>
+          <Button onClick={openCreate}>
+            <Plus size={18} />
+            Создать
+          </Button>
         </div>
-      )}
 
+        {codes.length === 0 ? (
+          <div className="glass-card p-8 text-center text-slate-500">
+            Нет промокодов. Нажмите «Создать» чтобы добавить.
+          </div>
+        ) : (
+          <div className="glass-card glass-card--static overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHead>
+                  <TableRow className="bg-slate-50/50">
+                    <TableHeaderCell className="px-6">Код</TableHeaderCell>
+                    <TableHeaderCell className="px-6">Скидка</TableHeaderCell>
+                    <TableHeaderCell className="px-6">Использовано</TableHeaderCell>
+                    <TableHeaderCell className="px-6">Владелец</TableHeaderCell>
+                    <TableHeaderCell className="px-6">Выплата</TableHeaderCell>
+                    <TableHeaderCell className="px-6">Reward</TableHeaderCell>
+                    <TableHeaderCell className="px-6">Начислено</TableHeaderCell>
+                    <TableHeaderCell className="px-6">Годен до</TableHeaderCell>
+                    <TableHeaderCell className="px-6">Статус</TableHeaderCell>
+                    <TableHeaderCell className="px-6 text-right">Действия</TableHeaderCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody className="divide-y divide-slate-100">
+                  {codes.map((c) => {
+                    const payout = c.referralPayoutMode ? getPayoutModeLabel(c.referralPayoutMode) : null
+                    return (
+                      <TableRow key={c.id} className="hover:bg-slate-50/50">
+                        <TableCell className="px-6 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-slate-800">{c.code}</span>
+                            <Button
+                              onClick={() => handleCopy(c.code, c.id)}
+                              variant="ghost"
+                              size="sm"
+                              iconOnly
+                              aria-label="Скопировать промокод"
+                              className="text-slate-400 hover:bg-transparent hover:text-slate-600"
+                            >
+                              {copiedId === c.id ? (
+                                <Check size={14} className="text-green-500" />
+                              ) : (
+                                <Copy size={14} />
+                              )}
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-6 py-3">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-700">
+                            {c.discountPercent}%
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-6 py-3 text-slate-600">
+                          {c.usedCount}
+                          {c.maxUses !== null ? ` / ${c.maxUses}` : ' / ∞'}
+                        </TableCell>
+                        <TableCell className="px-6 py-3 text-slate-700">
+                          {c.referralOwner ? (
+                            <div>
+                              <p className="text-sm font-medium">{ownerName(c)}</p>
+                              <p className="text-xs text-slate-400 font-mono">{c.referralOwner.referralCode}</p>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">Обычный</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-6 py-3">
+                          {payout ? (
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${payout.className}`}>
+                              {payout.label}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="px-6 py-3 text-slate-600">
+                          {c.referralBonusPercent !== null ? `${num(c.referralBonusPercent)}%` : '—'}
+                        </TableCell>
+                        <TableCell className="px-6 py-3 text-slate-700">
+                          {num(c.totalReferrerEarnings).toFixed(2)} ₽
+                        </TableCell>
+                        <TableCell className="px-6 py-3 text-slate-600">
+                          {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('ru-RU') : '—'}
+                        </TableCell>
+                        <TableCell className="px-6 py-3">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              }`}
+                          >
+                            {c.isActive ? 'Активен' : 'Выключен'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-6 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              onClick={() => openStats(c)}
+                              variant="ghost"
+                              size="sm"
+                              iconOnly
+                              aria-label="Статистика промокода"
+                              className="text-slate-500 hover:text-indigo-600"
+                            >
+                              <BarChart3 size={16} />
+                            </Button>
+                            <Button
+                              onClick={() => openEdit(c)}
+                              variant="ghost"
+                              size="sm"
+                              iconOnly
+                              aria-label="Редактировать промокод"
+                              className="text-slate-500 hover:text-blue-600"
+                            >
+                              <Pencil size={16} />
+                            </Button>
+                            <Button
+                              onClick={() => handleToggle(c.id, c.isActive)}
+                              variant="ghost"
+                              size="sm"
+                              iconOnly
+                              aria-label={c.isActive ? 'Выключить промокод' : 'Включить промокод'}
+                              className="text-slate-500 hover:text-slate-700"
+                            >
+                              {c.isActive ? (
+                                <ToggleRight size={20} className="text-green-600" />
+                              ) : (
+                                <ToggleLeft size={20} />
+                              )}
+                            </Button>
+                            <Button
+                              onClick={() => handleDelete(c.id)}
+                              variant="ghost"
+                              size="sm"
+                              iconOnly
+                              aria-label="Удалить промокод"
+                              className="text-slate-500 hover:bg-red-50 hover:text-red-600"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        )}
+      </div>
       {formOpen && (
         <PromoCodeFormModal
           promoCode={editingPromo}
@@ -403,9 +403,9 @@ function PromoCodeStatsModal({ data, loading, onClose }: PromoCodeStatsModalProp
     >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <StatCard label="Использования" value={stats.uses} />
-        <StatCard label="Primary orders" value={stats.completedPrimaryOrders} />
+        <StatCard label="Первые заказы" value={stats.completedPrimaryOrders} />
         <StatCard
-          label="Выручка (primary)"
+          label="Выручка с первых заказов"
           value={`${num(stats.commissionableRevenue).toFixed(2)} ₽`}
         />
         <StatCard
@@ -422,7 +422,7 @@ function PromoCodeStatsModal({ data, loading, onClose }: PromoCodeStatsModalProp
           {unknownSplit && <UnknownPayoutSplitCard item={unknownSplit} />}
         </div>
         <p className="mt-3 text-xs text-slate-400">
-          Split считается по snapshot payout mode из reservation и successful REFERRAL_BONUS ledger, а не по текущим настройкам промокода.
+          Распределение выплат рассчитывается на основе способа выплаты, зафиксированного при оформлении заказа, и успешно проведенных партнёрских бонусов, а не по текущим настройкам промокода.
         </p>
       </div>
 
@@ -464,7 +464,7 @@ function UnknownPayoutSplitCard({
   return (
     <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-3 md:col-span-2">
       <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-        Неизвестный snapshot
+        Неизвестные условия
       </span>
       <p className="mt-2 text-lg font-bold text-slate-800">{num(item.totalEarnings).toFixed(2)} ₽</p>
       <p className="text-xs text-slate-500">Начислений: {item.rewardsCount}</p>
@@ -534,7 +534,7 @@ function PromoCodeFormModal({ promoCode, onClose, onSave }: PromoCodeFormModalPr
 
   const handleSubmit = async () => {
     if (!canSubmit || parsedDiscount === null) {
-      toast.error('Проверьте код, скидку, лимит и партнёрскую policy')
+      toast.error('Проверьте код, размер скидки, лимит использований и настройки партнёрской программы')
       return
     }
 
@@ -599,7 +599,7 @@ function PromoCodeFormModal({ promoCode, onClose, onSave }: PromoCodeFormModalPr
   return (
     <Modal
       title={isEdit ? 'Редактировать промокод' : 'Новый промокод'}
-      description="Owner и reward policy нужны только для партнёрских промокодов. Без owner код остаётся обычным скидочным промокодом."
+      description="Владелец и условия вознаграждения заполняются только для партнёрских промокодов. Если владелец не указан, промокод будет работать как обычная скидка."
       onClose={onClose}
       contentClassName="max-w-2xl"
       footer={
@@ -678,13 +678,13 @@ function PromoCodeFormModal({ promoCode, onClose, onSave }: PromoCodeFormModalPr
       <div className="mt-6 rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h4 className="text-sm font-semibold text-slate-800">Partner reward</h4>
+            <h4 className="text-sm font-semibold text-slate-800">Партнёрская программа</h4>
             <p className="mt-1 text-xs text-slate-500">
-              Заполняйте блок только для партнёрского промокода. Backend требует owner, percent и payout mode вместе.
+              Заполните эти поля, если промокод является партнёрским. Для сохранения необходимо указать владельца, размер вознаграждения и режим выплаты.
             </p>
           </div>
           <Button onClick={clearPartnerPolicy} variant="secondary" size="sm" disabled={!hasOwner && !promoCode?.referralOwnerId}>
-            Очистить owner/policy
+            Сбросить партнёрские настройки
           </Button>
         </div>
 
@@ -699,7 +699,7 @@ function PromoCodeFormModal({ promoCode, onClose, onSave }: PromoCodeFormModalPr
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Reward, %</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Вознаграждение партнёру, %</label>
             <input
               type="number"
               min={0.01}
@@ -728,8 +728,8 @@ function PromoCodeFormModal({ promoCode, onClose, onSave }: PromoCodeFormModalPr
             </select>
             <p className="mt-1 text-xs text-slate-400">
               {referralPayoutMode === 'EXTERNAL'
-                ? 'Transaction создаётся для учёта суммы к выплате, bonusBalance не меняется.'
-                : 'После успешного primary order сумма автоматически увеличит bonusBalance владельца.'}
+                ? 'Создаётся финансовая операция для учёта выплаты партнёру, баланс бонусов клиента в приложении не меняется.'
+                : 'После успешной первой покупки по промокоду сумма вознаграждения автоматически зачислится на бонусный баланс партнёра.'}
             </p>
           </div>
         </div>
