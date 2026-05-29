@@ -117,3 +117,11 @@
   - Реализовать безопасный auto-promo lifecycle через `PromoCodeRedemption(RESERVED -> CONSUMED/RELEASED)` с row-locked capacity check по `maxUses`.
   - Добавить web landing `/ref/[code]`, one-shot `AuthProvider` integration, admin CRUD/stats UI и обновить `referrals-runtime.md`.
   - Документ: [phase-16-partner-referral-links.md](./phase-16-partner-referral-links.md)
+
+- [ ] **Phase 17: Partner Promo Codes**
+  - Добавить партнёрские промокоды: обычный `PromoCode` может опционально иметь владельца, bonus percent и payout mode.
+  - Не объединять `PromoCode` и `ReferralLink`: ссылки остаются acquisition attribution, промокоды — checkout attribution.
+  - Зафиксировать financial guardrails: один primary order = максимум один partner reward, manual partner promo wins over referral link, no self-reward, top-up некомиссионный.
+  - Snapshot-ить reward policy в `PromoCodeRedemption`, чтобы admin edits не меняли pending/historical orders.
+  - Доработать shared reward ledger, order completion, admin PromoCodes UI, analytics и runtime wiki.
+  - Документ: [phase-17-partner-promo-codes.md](./phase-17-partner-promo-codes.md)
