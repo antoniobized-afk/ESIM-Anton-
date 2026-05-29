@@ -16,12 +16,14 @@ import { EmailService } from '../notifications/email.service';
 import { SystemSettingsService } from '../system-settings/system-settings.service';
 import { EsimStatus } from '../esim-provider/esim-status';
 import { ReferralsService } from '../referrals/referrals.service';
+import { PartnerRewardsService } from '../referrals/partner-rewards.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import {
   OrderStatus,
   Prisma,
   PromoCodeRedemptionSource,
   PromoCodeSource,
+  ReferralPayoutMode,
   RepeatChargeAttemptStatus,
   TransactionStatus,
   TransactionType,
@@ -129,6 +131,13 @@ type PurchaseAccountingOrder = {
     referralLinkId?: string | null;
     referredById?: string | null;
   };
+  promoCodeRedemption?: {
+    promoCodeId: string;
+    source: PromoCodeRedemptionSource;
+    rewardOwnerIdSnapshot: string | null;
+    rewardBonusPercentSnapshot: Prisma.Decimal | number | string | null;
+    rewardPayoutModeSnapshot: ReferralPayoutMode | null;
+  } | null;
 };
 
 export class FulfillmentFinalizeException extends Error {
@@ -158,6 +167,7 @@ export class OrdersService {
     private emailService: EmailService,
     private systemSettingsService: SystemSettingsService,
     private referralsService: ReferralsService,
+    private partnerRewardsService: PartnerRewardsService,
     private loyaltyService: LoyaltyService,
   ) {}
 
@@ -516,6 +526,11 @@ export class OrdersService {
       const promoPreview = await this.promoCodesService.validateForReservation(
         normalizedManualPromoCode,
       );
+      if (promoPreview.partnerRewardPolicy?.ownerId === user.id) {
+        throw new BadRequestException(
+          'Нельзя применить собственный партнёрский промокод',
+        );
+      }
       promoId = promoPreview.promoId;
       promoCode = promoPreview.code;
       promoCodeSource = PromoCodeSource.MANUAL;
@@ -1198,12 +1213,18 @@ export class OrdersService {
       Number(order.user.totalSpent),
     );
 
+    const manualPartnerPromoReward = this.resolveManualPartnerPromoReward(order);
+    const manualPartnerPromoBlocksReferral = Boolean(
+      order.promoCodeRedemption?.source === PromoCodeRedemptionSource.MANUAL &&
+        order.promoCodeRedemption.rewardOwnerIdSnapshot,
+    );
+
     let referralContext: {
       settings: { enabled: boolean; bonusPercent: number; minPayout: number };
       referralLink: { id: string; bonusPercent: any; payoutMode: any } | null;
     } | null = null;
 
-    if (order.user.referredById) {
+    if (!manualPartnerPromoBlocksReferral && order.user.referredById) {
       const [settings, referralLink] = await Promise.all([
         this.systemSettingsService.getReferralSettings(),
         order.user.referralLinkId
@@ -1266,7 +1287,24 @@ export class OrdersService {
         data: { totalSpent: { increment: order.totalAmount } },
       });
 
-      if (order.user.referredById && referralContext) {
+      if (manualPartnerPromoReward) {
+        await this.partnerRewardsService.award({
+          ownerId: manualPartnerPromoReward.ownerId,
+          orderAmount: Number(order.totalAmount),
+          orderId: order.id,
+          source: {
+            kind: 'partner_promo_code',
+            promoCodeId: manualPartnerPromoReward.promoCodeId,
+            bonusPercent: manualPartnerPromoReward.bonusPercent,
+            payoutMode: manualPartnerPromoReward.payoutMode,
+          },
+          client: tx,
+        });
+      } else if (
+        !manualPartnerPromoBlocksReferral &&
+        order.user.referredById &&
+        referralContext
+      ) {
         await this.referralsService.awardReferralBonus(
           order.user.referredById,
           Number(order.totalAmount),
@@ -1297,6 +1335,71 @@ export class OrdersService {
     }
 
     return { applied: true };
+  }
+
+  private resolveManualPartnerPromoReward(order: PurchaseAccountingOrder) {
+    const redemption = order.promoCodeRedemption;
+
+    if (
+      !redemption ||
+      redemption.source !== PromoCodeRedemptionSource.MANUAL ||
+      !redemption.rewardOwnerIdSnapshot
+    ) {
+      return null;
+    }
+
+    if (redemption.rewardOwnerIdSnapshot === order.userId) {
+      return null;
+    }
+
+    if (
+      !redemption.rewardBonusPercentSnapshot ||
+      !redemption.rewardPayoutModeSnapshot
+    ) {
+      throw new BadRequestException(
+        'Партнёрский промокод имеет неполный reward snapshot',
+      );
+    }
+
+    return {
+      ownerId: redemption.rewardOwnerIdSnapshot,
+      promoCodeId: redemption.promoCodeId,
+      bonusPercent: redemption.rewardBonusPercentSnapshot,
+      payoutMode: redemption.rewardPayoutModeSnapshot,
+    };
+  }
+
+  private async loadPurchaseAccountingOrder(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        userId: true,
+        totalAmount: true,
+        user: {
+          select: {
+            totalSpent: true,
+            referralLinkId: true,
+            referredById: true,
+          },
+        },
+        promoCodeRedemption: {
+          select: {
+            promoCodeId: true,
+            source: true,
+            rewardOwnerIdSnapshot: true,
+            rewardBonusPercentSnapshot: true,
+            rewardPayoutModeSnapshot: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new BadRequestException('Заказ не найден');
+    }
+
+    return order;
   }
 
   /**
@@ -1423,6 +1526,8 @@ export class OrdersService {
       return this.fulfillTopupOrder(order as any);
     }
 
+    const accountingOrder = await this.loadPurchaseAccountingOrder(orderId);
+
     try {
       const esimData = await this.esimProviderService.purchaseEsim(
         order.product.providerId,
@@ -1436,7 +1541,7 @@ export class OrdersService {
       try {
         updatedOrder = await this.prisma.$transaction(async (tx) => {
           const completedOrder = await this.markOrderCompleted(orderId, issuedEsimSnapshot, tx);
-          await this.applyPurchaseCompletionEffects(order, tx);
+          await this.applyPurchaseCompletionEffects(accountingOrder, tx);
           return completedOrder;
         }, { timeout: 60_000 });
       } catch (error: any) {

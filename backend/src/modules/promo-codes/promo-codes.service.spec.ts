@@ -259,6 +259,58 @@ describe('PromoCodesService', () => {
       promoId: 'promo_1',
       code: 'PROMO10',
       discountPercent: 10,
+      partnerRewardPolicy: null,
+    });
+  });
+
+  it('validateForReservation возвращает internal partner reward policy для checkout context', async () => {
+    const { service, prisma } = makeService();
+    prisma.promoCode.findUnique.mockResolvedValue({
+      id: 'promo_partner_1',
+      code: 'PARTNER10',
+      isActive: true,
+      expiresAt: null,
+      maxUses: null,
+      usedCount: 0,
+      discountPercent: 10,
+      referralOwnerId: 'owner_1',
+      referralBonusPercent: '12.5',
+      referralPayoutMode: ReferralPayoutMode.EXTERNAL,
+    });
+
+    await expect(service.validateForReservation('partner10')).resolves.toEqual({
+      valid: true,
+      promoId: 'promo_partner_1',
+      code: 'PARTNER10',
+      discountPercent: 10,
+      partnerRewardPolicy: {
+        ownerId: 'owner_1',
+        bonusPercent: '12.5',
+        payoutMode: ReferralPayoutMode.EXTERNAL,
+      },
+    });
+  });
+
+  it('validate не раскрывает partner owner/reward metadata в public endpoint contract', async () => {
+    const { service, prisma } = makeService();
+    prisma.promoCode.findUnique.mockResolvedValue({
+      id: 'promo_partner_1',
+      code: 'PARTNER10',
+      isActive: true,
+      expiresAt: null,
+      maxUses: null,
+      usedCount: 0,
+      discountPercent: 10,
+      referralOwnerId: 'owner_1',
+      referralBonusPercent: '12.5',
+      referralPayoutMode: ReferralPayoutMode.EXTERNAL,
+    });
+
+    await expect(service.validate('partner10')).resolves.toEqual({
+      valid: true,
+      promoId: 'promo_partner_1',
+      code: 'PARTNER10',
+      discountPercent: 10,
     });
   });
 

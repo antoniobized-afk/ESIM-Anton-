@@ -1,7 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   OrderStatus,
+  PromoCodeRedemptionSource,
   PromoCodeSource,
+  ReferralPayoutMode,
   TransactionStatus,
   TransactionType,
 } from '@prisma/client';
@@ -64,6 +66,9 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
       ),
     },
     referralLink: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    promoCodeRedemption: {
       findUnique: jest.fn().mockResolvedValue(null),
     },
     user: {
@@ -187,6 +192,10 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     awardReferralBonus: jest.fn().mockResolvedValue({ awarded: true, bonusAmount: 5 }),
   };
 
+  const partnerRewardsService = {
+    award: jest.fn().mockResolvedValue({ awarded: true, bonusAmount: 12.5 }),
+  };
+
   const loyaltyService = {
     updateUserLevel: jest.fn().mockResolvedValue(undefined),
     getEffectiveLevelForSpent: jest.fn().mockResolvedValue({
@@ -208,6 +217,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     emailService as any,
     systemSettingsService as any,
     referralsService as any,
+    partnerRewardsService as any,
     loyaltyService as any,
   );
 
@@ -218,6 +228,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     esimProviderService,
     emailService,
     referralsService,
+    partnerRewardsService,
     loyaltyService,
     systemSettingsService,
   };
@@ -317,6 +328,68 @@ describe('OrdersService', () => {
       expect(prisma.transaction.create).not.toHaveBeenCalled();
       expect(referralsService.awardReferralBonus).not.toHaveBeenCalled();
       expect(loyaltyService.updateUserLevel).not.toHaveBeenCalled();
+    });
+
+    it('начисляет reward владельцу manual partner promo и не создаёт referral reward по тому же order', async () => {
+      const { service, referralsService, partnerRewardsService } = makeService();
+
+      const result = await (service as any).applyPurchaseCompletionEffects(
+        makeOrder({
+          promoCodeRedemption: {
+            promoCodeId: 'promo_partner_1',
+            source: PromoCodeRedemptionSource.MANUAL,
+            rewardOwnerIdSnapshot: 'owner_1',
+            rewardBonusPercentSnapshot: '12.5',
+            rewardPayoutModeSnapshot: ReferralPayoutMode.EXTERNAL,
+          },
+          user: {
+            id: 'user_1',
+            totalSpent: 10000,
+            referralLinkId: 'link_1',
+            referredById: 'ref_1',
+          },
+        }),
+      );
+
+      expect(result).toEqual({ applied: true });
+      expect(partnerRewardsService.award).toHaveBeenCalledWith({
+        ownerId: 'owner_1',
+        orderAmount: 100,
+        orderId: 'order_1',
+        source: {
+          kind: 'partner_promo_code',
+          promoCodeId: 'promo_partner_1',
+          bonusPercent: '12.5',
+          payoutMode: ReferralPayoutMode.EXTERNAL,
+        },
+        client: expect.anything(),
+      });
+      expect(referralsService.awardReferralBonus).not.toHaveBeenCalled();
+    });
+
+    it('не fallback-ится в referral reward, если manual partner promo snapshot принадлежит buyer', async () => {
+      const { service, referralsService, partnerRewardsService } = makeService();
+
+      await (service as any).applyPurchaseCompletionEffects(
+        makeOrder({
+          promoCodeRedemption: {
+            promoCodeId: 'promo_partner_1',
+            source: PromoCodeRedemptionSource.MANUAL,
+            rewardOwnerIdSnapshot: 'user_1',
+            rewardBonusPercentSnapshot: '12.5',
+            rewardPayoutModeSnapshot: ReferralPayoutMode.BALANCE,
+          },
+          user: {
+            id: 'user_1',
+            totalSpent: 10000,
+            referralLinkId: 'link_1',
+            referredById: 'ref_1',
+          },
+        }),
+      );
+
+      expect(partnerRewardsService.award).not.toHaveBeenCalled();
+      expect(referralsService.awardReferralBonus).not.toHaveBeenCalled();
     });
 
     it('оставляет заказ в processing для reconciliation, если referral awarding падает после выдачи eSIM', async () => {
@@ -547,6 +620,31 @@ describe('OrdersService', () => {
           isFree: false,
         }),
       );
+    });
+
+    it('previewPricing отклоняет собственный manual partner promo без мутаций', async () => {
+      const { service, prisma } = makeService();
+      const promoCodesService = (service as any).promoCodesService;
+      promoCodesService.validateForReservation.mockResolvedValue({
+        valid: true,
+        promoId: 'promo_partner_1',
+        code: 'PARTNER10',
+        discountPercent: 10,
+        partnerRewardPolicy: {
+          ownerId: 'user_1',
+          bonusPercent: '12.5',
+          payoutMode: ReferralPayoutMode.BALANCE,
+        },
+      });
+
+      await expect(
+        service.previewPricing('user_1', 'product_1', {
+          promoCode: 'partner10',
+        }),
+      ).rejects.toThrow('Нельзя применить собственный партнёрский промокод');
+
+      expect(prisma.order.create).not.toHaveBeenCalled();
+      expect(promoCodesService.reserveForOrder).not.toHaveBeenCalled();
     });
 
     it('previewPricing не падает, если auto-promo по реферальной ссылке истёк', async () => {

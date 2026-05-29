@@ -218,6 +218,14 @@
   `promoCodeId` ledger keys и `metadata.source`. `ReferralsService` сохранён
   как compatibility wrapper; partner promo reward готов к подключению в
   `OrdersService` на Step 4.
+- Step 4 выполнен: checkout self-use guard отклоняет владельца manual partner
+  promo до мутаций; internal `validateForReservation()` отдаёт reward policy
+  только backend checkout/reservation path, а public validate не раскрывает
+  owner metadata. `OrdersService.applyPurchaseCompletionEffects()` сначала
+  начисляет manual partner promo reward по snapshot через `PartnerRewardsService`,
+  затем fallback-ится в referral link / legacy referral flow. Self-owned
+  historical snapshot не создаёт reward и не даёт referral fallback по тому же
+  order.
 
 ## Ссылки
 

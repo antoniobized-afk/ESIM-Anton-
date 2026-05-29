@@ -45,13 +45,40 @@
 
 ## Статус
 
-- `planned`
+- `done`
+
+## Реализация
+
+- `PromoCodesService.validateForReservation()` возвращает internal
+  `partnerRewardPolicy` для backend checkout context.
+- Public `PromoCodesService.validate()` сохраняет прежний безопасный response:
+  `valid`, `promoId`, `code`, `discountPercent` без owner/reward metadata.
+- `reserveForOrder()` использует тот же resolver reward policy и snapshot-ит
+  owner/percent/payout mode из залоченной строки `promo_codes`.
+- `OrdersService.buildOrderPricingSnapshot()` остаётся read-only на quote path,
+  но теперь отклоняет manual partner promo, если buyer совпадает с owner.
+- `OrdersService.fulfillOrder()` перед provider call загружает минимальный
+  `PurchaseAccountingOrder` с `PromoCodeRedemption` snapshot для accounting,
+  не расширяя client/admin `findById()` response приватными partner fields.
+- `applyPurchaseCompletionEffects()` применяет precedence:
+  1. manual partner promo snapshot через `PartnerRewardsService`;
+  2. referral link / legacy referral fallback;
+  3. no reward.
+- Если в данных уже оказался self-owned manual partner promo snapshot, reward не
+  начисляется и fallback в referral reward не выполняется.
 
 ## Журнал изменений
 
 ### 2026-05-29
 
 - Step создан как основной runtime integration contour фазы.
+- Step выполнен: checkout получил self-reward guard, internal promo reservation
+  preview получил partner reward policy без public leak, а completion accounting
+  теперь сначала обрабатывает manual partner promo snapshot и только затем
+  fallback-ится в referral flow.
+- Покрытие добавлено в `promo-codes.service.spec.ts` и
+  `orders.service.spec.ts`: internal/public promo contract, self-use reject,
+  partner promo precedence, no-fallback для self-owned snapshot.
 
 ## Файлы
 
@@ -72,3 +99,11 @@
   - top-up with partner promo does not reward;
   - failed/cancelled/stale releases reservation;
   - duplicate completion does not duplicate transaction.
+
+Фактически прогнано:
+
+```bash
+pnpm exec jest src/modules/promo-codes/promo-codes.service.spec.ts --runInBand
+pnpm exec jest src/modules/orders/orders.service.spec.ts --runInBand
+pnpm exec tsc --noEmit -p tsconfig.json
+```

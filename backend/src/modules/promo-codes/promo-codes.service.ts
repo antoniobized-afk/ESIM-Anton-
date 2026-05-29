@@ -15,6 +15,12 @@ type PartnerRewardPolicyInput = Pick<
   'referralOwnerId' | 'referralBonusPercent' | 'referralPayoutMode'
 >;
 
+type ReservationRewardPolicy = {
+  ownerId: string;
+  bonusPercent: Prisma.Decimal;
+  payoutMode: ReferralPayoutMode;
+} | null;
+
 @Injectable()
 export class PromoCodesService {
   constructor(private prisma: PrismaService) {}
@@ -97,6 +103,28 @@ export class PromoCodesService {
     return promo;
   }
 
+  private buildReservationRewardPolicy(promo: {
+    referralOwnerId?: string | null;
+    referralBonusPercent?: Prisma.Decimal | null;
+    referralPayoutMode?: ReferralPayoutMode | null;
+  }): ReservationRewardPolicy {
+    if (!promo.referralOwnerId) {
+      return null;
+    }
+
+    if (!promo.referralBonusPercent || !promo.referralPayoutMode) {
+      throw new BadRequestException(
+        'Партнёрский промокод имеет неполную reward policy',
+      );
+    }
+
+    return {
+      ownerId: promo.referralOwnerId,
+      bonusPercent: promo.referralBonusPercent,
+      payoutMode: promo.referralPayoutMode,
+    };
+  }
+
   async create(data: CreatePromoCodeDto) {
     const normalized = this.normalizeCode(data.code);
     const rewardPolicy = this.validatePartnerRewardPolicyBlock(data, 'create');
@@ -152,7 +180,14 @@ export class PromoCodesService {
   }
 
   async validate(code: string) {
-    return this.validateForReservation(code);
+    const reservation = await this.validateForReservation(code);
+
+    return {
+      valid: reservation.valid,
+      promoId: reservation.promoId,
+      code: reservation.code,
+      discountPercent: reservation.discountPercent,
+    };
   }
 
   async validateForReservation(code: string) {
@@ -168,6 +203,7 @@ export class PromoCodesService {
       promoId: promo.id,
       code: promo.code,
       discountPercent: promo.discountPercent,
+      partnerRewardPolicy: this.buildReservationRewardPolicy(promo),
     };
   }
 
@@ -207,15 +243,7 @@ export class PromoCodesService {
         throw new BadRequestException('Промокод исчерпан');
       }
 
-      const rewardOwnerIdSnapshot = lockedPromo.referralOwnerId ?? null;
-      if (
-        rewardOwnerIdSnapshot &&
-        (!lockedPromo.referralBonusPercent || !lockedPromo.referralPayoutMode)
-      ) {
-        throw new BadRequestException(
-          'Партнёрский промокод имеет неполную reward policy',
-        );
-      }
+      const rewardPolicy = this.buildReservationRewardPolicy(lockedPromo);
 
       return tx.promoCodeRedemption.create({
         data: {
@@ -224,13 +252,9 @@ export class PromoCodesService {
           orderId,
           source,
           status: PromoCodeRedemptionStatus.RESERVED,
-          rewardOwnerIdSnapshot,
-          rewardBonusPercentSnapshot: rewardOwnerIdSnapshot
-            ? lockedPromo.referralBonusPercent
-            : null,
-          rewardPayoutModeSnapshot: rewardOwnerIdSnapshot
-            ? lockedPromo.referralPayoutMode
-            : null,
+          rewardOwnerIdSnapshot: rewardPolicy?.ownerId ?? null,
+          rewardBonusPercentSnapshot: rewardPolicy?.bonusPercent ?? null,
+          rewardPayoutModeSnapshot: rewardPolicy?.payoutMode ?? null,
         },
       });
     };

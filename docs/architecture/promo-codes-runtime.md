@@ -112,9 +112,10 @@ Partner reward DTO rule: `referralOwnerId`, `referralBonusPercent` и
 ### Public/client promo validation
 
 `GET /promo-codes/validate?code=...` calls `PromoCodesService.validate()`.
-Current endpoint has no user context and should not expose partner owner
-metadata. Partner promo checkout decisions must be made through `POST
-/orders/quote` and `POST /orders`, where user/order context is available.
+Endpoint has no user context and does not expose partner owner metadata:
+response includes only `valid`, `promoId`, `code`, `discountPercent`.
+Partner promo checkout decisions use internal `validateForReservation()` through
+`POST /orders/quote` and `POST /orders`, where user/order context is available.
 
 ## Runtime Map
 
@@ -126,6 +127,7 @@ metadata. Partner promo checkout decisions must be made through `POST
 Behavior:
 
 - manual promo from request is strict and wins over referral auto-promo;
+- manual partner promo self-use is rejected before any database mutation;
 - if no manual promo is passed, current `User.referralLinkId -> ReferralLink`
   may provide auto-promo;
 - invalid manual promo throws;
@@ -176,8 +178,18 @@ For primary purchase, it:
 4. In finalize transaction, calls `markOrderCompleted()`.
 5. `markOrderCompleted()` consumes promo reservation and increments
    `PromoCode.usedCount`.
-6. `applyPurchaseCompletionEffects()` applies cashback, `totalSpent`, referral
-   bonus and loyalty level recalculation.
+6. `applyPurchaseCompletionEffects()` applies cashback, `totalSpent`, partner
+   promo/referral reward and loyalty level recalculation.
+
+Reward precedence:
+
+1. Manual partner promo snapshot with owner policy creates
+   `REFERRAL_BONUS(metadata.source='partner_promo_code')` through
+   `PartnerRewardsService`.
+2. If no manual partner promo owner snapshot exists, existing referral link /
+   legacy referral attribution may create the referral reward.
+3. Self-owned manual partner promo snapshots do not create reward and do not
+   fallback to referral reward for the same order.
 
 Top-up orders are detected by `parentOrderId + topupPackageCode` and go through
 `fulfillTopupOrder()` without purchase completion side effects.
@@ -208,9 +220,7 @@ order cancellation boundary.
 ## Remaining Implementation Gaps For Phase 17
 
 - Extend admin typed API/UI after backend contracts are stable.
-- Integrate checkout self-reward rejection when buyer context is available.
-- Connect `OrdersService.applyPurchaseCompletionEffects()` to choose manual
-  partner promo snapshot before referral fallback.
+- Add admin analytics surface for partner promo earnings in Step 5/6.
 
 ## Verification Baseline
 
