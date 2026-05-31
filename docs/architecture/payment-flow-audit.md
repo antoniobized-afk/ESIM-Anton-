@@ -180,7 +180,7 @@ Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `
 - Repeat purchase by saved card не обходит order state machine и не вводит отдельный hidden purchase lifecycle.
 - Token fail не должен приводить к widget retry на том же order/invoice.
 - Repeat charge по saved card теперь обязан иметь один durable attempt на order; `IN_PROGRESS` и `AMBIGUOUS` attempt запрещают второй provider charge на тот же `orderId`.
-- Обычный CloudPayments widget `pay` callback тоже не должен иметь second-fulfill window: только один callback может claim-ить completion boundary и запустить `fulfillOrder()`.
+- Обычный CloudPayments widget `pay` callback тоже не должен иметь second-fulfill window: только один callback может durable-claim-ить переход заказа в `PAID`, после чего canonical pickup worker забирает его в `fulfillOrder()`.
 - После успешного provider issuance локальная ошибка финализации больше не должна откатывать заказ в обычный `FAILED` или запускать refund-компенсацию как будто provider side-effect не случился. Такой кейс обязан оставлять durable reconciliation state без повторного `purchaseEsim()` / `topupEsim()`.
 
 ## Confirmed Risks / Remaining Gaps
@@ -194,7 +194,7 @@ Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `
 
 ### Still active
 
-- Expire policy для stale payment sessions теперь есть, но это opportunistic cleanup на order-related backend paths, а не отдельный scheduler/queue.
+- Expire policy для stale payment sessions теперь есть, но это opportunistic cleanup на order-related backend paths; отдельный scheduler введён только для pickup уже оплаченных `PAID` заказов.
 - Legacy Robokassa flow остаётся отдельным runtime path и использует свой webhook lifecycle.
 - Client пока не показывает отдельный UI для bonus spend на product page, хотя backend pricing formula это поддерживает.
 - `POST /orders/:id/fulfill-free` остаётся отдельным client-visible step вместо полного server-side auto-fulfill внутри `POST /orders`.
@@ -221,6 +221,13 @@ Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `
 - `create()` и `createWithBalance()` переведены на один pricing helper.
 - Product page переведена на backend quote contract.
 - Card purchase flow на product page теперь всегда создаёт новый order.
+- CloudPayments `Pay` webhook больше не ждёт provider issuance inline:
+  - webhook фиксирует payment transaction,
+  - durable-claim-ит `order -> PAID`,
+  - быстро отвечает `{ code: 0 }`,
+  - дальнейший `fulfillOrder()` запускается scheduler-based picker-ом по `status=PAID`.
+- `PROCESSING` закреплён как canonical visible state для user/support UX, а не как скрытое внутреннее состояние.
+- Purchase success push перенесён в canonical purchase fulfillment path, чтобы webhook retry и saved-card repeat charge не плодили дубли side effects.
 - В `shared/contracts/checkout.ts` появился общий contract-level type surface для `quote/create/topup`.
 - Backend `orders/payments` write endpoints переведены с inline body contracts на DTO + `class-validator`.
 - `POST /orders` и `POST /orders/:id/topup` выровнены к одному response shape: `{ paymentMethod, order }`.
@@ -273,7 +280,7 @@ Runtime validation теперь идёт через:
   - stale `PENDING` order -> `CANCELLED` + `Payment session expired`;
   - `check` webhook получает `code:20`;
   - late successful `pay` может revive только expired-session order.
-- При необходимости вынести cleanup из opportunistic path в отдельный scheduled operational task.
+- Pickup для уже оплаченных `PAID` заказов теперь вынесен в scheduled backend worker; cleanup expired-session path по-прежнему opportunistic.
 
 ### Wave 3. Legacy retirement decision
 
@@ -296,6 +303,8 @@ Runtime validation теперь идёт через:
 - stale session auto-expire policy;
 - late webhook recovery only for `Payment session expired`;
 - ignore late webhook for non-actionable cancelled order.
+- fast webhook ack без inline provider latency;
+- async pickup of `PAID` orders через canonical `fulfillOrder()` boundary.
 
 ### Not covered by unit tests
 
@@ -321,15 +330,17 @@ Runtime smoke:
    - promo code меняет quote;
    - повторный card click создаёт новый order.
 2. Card purchase with promo:
-   - widget amount равен `POST /orders` response `totalAmount`.
+  - widget amount равен `POST /orders` response `totalAmount`.
+  - после widget success пользователь попадает на `/order/[id]`, а не в optimistic ready-state.
 3. Free order:
-   - создаётся новый order;
-   - `fulfill-free` работает только с ним.
+  - создаётся новый order;
+  - `fulfill-free` работает только с ним.
 4. Balance purchase:
    - backend quote и backend createWithBalance совпадают по сумме.
 5. Top-up card/balance:
-   - по-прежнему используют fresh order id;
-   - не создают loyalty/referral side effects.
+  - по-прежнему используют fresh order id;
+  - не создают loyalty/referral side effects.
+  - card top-up после widget success показывает order-tracking, пока backend не доведёт заказ до terminal state.
 6. Saved-card purchase:
    - active card видна в purchase checkout;
    - repeat charge success доводит order до `COMPLETED`;

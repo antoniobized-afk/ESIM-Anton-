@@ -333,12 +333,12 @@ function ProductPageInner() {
       // email передаётся в payload заказа — контроллер сохранит его синхронно
 
       const tg = isTelegramWebApp() ? (window as any).Telegram.WebApp : null
-      const finishSuccessfulPurchase = async (message: string) => {
+      const finishSuccessfulPurchase = async (message: string, orderId: string) => {
         if (tg) {
-          tg.showAlert(message, () => router.push('/my-esim'))
+          tg.showAlert(message, () => router.push(`/order/${orderId}`))
         } else {
           alert(message)
-          router.push('/my-esim')
+          router.push(`/order/${orderId}`)
         }
       }
       const openWidgetForOrder = async (orderForWidget: { id: string; totalAmount: number }) => {
@@ -357,7 +357,7 @@ function ProductPageInner() {
         })
 
         if (result.success) {
-          await finishSuccessfulPurchase('Оплата прошла успешно!')
+          await finishSuccessfulPurchase('Оплата принята. Проверяем выпуск eSIM…', orderForWidget.id)
         } else {
           console.error('Payment failed:', result.reason)
           if (tg) tg.showAlert('Оплата не прошла. Попробуйте еще раз.')
@@ -423,7 +423,8 @@ function ProductPageInner() {
         if (repeatCharge.success) {
           setSavedCard(repeatCharge.savedCard)
           await finishSuccessfulPurchase(
-            repeatCharge.message || 'Оплата по привязанной карте прошла успешно!',
+            repeatCharge.message || 'Оплата принята. Проверяем выпуск eSIM…',
+            order.id,
           )
           return
         }

@@ -86,6 +86,17 @@ export default function OrderDetailPage() {
     }
   }, [params.id, loadOrder])
 
+  useEffect(() => {
+    if (!order) return
+    if (!['PENDING', 'PAID', 'PROCESSING'].includes(order.status)) return
+
+    const interval = window.setInterval(() => {
+      void loadOrder()
+    }, 5000)
+
+    return () => window.clearInterval(interval)
+  }, [order, loadOrder])
+
   const copyToClipboard = async (text: string, label: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -123,6 +134,8 @@ export default function OrderDetailPage() {
 
   const badge = getStatusBadge(order.status)
   const isCompleted = order.status === 'COMPLETED'
+  const hasIssuedSnapshot = Boolean(order.qrCode || order.iccid || order.activationCode)
+  const canShowEsimData = isCompleted || (order.status === 'PROCESSING' && hasIssuedSnapshot)
   const formattedDate = new Date(order.createdAt).toLocaleString('ru-RU', {
     day: '2-digit',
     month: '2-digit',
@@ -171,9 +184,16 @@ export default function OrderDetailPage() {
         <div className="mb-3 text-5xl">{badge.icon}</div>
         <span className={`badge ${badge.class} text-base`}>{badge.label}</span>
         <p className="mt-2 text-sm text-secondary">{formattedDate}</p>
+        {(order.status === 'PAID' || order.status === 'PROCESSING') && (
+          <p className="mt-3 text-sm text-secondary">
+            {order.status === 'PAID'
+              ? 'Оплата подтверждена. Заказ поставлен в очередь на выпуск eSIM.'
+              : 'Заказ обрабатывается. Страница обновляется автоматически.'}
+          </p>
+        )}
       </div>
 
-      {isCompleted && order.qrCode && (
+      {canShowEsimData && order.qrCode && (
         <div className="card-neutral mb-4 p-5 text-center animate-slide-up" style={{ animationDelay: '0.04s' }}>
           <h3 className="mb-3 flex items-center justify-center gap-2 font-bold text-primary">
             <QrCode size={20} />
@@ -183,7 +203,9 @@ export default function OrderDetailPage() {
             <img src={order.qrCode} alt="QR Code" className="mx-auto h-64 w-64" />
           </div>
           <p className="mb-4 text-sm text-secondary">
-            Отсканируйте этот QR-код в настройках вашего телефона для активации eSIM
+            {isCompleted
+              ? 'Отсканируйте этот QR-код в настройках вашего телефона для активации eSIM'
+              : 'Данные eSIM уже получены от провайдера. Локальная финализация заказа ещё завершается.'}
           </p>
           <button
             onClick={() => {
@@ -202,7 +224,7 @@ export default function OrderDetailPage() {
         </div>
       )}
 
-      {isCompleted && (order.iccid || order.activationCode) && (
+      {canShowEsimData && (order.iccid || order.activationCode) && (
         <div className="card-neutral mb-4 p-5 animate-slide-up" style={{ animationDelay: '0.08s' }}>
           <h3 className="mb-3 font-bold text-primary">Данные eSIM</h3>
           <div className="flex flex-col gap-3">
@@ -265,7 +287,7 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      {isCompleted && (
+      {canShowEsimData && (
         <div className="card-neutral border border-amber-200 bg-amber-50 p-5 animate-slide-up" style={{ animationDelay: '0.2s' }}>
           <div className="flex gap-3">
             <Info size={20} className="mt-1 shrink-0 text-amber-700" />

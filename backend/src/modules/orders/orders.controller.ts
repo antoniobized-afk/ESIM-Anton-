@@ -86,6 +86,20 @@ export class OrdersController {
     return this.ordersService.cancelOrder(id);
   }
 
+  @Post(':id/retry-fulfillment')
+  @UseGuards(JwtAdminGuard)
+  @ApiOperation({ summary: 'Повторно запустить fulfillment для PAID-заказа' })
+  async retryFulfillment(@Param('id') id: string) {
+    return this.ordersService.retryFulfillment(id);
+  }
+
+  @Post(':id/finalize-reconcile')
+  @UseGuards(JwtAdminGuard)
+  @ApiOperation({ summary: 'Дофинализировать PROCESSING-заказ с issued snapshot' })
+  async finalizeReconcile(@Param('id') id: string) {
+    return this.ordersService.finalizeReconciledOrder(id);
+  }
+
   @Post('quote')
   @UseGuards(JwtUserGuard)
   @ApiOperation({ summary: 'Посчитать актуальную цену заказа без создания order' })

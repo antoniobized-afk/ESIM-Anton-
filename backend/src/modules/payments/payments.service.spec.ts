@@ -93,19 +93,14 @@ function makeService() {
     sendPaymentSuccessNotification: jest.fn(),
   };
 
-  const pushService = {
-    sendPaymentSuccess: jest.fn().mockResolvedValue(undefined),
-  };
-
   const service = new PaymentsService(
     prisma as any,
     ordersService as any,
     configService as any,
     telegramNotification as any,
-    pushService as any,
   );
 
-  return { service, prisma, ordersService, pushService };
+  return { service, prisma, ordersService };
 }
 
 describe('PaymentsService saved card repeat charge', () => {
@@ -200,7 +195,7 @@ describe('PaymentsService saved card repeat charge', () => {
   });
 
   it('charges order with saved card and fulfills on provider success', async () => {
-    const { service, prisma, ordersService, pushService } = makeService();
+    const { service, prisma, ordersService } = makeService();
     prisma.order.findUnique.mockResolvedValue({
       id: 'order_1',
       userId: 'user_1',
@@ -272,13 +267,6 @@ describe('PaymentsService saved card repeat charge', () => {
 
     expect(mockedAxios.post).toHaveBeenCalled();
     expect(ordersService.fulfillOrder).toHaveBeenCalledWith('order_1');
-    expect(pushService.sendPaymentSuccess).toHaveBeenCalledWith('user_1', {
-      orderId: 'order_1',
-      productName: 'Japan 10 GB',
-      country: 'JP',
-      dataAmount: '10 GB',
-      price: 100,
-    });
     expect(result.success).toBe(true);
     expect(result.chargeState).toBe('succeeded');
     expect(result.fallbackToWidget).toBe(false);

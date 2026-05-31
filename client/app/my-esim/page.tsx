@@ -35,6 +35,7 @@ interface MyEsim {
   iccid: string
   country: string
   dataAmount: string
+  orderStatus: 'PAID' | 'PROCESSING' | 'COMPLETED'
   qrCode?: string
   activationCode?: string
   smdpAddress?: string | null
@@ -382,7 +383,7 @@ export default function MyEsimPage() {
       const orders = await ordersApi.getMy(userId);
 
       const activeOrders = orders.filter(o =>
-        o.status === 'PAID' || o.status === 'COMPLETED'
+        o.status === 'PAID' || o.status === 'PROCESSING' || o.status === 'COMPLETED'
       );
 
       const mappedEsims: MyEsim[] = activeOrders.map(order => ({
@@ -390,6 +391,7 @@ export default function MyEsimPage() {
         iccid: order.iccid || 'Ожидает генерации...',
         country: order.product.country,
         dataAmount: formatDataAmount(order.product.dataAmount),
+        orderStatus: order.status as 'PAID' | 'PROCESSING' | 'COMPLETED',
         qrCode: order.qrCode,
         activationCode: order.activationCode,
         smdpAddress: order.smdpAddress ?? null,
@@ -501,10 +503,14 @@ export default function MyEsimPage() {
             {esims.map((esim) => {
               const statusConfig = getStatusConfig(esim.status)
               const StatusIcon = statusConfig.icon
-              const showTopup = esim.canTopup && (esim.status === 'ACTIVE' || esim.status === 'NOT_INSTALLED')
+              const showTopup =
+                esim.orderStatus === 'COMPLETED' &&
+                esim.canTopup &&
+                (esim.status === 'ACTIVE' || esim.status === 'NOT_INSTALLED')
               const validUntilLabel = esim.expiresAt
                 ? new Date(esim.expiresAt).toLocaleDateString('ru-RU')
                 : null
+              const isAwaitingFulfillment = esim.orderStatus === 'PAID' || esim.orderStatus === 'PROCESSING'
 
               return (
                 <div
@@ -532,7 +538,25 @@ export default function MyEsimPage() {
 
                   {/* Прогрессбар трафика */}
                   <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                    {esim.usage?.available && esim.usage.percentTraffic !== null ? (
+                    {isAwaitingFulfillment ? (
+                      <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-900/30 dark:bg-orange-900/20">
+                        <p className="text-sm font-medium text-orange-900 dark:text-orange-200">
+                          {esim.orderStatus === 'PAID'
+                            ? 'Платёж принят, готовим eSIM.'
+                            : 'Заказ обрабатывается, выпуск eSIM ещё не завершён.'}
+                        </p>
+                        <p className="mt-1 text-xs text-orange-700 dark:text-orange-300">
+                          Страница заказа покажет актуальный статус и данные eSIM сразу после выдачи.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/order/${esim.id}`)}
+                          className="mt-3 inline-flex rounded-xl bg-[#f77430] px-3 py-2 text-sm font-medium text-white"
+                        >
+                          Открыть заказ
+                        </button>
+                      </div>
+                    ) : esim.usage?.available && esim.usage.percentTraffic !== null ? (
                       <>
                         <div className="flex justify-between text-sm mb-2">
                           <span className="text-gray-500 dark:text-gray-400">
@@ -565,9 +589,9 @@ export default function MyEsimPage() {
                       </>
                     ) : (
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {esim.usage?.reason || (esim.status === 'NOT_INSTALLED' ? 'Расход появится после активации' : 'Расход обновляется...')}
-                        </p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {esim.usage?.reason || (esim.status === 'NOT_INSTALLED' ? 'Расход появится после активации' : 'Расход обновляется...')}
+                          </p>
                         <button
                           type="button"
                           onClick={() => refreshUsage(esim.id)}

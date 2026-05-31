@@ -24,6 +24,11 @@ const hasDiscount = (order: AdminOrder): boolean =>
   Number(order.bonusUsed || 0) > 0
 
 const CANCELLABLE = new Set<OrderStatus>(['PENDING', 'FAILED'])
+const RETRYABLE = new Set<OrderStatus>(['PAID'])
+const RECONCILE_FINALIZABLE = new Set([
+  'issued_but_finalize_failed',
+  'topup_issued_but_finalize_failed',
+])
 
 type SortField = 'createdAt' | 'totalAmount' | 'productPrice' | 'status'
 
@@ -211,6 +216,50 @@ export default function Orders() {
     }
   }
 
+  const handleRetryFulfillment = async (orderId: string) => {
+    const confirmed = await confirmDialog({
+      title: 'Повторный запуск fulfillment',
+      description: 'Повторно передать оплаченный заказ в canonical fulfillment pipeline?',
+      confirmLabel: 'Запустить повторно',
+    })
+    if (!confirmed) return
+
+    try {
+      await ordersApi.retryFulfillment(orderId)
+      toast.success('Fulfillment повторно запущен')
+      loadOrders()
+    } catch (error: unknown) {
+      console.error('Ошибка повторного запуска fulfillment:', error)
+      const errorMessage =
+        typeof error === 'object' && error !== null && 'response' in error
+          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined
+      toast.error(errorMessage || 'Не удалось повторно запустить fulfillment')
+    }
+  }
+
+  const handleFinalizeReconcile = async (orderId: string) => {
+    const confirmed = await confirmDialog({
+      title: 'Дофинализировать заказ',
+      description: 'Завершить локальную финализацию заказа без повторного вызова провайдера?',
+      confirmLabel: 'Дофинализировать',
+    })
+    if (!confirmed) return
+
+    try {
+      await ordersApi.finalizeReconcile(orderId)
+      toast.success('Заказ дофинализирован')
+      loadOrders()
+    } catch (error: unknown) {
+      console.error('Ошибка локальной финализации заказа:', error)
+      const errorMessage =
+        typeof error === 'object' && error !== null && 'response' in error
+          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined
+      toast.error(errorMessage || 'Не удалось дофинализировать заказ')
+    }
+  }
+
   const handleExport = async () => {
     try {
       setExporting(true)
@@ -316,6 +365,10 @@ export default function Orders() {
                   const promoAmt = Number(order.promoDiscount || 0)
                   const loyaltyAmt = Number(order.discount || 0)
                   const bonusAmt = Number(order.bonusUsed || 0)
+                  const canRetryFulfillment = RETRYABLE.has(order.status)
+                  const canFinalizeReconcile =
+                    order.status === 'PROCESSING' &&
+                    RECONCILE_FINALIZABLE.has(order.reconciliation?.category || '')
 
                   return (
                     <TableRow
@@ -376,6 +429,26 @@ export default function Orders() {
                         {new Date(order.createdAt).toLocaleDateString('ru-RU')}
                       </TableCell>
                       <TableCell>
+                        {canRetryFulfillment && (
+                          <Button
+                            onClick={() => handleRetryFulfillment(order.id)}
+                            variant="ghost"
+                            size="sm"
+                            className="px-0 text-xs text-blue-600 hover:bg-transparent hover:text-blue-700"
+                          >
+                            Retry fulfillment
+                          </Button>
+                        )}
+                        {canFinalizeReconcile && (
+                          <Button
+                            onClick={() => handleFinalizeReconcile(order.id)}
+                            variant="ghost"
+                            size="sm"
+                            className="px-0 text-xs text-amber-600 hover:bg-transparent hover:text-amber-700"
+                          >
+                            Дофинализировать
+                          </Button>
+                        )}
                         {CANCELLABLE.has(order.status) && (
                           <Button onClick={() => handleCancel(order.id)} variant="ghost" size="sm" className="px-0 text-xs text-red-500 hover:bg-transparent hover:text-red-700">
                             Отменить

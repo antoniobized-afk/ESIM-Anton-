@@ -131,8 +131,8 @@ export default function TopupPage() {
         if (!result.success) {
           throw new Error(result.reason || 'Оплата не была завершена')
         }
-        setSuccess(`✅ Оплата прошла, eSIM пополняется...`)
-        setTimeout(() => router.push('/my-esim'), 1500)
+        setSuccess('✅ Оплата принята, пополнение обрабатывается...')
+        setTimeout(() => router.push(`/order/${data.order.id}`), 900)
         return
       }
       setSuccess(`✅ eSIM пополнена пакетом «${pkg.name}»`)
@@ -303,7 +303,7 @@ export default function TopupPage() {
         )}
 
         <p className="text-xs text-gray-400 text-center mt-4">
-          После успешной оплаты данные обновятся автоматически.
+          После оплаты статус заказа обновится на странице заказа.
         </p>
       </div>
 

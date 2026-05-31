@@ -58,15 +58,18 @@ export default function TelegramRedirectHandler() {
             localStorage.setItem(LAST_NOTIFIED_ORDER_KEY, latestOrder.id)
             
             // Показываем уведомление
-            const message = `✅ Заказ оплачен!\n\neSIM для ${latestOrder.product.country}\n${latestOrder.product.dataAmount} готов к использованию`
-            
+            const isReady = latestOrder.status === 'COMPLETED'
+            const message = isReady
+              ? `✅ Заказ готов!\n\neSIM для ${latestOrder.product.country}\n${latestOrder.product.dataAmount} доступна в приложении`
+              : `✅ Оплата принята!\n\nЗаказ для ${latestOrder.product.country} сейчас обрабатывается. Статус можно посмотреть в приложении.`
+
             if (tg.showAlert) {
               tg.showAlert(message, () => {
-                router.push('/my-esim')
+                router.push(isReady ? '/my-esim' : `/order/${latestOrder.id}`)
               })
             } else {
               alert(message)
-              router.push('/my-esim')
+              router.push(isReady ? '/my-esim' : `/order/${latestOrder.id}`)
             }
           }
         }

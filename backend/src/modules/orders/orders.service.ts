@@ -13,6 +13,7 @@ import { EsimProviderService } from '../esim-provider/esim-provider.service';
 import { PromoCodesService } from '../promo-codes/promo-codes.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { EmailService } from '../notifications/email.service';
+import { PushService } from '../notifications/push.service';
 import { SystemSettingsService } from '../system-settings/system-settings.service';
 import { EsimStatus } from '../esim-provider/esim-status';
 import { ReferralsService } from '../referrals/referrals.service';
@@ -100,6 +101,8 @@ type OrderPricingSnapshot = {
 };
 
 type ReconciliationCategory =
+  | 'webhook_acked_fulfillment_pending'
+  | 'stuck_processing'
   | 'provider_failed_after_card_charge'
   | 'provider_failed_balance_refunded'
   | 'topup_failed_balance_refunded'
@@ -165,6 +168,7 @@ export class OrdersService {
     private promoCodesService: PromoCodesService,
     private telegramNotification: TelegramNotificationService,
     private emailService: EmailService,
+    private pushService: PushService,
     private systemSettingsService: SystemSettingsService,
     private referralsService: ReferralsService,
     private partnerRewardsService: PartnerRewardsService,
@@ -253,6 +257,40 @@ export class OrdersService {
         category: order.parentOrderId
           ? 'topup_issued_but_finalize_failed'
           : 'issued_but_finalize_failed',
+        refunded: false,
+        paymentProvider: paymentTx.paymentProvider ?? null,
+        paymentMethod: paymentTx.paymentMethod ?? null,
+        paymentAmount: Number(paymentTx.amount),
+        lastError: order.errorMessage ?? null,
+        repeatChargeAttemptId: repeatChargeAttempt?.id ?? null,
+        repeatChargeAttemptStatus: repeatChargeAttempt?.status ?? null,
+        providerReasonCode: repeatChargeAttempt?.providerReasonCode ?? null,
+        providerMessage: repeatChargeAttempt?.providerMessage ?? null,
+        ambiguousReason: repeatChargeAttempt?.ambiguousReason ?? null,
+      };
+    }
+
+    if (order.status === OrderStatus.PAID && paymentTx) {
+      return {
+        needsAttention: true,
+        category: 'webhook_acked_fulfillment_pending',
+        refunded: false,
+        paymentProvider: paymentTx.paymentProvider ?? null,
+        paymentMethod: paymentTx.paymentMethod ?? null,
+        paymentAmount: Number(paymentTx.amount),
+        lastError: order.errorMessage ?? null,
+        repeatChargeAttemptId: repeatChargeAttempt?.id ?? null,
+        repeatChargeAttemptStatus: repeatChargeAttempt?.status ?? null,
+        providerReasonCode: repeatChargeAttempt?.providerReasonCode ?? null,
+        providerMessage: repeatChargeAttempt?.providerMessage ?? null,
+        ambiguousReason: repeatChargeAttempt?.ambiguousReason ?? null,
+      };
+    }
+
+    if (order.status === OrderStatus.PROCESSING && paymentTx) {
+      return {
+        needsAttention: true,
+        category: 'stuck_processing',
         refunded: false,
         paymentProvider: paymentTx.paymentProvider ?? null,
         paymentMethod: paymentTx.paymentMethod ?? null,
@@ -1201,6 +1239,86 @@ export class OrdersService {
     return order ? this.decorateOrderWithReconciliation(order) : order;
   }
 
+  async retryFulfillment(orderId: string) {
+    const order = await this.findById(orderId);
+
+    if (!order) {
+      throw new BadRequestException('Заказ не найден');
+    }
+
+    if (order.status !== OrderStatus.PAID) {
+      throw new BadRequestException('Повторный запуск fulfillment доступен только для оплаченного заказа');
+    }
+
+    return this.fulfillOrder(orderId);
+  }
+
+  async finalizeReconciledOrder(orderId: string) {
+    const order = await this.findById(orderId);
+
+    if (!order) {
+      throw new BadRequestException('Заказ не найден');
+    }
+
+    if (order.status !== OrderStatus.PROCESSING) {
+      throw new BadRequestException('Ручная финализация доступна только для заказа в processing');
+    }
+
+    const category = this.deriveReconciliationSnapshot(order).category;
+    if (
+      category !== 'issued_but_finalize_failed' &&
+      category !== 'topup_issued_but_finalize_failed'
+    ) {
+      throw new BadRequestException(
+        'Ручная финализация доступна только для заказа с уже выданным provider snapshot',
+      );
+    }
+
+    if (order.parentOrderId) {
+      return this.prisma.$transaction(async (tx) => {
+        const completedOrder = await this.markOrderCompleted(
+          order.id,
+          {
+            providerOrderId: order.providerOrderId ?? undefined,
+            providerResponse: order.providerResponse ?? undefined,
+            errorMessage: null,
+          },
+          tx,
+        );
+
+        await tx.order.update({
+          where: { id: order.parentOrderId! },
+          data: {
+            lastUsageAt: null,
+            lastUsageTotalBytes: null,
+            lowTrafficNotifiedAt: null,
+          },
+        });
+
+        return completedOrder;
+      });
+    }
+
+    const accountingOrder = await this.loadPurchaseAccountingOrder(orderId);
+    return this.prisma.$transaction(async (tx) => {
+      const completedOrder = await this.markOrderCompleted(
+        order.id,
+        {
+          qrCode: order.qrCode ?? undefined,
+          iccid: order.iccid ?? undefined,
+          activationCode: order.activationCode ?? undefined,
+          providerOrderId: order.providerOrderId ?? undefined,
+          providerResponse: order.providerResponse ?? undefined,
+          smdpAddress: order.smdpAddress ?? undefined,
+          errorMessage: null,
+        },
+        tx,
+      );
+      await this.applyPurchaseCompletionEffects(accountingOrder, tx);
+      return completedOrder;
+    });
+  }
+
   private async applyPurchaseCompletionEffects(
     order: PurchaseAccountingOrder,
     client?: Prisma.TransactionClient | PrismaService,
@@ -1432,7 +1550,7 @@ export class OrdersService {
       where: {
         userId,
         status: {
-          in: [OrderStatus.PAID, OrderStatus.COMPLETED],
+          in: [OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.COMPLETED],
         },
         createdAt: {
           gte: tenMinutesAgo,
@@ -1589,6 +1707,18 @@ export class OrdersService {
         } catch (e: any) {
           this.logger.error(`Email notification failed: ${e.message}`);
         }
+      }
+
+      try {
+        await this.pushService.sendPaymentSuccess(order.userId, {
+          orderId: order.id,
+          productName: order.product.name,
+          country: order.product.country,
+          dataAmount: order.product.dataAmount,
+          price: Number(order.totalAmount),
+        });
+      } catch (e: any) {
+        this.logger.error(`Push notification error: ${e.message}`);
       }
 
       return updatedOrder;
@@ -2397,14 +2527,16 @@ export class OrdersService {
         ? {
             OR: [
               {
+                status: OrderStatus.PAID,
+                transactions: {
+                  some: {
+                    type: TransactionType.PAYMENT,
+                    status: TransactionStatus.SUCCEEDED,
+                  },
+                },
+              },
+              {
                 status: OrderStatus.PROCESSING,
-                OR: [
-                  { providerOrderId: { not: null } },
-                  { providerResponse: { not: Prisma.JsonNull } },
-                  { iccid: { not: null } },
-                  { qrCode: { not: null } },
-                  { activationCode: { not: null } },
-                ],
               },
               {
                 status: OrderStatus.FAILED,

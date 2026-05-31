@@ -52,19 +52,14 @@ function makeService() {
     sendTextNotification: jest.fn().mockResolvedValue(undefined),
   };
 
-  const pushService = {
-    sendPaymentSuccess: jest.fn().mockResolvedValue(undefined),
-  };
-
   const service = new CloudPaymentsService(
     prisma as any,
     configService as any,
     ordersService as any,
     telegramNotification as any,
-    pushService as any,
   );
 
-  return { service, prisma, ordersService, pushService };
+  return { service, prisma, ordersService };
 }
 
 describe('CloudPaymentsService', () => {
@@ -91,8 +86,8 @@ describe('CloudPaymentsService', () => {
     expect(result).toEqual({ code: 20 });
   });
 
-  it('revives expired cancelled order on late pay callback and fulfills it', async () => {
-    const { service, prisma, ordersService, pushService } = makeService();
+  it('revives expired cancelled order on late pay callback and acknowledges without inline fulfill', async () => {
+    const { service, prisma, ordersService } = makeService();
     prisma.order.findUnique.mockResolvedValue({
       id: 'order_1',
       userId: 'user_1',
@@ -119,14 +114,7 @@ describe('CloudPaymentsService', () => {
     });
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(ordersService.fulfillOrder).toHaveBeenCalledWith('order_1');
-    expect(pushService.sendPaymentSuccess).toHaveBeenCalledWith('user_1', {
-      orderId: 'order_1',
-      productName: 'Japan 10 GB',
-      country: 'JP',
-      dataAmount: '10 GB',
-      price: 100,
-    });
+    expect(ordersService.fulfillOrder).not.toHaveBeenCalled();
     expect(result).toEqual({ code: 0 });
   });
 
@@ -161,8 +149,8 @@ describe('CloudPaymentsService', () => {
     expect(result).toEqual({ code: 0 });
   });
 
-  it('does not fulfill twice when another callback already claimed the order', async () => {
-    const { service, prisma, ordersService, pushService } = makeService();
+  it('does not schedule duplicate fulfillment when another callback already claimed the order', async () => {
+    const { service, prisma, ordersService } = makeService();
     prisma.order.findUnique.mockResolvedValue({
       id: 'order_1',
       userId: 'user_1',
@@ -207,7 +195,6 @@ describe('CloudPaymentsService', () => {
     });
 
     expect(ordersService.fulfillOrder).not.toHaveBeenCalled();
-    expect(pushService.sendPaymentSuccess).not.toHaveBeenCalled();
     expect(result).toEqual({ code: 0 });
   });
 

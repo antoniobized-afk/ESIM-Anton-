@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { OrdersService } from '../orders/orders.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
-import { PushService } from '../notifications/push.service';
 import { TransactionType, TransactionStatus, OrderStatus, Prisma } from '@prisma/client';
 import * as crypto from 'crypto';
 import {
@@ -55,7 +54,6 @@ export class CloudPaymentsService {
     private configService: ConfigService,
     private ordersService: OrdersService,
     private telegramNotification: TelegramNotificationService,
-    private pushService: PushService,
   ) {
     this.publicId = this.configService.get('CLOUDPAYMENTS_PUBLIC_ID') || '';
     this.apiSecret = this.configService.get('CLOUDPAYMENTS_API_SECRET') || '';
@@ -479,28 +477,9 @@ export class CloudPaymentsService {
       return claimed;
     });
 
-    // Выдача eSIM — вне транзакции, чтобы долгий запрос к провайдеру не лочил БД
     if (didClaimOrderForFulfillment) {
       if (canReviveExpiredSession && order.status !== OrderStatus.PENDING) {
         this.logger.warn(`Late CP pay revived expired order ${order.id}`);
-      }
-      try {
-        await this.ordersService.fulfillOrder(order.id);
-        this.logger.log(`✅ eSIM issued for order ${order.id}`);
-      } catch (e: any) {
-        this.logger.error(`❌ Failed to issue eSIM for order ${order.id}: ${e.message}`);
-      }
-
-      try {
-        await this.pushService.sendPaymentSuccess(order.userId, {
-          orderId: order.id,
-          productName: order.product.name,
-          country: order.product.country,
-          dataAmount: order.product.dataAmount,
-          price: Number(order.totalAmount),
-        });
-      } catch (e: any) {
-        this.logger.error(`Push notification error: ${e.message}`);
       }
     } else if (shouldProcessPayment) {
       this.logger.warn(

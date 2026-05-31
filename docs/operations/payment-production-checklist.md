@@ -27,6 +27,7 @@
 - late webhook recovery только для `Payment session expired`;
 - DTO validation для `quote/create/topup/payments`;
 - typed response contract `{ paymentMethod, order }` для order/topup create flows.
+- webhook fast-ack contract и durable `PAID -> PROCESSING` anti-double-fulfill boundary.
 
 Это уже покрывается unit tests и typecheck baseline.
 
@@ -90,6 +91,8 @@ Source:
 - Проверить:
   - order создаётся новый;
   - `check` и `pay` callbacks приходят;
+  - `pay` callback отвечает быстро и не ждёт provider issuance >30s;
+  - после widget success клиент попадает на `/order/[id]` и видит честный `PAID/PROCESSING/COMPLETED` progression;
   - order доходит до `COMPLETED`;
   - eSIM fulfillment / success path не ломается.
 
@@ -157,6 +160,7 @@ Source:
 - Проверить:
   - `paymentMethod = card`;
   - top-up использует новый `order.id`;
+  - после widget success top-up order виден в `PAID/PROCESSING/COMPLETED` lifecycle;
   - loyalty/referral side effects не начисляются.
 
 ### 7. Top-up by balance
@@ -182,6 +186,9 @@ Source:
 
 - `GET /api/orders?reconciliation=needs_attention` не даёт 500;
 - новые card orders создаются и доходят до callback path;
+- `GET /api/orders?reconciliation=needs_attention` показывает как минимум `webhook_acked_fulfillment_pending`, `stuck_processing`, `issued_but_finalize_failed`, если такие кейсы есть;
+- в админке для `PAID` доступен recovery action `Retry fulfillment`;
+- в админке для `PROCESSING` + `issued_but_finalize_failed` доступен recovery action `Дофинализировать` без повторного provider call;
 - saved-card purchase path не режет обычный widget purchase path;
 - support/admin видят корректный `paymentMethod` и финансовые поля;
 - нет всплеска `Payment session expired` для свежих заказов;

@@ -60,7 +60,8 @@
 
 - зафиксировать успешную оплату;
 - перевести order в `PAID`;
-- вызвать fulfillment;
+- отдать быстрый webhook ack после durable persistence payment result;
+- передать заказ в асинхронный server-side fulfillment pickup;
 - при Phase 14 tokenized flow дополнительно забрать `Token`, `CardFirstSix`, `CardLastFour`, `CardType`, `CardExpDate`, если они реально пришли в payload.
 
 Late `Pay` разрешено принимать только для order, который был auto-expired по policy `Payment session expired`.
@@ -72,10 +73,17 @@ Late `Pay` разрешено принимать только для order, ко
 Текущий repo baseline:
 
 - webhook сначала делает durable DB-claim на переход `order -> PAID`;
-- только callback, который реально сделал этот transition, имеет право:
-  - запускать `OrdersService.fulfillOrder()`;
-  - отправлять success push/notification side effects;
+- только callback, который реально сделал этот transition, имеет право поставить заказ в durable pickup pool для дальнейшего fulfillment;
+- scheduler worker забирает `status=PAID` и уже внутри `OrdersService.fulfillOrder()` делает CAS `PAID -> PROCESSING` перед provider call;
 - повторный/параллельный `Pay` может обновить transaction audit, но не должен второй раз выдавать eSIM или повторно начислять post-payment side effects.
+
+### User-visible runtime contract
+
+- widget success не означает, что eSIM уже готова;
+- source of truth после оплаты: `GET /orders/:id`;
+- `PAID` означает: платёж принят, backend pickup ещё не завершил claim/fulfillment;
+- `PROCESSING` означает: fulfillment claim-нут и выполняется либо требует reconciliation;
+- `COMPLETED` означает: выдача и обязательные локальные side effects завершены.
 
 ### Fail
 

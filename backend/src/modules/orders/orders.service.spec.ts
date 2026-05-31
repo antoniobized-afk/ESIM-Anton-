@@ -179,6 +179,10 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     sendEsimReady: jest.fn().mockResolvedValue(undefined),
   };
 
+  const pushService = {
+    sendPaymentSuccess: jest.fn().mockResolvedValue(undefined),
+  };
+
   const systemSettingsService = {
     getPricingSettings: jest.fn(),
     getReferralSettings: jest.fn().mockResolvedValue({
@@ -215,6 +219,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     promoCodesService as any,
     telegramNotification as any,
     emailService as any,
+    pushService as any,
     systemSettingsService as any,
     referralsService as any,
     partnerRewardsService as any,
@@ -227,6 +232,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     usersService,
     esimProviderService,
     emailService,
+    pushService,
     referralsService,
     partnerRewardsService,
     loyaltyService,
@@ -246,6 +252,7 @@ describe('OrdersService', () => {
         referralsService,
         loyaltyService,
         emailService,
+        pushService,
       } = makeService();
 
       const result = await service.fulfillOrder('order_1');
@@ -462,6 +469,112 @@ describe('OrdersService', () => {
 
       expect(esimProviderService.purchaseEsim).not.toHaveBeenCalled();
       expect(result?.status).toBe(OrderStatus.COMPLETED);
+    });
+
+    it('admin retryFulfillment переиспользует canonical fulfillOrder только для PAID', async () => {
+      const { service } = makeService();
+
+      const result = await service.retryFulfillment('order_1');
+
+      expect(result?.status).toBe(OrderStatus.COMPLETED);
+    });
+
+    it('admin retryFulfillment отклоняет не-PAID заказ', async () => {
+      const { service, prisma } = makeService();
+      prisma.order.findUnique.mockResolvedValueOnce(
+        makeOrder({ status: OrderStatus.PROCESSING }),
+      );
+
+      await expect(service.retryFulfillment('order_1')).rejects.toThrow(
+        'Повторный запуск fulfillment доступен только для оплаченного заказа',
+      );
+    });
+
+    it('admin finalizeReconciledOrder завершает purchase finalize-failure без повторного provider call', async () => {
+      const { service, prisma, esimProviderService } = makeService();
+      prisma.order.findUnique
+        .mockResolvedValueOnce(
+          makeOrder({
+            status: OrderStatus.PROCESSING,
+            qrCode: 'qr',
+            iccid: 'iccid-1',
+            activationCode: 'act-1',
+            providerOrderId: 'provider-order-1',
+            providerResponse: { order_id: 'provider-order-1' },
+            errorMessage: 'Provider issuance succeeded, local finalize failed: db down',
+            transactions: [
+              {
+                type: TransactionType.PAYMENT,
+                status: TransactionStatus.SUCCEEDED,
+                amount: 100,
+                paymentProvider: 'cloudpayments',
+                paymentMethod: 'card',
+                metadata: {},
+              },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce({
+          id: 'order_1',
+          userId: 'user_1',
+          totalAmount: 100,
+          user: {
+            totalSpent: 10000,
+            referralLinkId: null,
+            referredById: 'ref_1',
+          },
+          promoCodeRedemption: null,
+        })
+        .mockResolvedValueOnce(
+          makeOrder({
+            status: OrderStatus.COMPLETED,
+            qrCode: 'qr',
+            iccid: 'iccid-1',
+            activationCode: 'act-1',
+            providerOrderId: 'provider-order-1',
+            providerResponse: { order_id: 'provider-order-1' },
+            errorMessage: null,
+          }),
+        );
+
+      const result = await service.finalizeReconciledOrder('order_1');
+
+      expect(esimProviderService.purchaseEsim).not.toHaveBeenCalled();
+      expect(prisma.order.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'order_1' },
+          data: expect.objectContaining({
+            status: OrderStatus.COMPLETED,
+            errorMessage: null,
+          }),
+        }),
+      );
+      expect(result?.status).toBe(OrderStatus.COMPLETED);
+    });
+
+    it('admin finalizeReconciledOrder отклоняет stuck_processing без issued snapshot contract', async () => {
+      const { service, prisma, esimProviderService } = makeService();
+      prisma.order.findUnique.mockResolvedValueOnce(
+        makeOrder({
+          status: OrderStatus.PROCESSING,
+          errorMessage: 'still waiting',
+          transactions: [
+            {
+              type: TransactionType.PAYMENT,
+              status: TransactionStatus.SUCCEEDED,
+              amount: 100,
+              paymentProvider: 'cloudpayments',
+              paymentMethod: 'card',
+              metadata: {},
+            },
+          ],
+        }),
+      );
+
+      await expect(service.finalizeReconciledOrder('order_1')).rejects.toThrow(
+        'Ручная финализация доступна только для заказа с уже выданным provider snapshot',
+      );
+      expect(esimProviderService.purchaseEsim).not.toHaveBeenCalled();
     });
 
     it('блокирует параллельный fulfillment, если другой worker уже перевёл заказ в processing', async () => {

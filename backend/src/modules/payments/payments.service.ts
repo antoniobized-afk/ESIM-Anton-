@@ -12,7 +12,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import axios from 'axios';
-import { PushService } from '../notifications/push.service';
 import { decryptCloudPaymentsToken } from './cloudpayments-token-crypto';
 import type {
   ChargeOrderWithSavedCardResponse,
@@ -88,7 +87,6 @@ export class PaymentsService {
     private ordersService: OrdersService,
     private configService: ConfigService,
     private telegramNotification: TelegramNotificationService,
-    private pushService: PushService,
   ) {
     this.cloudPaymentsPublicId = this.configService.get('CLOUDPAYMENTS_PUBLIC_ID') || '';
     this.cloudPaymentsApiSecret = this.configService.get('CLOUDPAYMENTS_API_SECRET') || '';
@@ -963,18 +961,6 @@ export class PaymentsService {
       finalOrder = await this.prisma.order.findUniqueOrThrow({
         where: { id: order.id },
       });
-    }
-
-    try {
-      await this.pushService.sendPaymentSuccess(order.userId, {
-        orderId: order.id,
-        productName: order.product.name,
-        country: order.product.country,
-        dataAmount: order.product.dataAmount,
-        price: Number(order.totalAmount),
-      });
-    } catch (error: any) {
-      this.logger.error(`Push notification error: ${error.message}`);
     }
 
     return {

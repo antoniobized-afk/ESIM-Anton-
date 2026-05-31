@@ -6,6 +6,8 @@ describe('OrdersController', () => {
   const ordersService = {
     findAll: jest.fn(),
     cancelOrder: jest.fn(),
+    retryFulfillment: jest.fn(),
+    finalizeReconciledOrder: jest.fn(),
     assertOwnership: jest.fn(),
     findById: jest.fn(),
     findByUser: jest.fn(),
@@ -72,6 +74,24 @@ describe('OrdersController', () => {
 
     expect(ordersService.assertOwnership).toHaveBeenCalledWith('order_1', 'user_1');
     expect(ordersService.markOrderPaid).toHaveBeenCalledWith('order_1');
+    expect(result).toEqual({ id: 'order_1', status: OrderStatus.COMPLETED });
+  });
+
+  it('retryFulfillment вызывает admin retry path', async () => {
+    ordersService.retryFulfillment.mockResolvedValue({ id: 'order_1', status: OrderStatus.PROCESSING });
+
+    const result = await controller.retryFulfillment('order_1');
+
+    expect(ordersService.retryFulfillment).toHaveBeenCalledWith('order_1');
+    expect(result).toEqual({ id: 'order_1', status: OrderStatus.PROCESSING });
+  });
+
+  it('finalizeReconcile вызывает admin reconcile finalize path', async () => {
+    ordersService.finalizeReconciledOrder.mockResolvedValue({ id: 'order_1', status: OrderStatus.COMPLETED });
+
+    const result = await controller.finalizeReconcile('order_1');
+
+    expect(ordersService.finalizeReconciledOrder).toHaveBeenCalledWith('order_1');
     expect(result).toEqual({ id: 'order_1', status: OrderStatus.COMPLETED });
   });
 });
