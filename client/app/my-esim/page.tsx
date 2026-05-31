@@ -184,7 +184,7 @@ function ActivationBlock({
     if (isAndroid) {
       void copyLpa() // Асинхронное копирование в фоне (без блокировки)
     }
-    
+
     if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.openLink) {
       // API Telegram для принудительного открытия ссылки ВО ВНЕШНЕМ обработчике (настройки ОС)
       try {
@@ -430,24 +430,24 @@ export default function MyEsimPage() {
         prev.map((e) =>
           e.id === esimId
             ? {
-                ...e,
-                refreshing: false,
-                status: normalizeStatus(u.status ?? e.status),
-                activatedAt: u.activatedAt ?? e.activatedAt,
-                expiresAt: u.expiresAt ?? e.expiresAt,
-                usage: {
-                  available: !!u.available,
-                  reason: u.reason,
-                  stale: u.stale,
-                  usedBytes: u.usedBytes ?? null,
-                  totalBytes: u.totalBytes ?? null,
-                  remainingBytes: u.remainingBytes ?? null,
-                  percentTraffic: u.percentTraffic ?? null,
-                  percentTime: u.percentTime ?? null,
-                  validityDaysLeft: u.validityDaysLeft ?? null,
-                  validityHoursLeft: u.validityHoursLeft ?? null,
-                },
-              }
+              ...e,
+              refreshing: false,
+              status: normalizeStatus(u.status ?? e.status),
+              activatedAt: u.activatedAt ?? e.activatedAt,
+              expiresAt: u.expiresAt ?? e.expiresAt,
+              usage: {
+                available: !!u.available,
+                reason: u.reason,
+                stale: u.stale,
+                usedBytes: u.usedBytes ?? null,
+                totalBytes: u.totalBytes ?? null,
+                remainingBytes: u.remainingBytes ?? null,
+                percentTraffic: u.percentTraffic ?? null,
+                percentTime: u.percentTime ?? null,
+                validityDaysLeft: u.validityDaysLeft ?? null,
+                validityHoursLeft: u.validityHoursLeft ?? null,
+              },
+            }
             : e,
         ),
       )
@@ -465,224 +465,224 @@ export default function MyEsimPage() {
     <div className="container animate-fade-in bg-[#f4f5f7] dark:bg-gray-950 pb-20">
       <BackHeader title="Мои eSIM" fallbackRoute="/profile" />
 
-        {loading ? (
-          <div className="flex flex-col gap-4">
-            {[1, 2].map((i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl p-4">
-                <div className="flex items-center gap-4">
-                  <div className="skeleton w-14 h-14 rounded-xl" />
-                  <div className="flex-1">
-                    <div className="skeleton h-5 w-24 mb-2" />
-                    <div className="skeleton h-4 w-32" />
-                  </div>
+      {loading ? (
+        <div className="flex flex-col gap-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl p-4">
+              <div className="flex items-center gap-4">
+                <div className="skeleton w-14 h-14 rounded-xl" />
+                <div className="flex-1">
+                  <div className="skeleton h-5 w-24 mb-2" />
+                  <div className="skeleton h-4 w-32" />
                 </div>
               </div>
-            ))}
-          </div>
-        ) : esims.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-6">
-              <Smartphone className="text-gray-400" size={48} />
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-              Нет активных eSIM
-            </h2>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">
-              Купите ваш первый eSIM и он появится здесь
-            </p>
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-[#f77430] hover:bg-[#f2622a] text-white font-medium rounded-xl transition-colors"
-            >
-              <Plus size={20} />
-              Купить eSIM
-            </Link>
+          ))}
+        </div>
+      ) : esims.length === 0 ? (
+        <div className="text-center py-16">
+          <div className="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-6">
+            <Smartphone className="text-gray-400" size={48} />
           </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {esims.map((esim) => {
-              const statusConfig = getStatusConfig(esim.status)
-              const StatusIcon = statusConfig.icon
-              const showTopup =
-                esim.orderStatus === 'COMPLETED' &&
-                esim.canTopup &&
-                (esim.status === 'ACTIVE' || esim.status === 'NOT_INSTALLED')
-              const validUntilLabel = esim.expiresAt
-                ? new Date(esim.expiresAt).toLocaleDateString('ru-RU')
-                : null
-              const isAwaitingFulfillment = esim.orderStatus === 'PAID' || esim.orderStatus === 'PROCESSING'
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            Нет активных eSIM
+          </h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-6">
+            Купите ваш первый eSIM и он появится здесь
+          </p>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-[#f77430] hover:bg-[#f2622a] text-white font-medium rounded-xl transition-colors"
+          >
+            <Plus size={20} />
+            Купить eSIM
+          </Link>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {esims.map((esim) => {
+            const statusConfig = getStatusConfig(esim.status)
+            const StatusIcon = statusConfig.icon
+            const showTopup =
+              esim.orderStatus === 'COMPLETED' &&
+              esim.canTopup &&
+              (esim.status === 'ACTIVE' || esim.status === 'NOT_INSTALLED')
+            const validUntilLabel = esim.expiresAt
+              ? new Date(esim.expiresAt).toLocaleDateString('ru-RU')
+              : null
+            const isAwaitingFulfillment = esim.orderStatus === 'PAID' || esim.orderStatus === 'PROCESSING'
 
-              return (
-                <div
-                  key={esim.id}
-                  className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm"
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-3xl">
-                      {getCountryEmoji(esim.country)}
+            return (
+              <div
+                key={esim.id}
+                className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-xl bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-3xl">
+                    {getCountryEmoji(esim.country)}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                      {esim.country}
+                    </h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {esim.dataAmount}
+                    </p>
+                    <div className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.color} ${statusConfig.bg}`}>
+                      <StatusIcon size={14} />
+                      {statusConfig.label}
                     </div>
+                  </div>
+                </div>
 
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        {esim.country}
-                      </h3>
+                {/* Прогрессбар трафика */}
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                  {isAwaitingFulfillment ? (
+                    <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-900/30 dark:bg-orange-900/20">
+                      <p className="text-sm font-medium text-orange-900 dark:text-orange-200">
+                        {esim.orderStatus === 'PAID'
+                          ? 'Платёж принят, готовим eSIM.'
+                          : 'Заказ обрабатывается.'}
+                      </p>
+                      <p className="mt-1 text-xs text-orange-700 dark:text-orange-300">
+                        Страница заказа покажет актуальный статус и данные eSIM сразу после выдачи.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/order/${esim.id}`)}
+                        className="mt-3 inline-flex rounded-xl bg-[#f77430] px-3 py-2 text-sm font-medium text-white"
+                      >
+                        Открыть заказ
+                      </button>
+                    </div>
+                  ) : esim.usage?.available && esim.usage.percentTraffic !== null ? (
+                    <>
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-gray-500 dark:text-gray-400">
+                          Остаток трафика
+                          {esim.usage.stale && (
+                            <span className="ml-1 text-amber-600 dark:text-amber-400" title="Данные могут быть устаревшими">
+                              (устар.)
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-medium text-gray-900 dark:text-white inline-flex items-center gap-2">
+                          {formatBytes(esim.usage.remainingBytes)} / {formatBytes(esim.usage.totalBytes)}
+                          <button
+                            type="button"
+                            onClick={() => refreshUsage(esim.id)}
+                            disabled={esim.refreshing}
+                            aria-label="Обновить расход"
+                            className="text-gray-400 hover:text-[#f77430] disabled:opacity-50 transition-colors"
+                          >
+                            <RefreshCw size={14} className={esim.refreshing ? 'animate-spin' : ''} />
+                          </button>
+                        </span>
+                      </div>
+                      <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${progressColor(esim.usage.percentTraffic)}`}
+                          style={{ width: `${esim.usage.percentTraffic}%` }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex items-center justify-between">
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {esim.dataAmount}
+                        {esim.usage?.reason || (esim.status === 'NOT_INSTALLED' ? 'Расход появится после активации' : 'Расход обновляется...')}
                       </p>
-                      <div className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.color} ${statusConfig.bg}`}>
-                        <StatusIcon size={14} />
-                        {statusConfig.label}
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => refreshUsage(esim.id)}
+                        disabled={esim.refreshing}
+                        aria-label="Обновить расход"
+                        className="text-gray-400 hover:text-[#f77430] disabled:opacity-50 transition-colors"
+                      >
+                        <RefreshCw size={14} className={esim.refreshing ? 'animate-spin' : ''} />
+                      </button>
                     </div>
-                  </div>
-
-                  {/* Прогрессбар трафика */}
-                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                    {isAwaitingFulfillment ? (
-                      <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-900/30 dark:bg-orange-900/20">
-                        <p className="text-sm font-medium text-orange-900 dark:text-orange-200">
-                          {esim.orderStatus === 'PAID'
-                            ? 'Платёж принят, готовим eSIM.'
-                            : 'Заказ обрабатывается, выпуск eSIM ещё не завершён.'}
-                        </p>
-                        <p className="mt-1 text-xs text-orange-700 dark:text-orange-300">
-                          Страница заказа покажет актуальный статус и данные eSIM сразу после выдачи.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/order/${esim.id}`)}
-                          className="mt-3 inline-flex rounded-xl bg-[#f77430] px-3 py-2 text-sm font-medium text-white"
-                        >
-                          Открыть заказ
-                        </button>
-                      </div>
-                    ) : esim.usage?.available && esim.usage.percentTraffic !== null ? (
-                      <>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="text-gray-500 dark:text-gray-400">
-                            Остаток трафика
-                            {esim.usage.stale && (
-                              <span className="ml-1 text-amber-600 dark:text-amber-400" title="Данные могут быть устаревшими">
-                                (устар.)
-                              </span>
-                            )}
-                          </span>
-                          <span className="font-medium text-gray-900 dark:text-white inline-flex items-center gap-2">
-                            {formatBytes(esim.usage.remainingBytes)} / {formatBytes(esim.usage.totalBytes)}
-                            <button
-                              type="button"
-                              onClick={() => refreshUsage(esim.id)}
-                              disabled={esim.refreshing}
-                              aria-label="Обновить расход"
-                              className="text-gray-400 hover:text-[#f77430] disabled:opacity-50 transition-colors"
-                            >
-                              <RefreshCw size={14} className={esim.refreshing ? 'animate-spin' : ''} />
-                            </button>
-                          </span>
-                        </div>
-                        <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${progressColor(esim.usage.percentTraffic)}`}
-                            style={{ width: `${esim.usage.percentTraffic}%` }}
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            {esim.usage?.reason || (esim.status === 'NOT_INSTALLED' ? 'Расход появится после активации' : 'Расход обновляется...')}
-                          </p>
-                        <button
-                          type="button"
-                          onClick={() => refreshUsage(esim.id)}
-                          disabled={esim.refreshing}
-                          aria-label="Обновить расход"
-                          className="text-gray-400 hover:text-[#f77430] disabled:opacity-50 transition-colors"
-                        >
-                          <RefreshCw size={14} className={esim.refreshing ? 'animate-spin' : ''} />
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Прогрессбар срока */}
-                    {esim.usage?.percentTime !== null && esim.usage?.percentTime !== undefined && (
-                      <div className="mt-3">
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="text-gray-500 dark:text-gray-400 inline-flex items-center gap-1">
-                            <Clock size={14} />
-                            Остаток срока
-                          </span>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {(() => {
-                              const d = esim.usage.validityDaysLeft;
-                              const h = esim.usage.validityHoursLeft;
-                              if (d == null) return '—';
-                              if (d <= 0 && (h ?? 0) <= 0) return 'истёк';
-                              const parts: string[] = [];
-                              if (d > 0) parts.push(`${d} дн.`);
-                              if (h != null && h > 0) parts.push(`${h} ч.`);
-                              return parts.length ? `осталось ${parts.join(' ')}` : 'менее часа';
-                            })()}
-                          </span>
-                        </div>
-                        <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${progressColor(esim.usage.percentTime)}`}
-                            style={{ width: `${Math.min(100, esim.usage.percentTime)}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {validUntilLabel && (
-                      <p className="text-xs text-gray-400 mt-2">
-                        Действует до {validUntilLabel}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Установка eSIM */}
-                  {(esim.activationCode || esim.smdpAddress) && (
-                    <ActivationBlock
-                      smdp={esim.smdpAddress}
-                      ac={esim.activationCode}
-                      iccid={esim.iccid}
-                    />
                   )}
 
-                  {/* Actions */}
-                  <div className="flex gap-2 mt-4">
-                    {esim.qrCode && (
-                      <button
-                        onClick={() => router.push(`/order/${esim.id}`)}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl font-medium text-sm"
-                      >
-                        <QrCode size={18} />
-                        QR-код
-                      </button>
-                    )}
-                    {showTopup && (
-                      <button
-                        onClick={() => router.push(`/topup/${esim.id}`)}
-                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#f77430] hover:bg-[#f2622a] text-white rounded-xl font-medium text-sm transition-colors"
-                      >
-                        <RefreshCw size={18} />
-                        Пополнить
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
+                  {/* Прогрессбар срока */}
+                  {esim.usage?.percentTime !== null && esim.usage?.percentTime !== undefined && (
+                    <div className="mt-3">
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-gray-500 dark:text-gray-400 inline-flex items-center gap-1">
+                          <Clock size={14} />
+                          Остаток срока
+                        </span>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {(() => {
+                            const d = esim.usage.validityDaysLeft;
+                            const h = esim.usage.validityHoursLeft;
+                            if (d == null) return '—';
+                            if (d <= 0 && (h ?? 0) <= 0) return 'истёк';
+                            const parts: string[] = [];
+                            if (d > 0) parts.push(`${d} дн.`);
+                            if (h != null && h > 0) parts.push(`${h} ч.`);
+                            return parts.length ? `осталось ${parts.join(' ')}` : 'менее часа';
+                          })()}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${progressColor(esim.usage.percentTime)}`}
+                          style={{ width: `${Math.min(100, esim.usage.percentTime)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
-            <Link href="/">
-              <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center hover:border-[#f77430] hover:bg-orange-50/50 dark:hover:bg-orange-900/10 transition-colors cursor-pointer">
-                <Plus className="mx-auto text-gray-400 mb-2" size={32} />
-                <p className="font-medium text-gray-600 dark:text-gray-300">Добавить eSIM</p>
+                  {validUntilLabel && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      Действует до {validUntilLabel}
+                    </p>
+                  )}
+                </div>
+
+                {/* Установка eSIM */}
+                {(esim.activationCode || esim.smdpAddress) && (
+                  <ActivationBlock
+                    smdp={esim.smdpAddress}
+                    ac={esim.activationCode}
+                    iccid={esim.iccid}
+                  />
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-2 mt-4">
+                  {esim.qrCode && (
+                    <button
+                      onClick={() => router.push(`/order/${esim.id}`)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl font-medium text-sm"
+                    >
+                      <QrCode size={18} />
+                      QR-код
+                    </button>
+                  )}
+                  {showTopup && (
+                    <button
+                      onClick={() => router.push(`/topup/${esim.id}`)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#f77430] hover:bg-[#f2622a] text-white rounded-xl font-medium text-sm transition-colors"
+                    >
+                      <RefreshCw size={18} />
+                      Пополнить
+                    </button>
+                  )}
+                </div>
               </div>
-            </Link>
-          </div>
-        )}
+            )
+          })}
+
+          <Link href="/">
+            <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-6 text-center hover:border-[#f77430] hover:bg-orange-50/50 dark:hover:bg-orange-900/10 transition-colors cursor-pointer">
+              <Plus className="mx-auto text-gray-400 mb-2" size={32} />
+              <p className="font-medium text-gray-600 dark:text-gray-300">Добавить eSIM</p>
+            </div>
+          </Link>
+        </div>
+      )}
       <BottomNav />
     </div>
   )

@@ -150,34 +150,34 @@ export default function OrderDetailPage() {
     <div className="container animate-fade-in bg-[#f4f5f7] dark:bg-gray-950 pb-20">
       <BackHeader title="Заказ" fallbackRoute="/my-esim" className="mb-6" />
 
-        <div className="card-neutral p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
-              {flagUrl ? (
-                <img
-                  src={flagUrl}
-                  alt={countryName}
-                  className="h-7 w-10 rounded-sm object-cover"
-                  onError={(e) => {
-                    ;(e.target as HTMLImageElement).src = '/logo-mark.png'
-                    ;(e.target as HTMLImageElement).className = 'w-9 h-9 rounded-lg object-contain'
-                  }}
-                />
-              ) : (
-                <img src="/logo-mark.png" alt="Mojo mobile" className="h-9 w-9 rounded-lg object-contain" />
-              )}
-            </div>
+      <div className="card-neutral p-4 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+            {flagUrl ? (
+              <img
+                src={flagUrl}
+                alt={countryName}
+                className="h-7 w-10 rounded-sm object-cover"
+                onError={(e) => {
+                  ; (e.target as HTMLImageElement).src = '/logo-mark.png'
+                    ; (e.target as HTMLImageElement).className = 'w-9 h-9 rounded-lg object-contain'
+                }}
+              />
+            ) : (
+              <img src="/logo-mark.png" alt="Mojo mobile" className="h-9 w-9 rounded-lg object-contain" />
+            )}
+          </div>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h1 className="text-2xl font-bold text-primary">Заказ #{order.id.slice(0, 8)}</h1>
-                <span className={`badge ${badge.class} shrink-0`}>{badge.label}</span>
-              </div>
-              <p className="mt-1 text-sm text-secondary">{countryName} • {order.product.name}</p>
-              <p className="mt-1 text-xs text-muted">Создан {formattedDate}</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h1 className="text-2xl font-bold text-primary">Заказ #{order.id.slice(0, 8)}</h1>
+              <span className={`badge ${badge.class} shrink-0`}>{badge.label}</span>
             </div>
+            <p className="mt-1 text-sm text-secondary">{countryName} • {order.product.name}</p>
+            <p className="mt-1 text-xs text-muted">Создан {formattedDate}</p>
           </div>
         </div>
+      </div>
 
 
       <div className="card-neutral mb-4 p-5 text-center animate-slide-up" style={{ animationDelay: '0.04s' }}>
