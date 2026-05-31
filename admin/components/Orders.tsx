@@ -261,6 +261,28 @@ export default function Orders() {
     }
   }
 
+  const handleFulfillFree = async (orderId: string) => {
+    const confirmed = await confirmDialog({
+      title: 'Выполнить бесплатный заказ',
+      description: 'Запустить fulfillment для бесплатного заказа без повторной оплаты?',
+      confirmLabel: 'Выполнить',
+    })
+    if (!confirmed) return
+
+    try {
+      await ordersApi.fulfillFree(orderId)
+      toast.success('Бесплатный заказ отправлен в fulfillment')
+      loadOrders()
+    } catch (error: unknown) {
+      console.error('Ошибка выполнения бесплатного заказа:', error)
+      const errorMessage =
+        typeof error === 'object' && error !== null && 'response' in error
+          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined
+      toast.error(errorMessage || 'Не удалось выполнить бесплатный заказ')
+    }
+  }
+
   const handleFinalizeReconcile = async (orderId: string) => {
     const confirmed = await confirmDialog({
       title: 'Дофинализировать заказ',
@@ -392,6 +414,9 @@ export default function Orders() {
                   const canRecoverPaidPending =
                     order.status === 'PENDING' &&
                     order.reconciliation?.category === PENDING_PAID_RECOVERY
+                  const canFulfillFree =
+                    order.status === 'PENDING' &&
+                    Number(order.totalAmount || 0) <= 0
                   const canFinalizeReconcile =
                     order.status === 'PROCESSING' &&
                     RECONCILE_FINALIZABLE.has(order.reconciliation?.category || '')
@@ -473,6 +498,16 @@ export default function Orders() {
                             className="px-0 text-xs text-blue-600 hover:bg-transparent hover:text-blue-700"
                           >
                             Recovery оплаты
+                          </Button>
+                        )}
+                        {canFulfillFree && (
+                          <Button
+                            onClick={() => handleFulfillFree(order.id)}
+                            variant="ghost"
+                            size="sm"
+                            className="px-0 text-xs text-emerald-600 hover:bg-transparent hover:text-emerald-700"
+                          >
+                            Выполнить бесплатно
                           </Button>
                         )}
                         {canFinalizeReconcile && (
