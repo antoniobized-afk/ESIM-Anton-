@@ -101,6 +101,7 @@ type OrderPricingSnapshot = {
 };
 
 type ReconciliationCategory =
+  | 'pending_paid_recovery'
   | 'webhook_acked_fulfillment_pending'
   | 'stuck_processing'
   | 'provider_failed_after_card_charge'
@@ -274,6 +275,23 @@ export class OrdersService {
       return {
         needsAttention: true,
         category: 'webhook_acked_fulfillment_pending',
+        refunded: false,
+        paymentProvider: paymentTx.paymentProvider ?? null,
+        paymentMethod: paymentTx.paymentMethod ?? null,
+        paymentAmount: Number(paymentTx.amount),
+        lastError: order.errorMessage ?? null,
+        repeatChargeAttemptId: repeatChargeAttempt?.id ?? null,
+        repeatChargeAttemptStatus: repeatChargeAttempt?.status ?? null,
+        providerReasonCode: repeatChargeAttempt?.providerReasonCode ?? null,
+        providerMessage: repeatChargeAttempt?.providerMessage ?? null,
+        ambiguousReason: repeatChargeAttempt?.ambiguousReason ?? null,
+      };
+    }
+
+    if (order.status === OrderStatus.PENDING && paymentTx) {
+      return {
+        needsAttention: true,
+        category: 'pending_paid_recovery',
         refunded: false,
         paymentProvider: paymentTx.paymentProvider ?? null,
         paymentMethod: paymentTx.paymentMethod ?? null,
@@ -1248,6 +1266,59 @@ export class OrdersService {
 
     if (order.status !== OrderStatus.PAID) {
       throw new BadRequestException('Повторный запуск fulfillment доступен только для оплаченного заказа');
+    }
+
+    return this.fulfillOrder(orderId);
+  }
+
+  async recoverPendingPaidOrder(orderId: string) {
+    const order = await this.findById(orderId);
+
+    if (!order) {
+      throw new BadRequestException('Заказ не найден');
+    }
+
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException('Recovery оплаты доступен только для pending-заказа');
+    }
+
+    const paymentTx = order.transactions?.find(
+      (tx) => tx.type === TransactionType.PAYMENT && tx.status === TransactionStatus.SUCCEEDED,
+    );
+
+    if (!paymentTx) {
+      throw new BadRequestException(
+        'Нельзя запустить recovery без локально зафиксированной успешной payment transaction',
+      );
+    }
+
+    const claimed = await this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        status: OrderStatus.PENDING,
+      },
+      data: {
+        status: OrderStatus.PAID,
+        errorMessage: null,
+      },
+    });
+
+    if (claimed.count !== 1) {
+      const freshOrder = await this.findById(orderId);
+      if (!freshOrder) {
+        throw new BadRequestException('Заказ не найден');
+      }
+      if (freshOrder.status === OrderStatus.PAID) {
+        return this.fulfillOrder(orderId);
+      }
+      if (
+        freshOrder.status === OrderStatus.PROCESSING ||
+        freshOrder.status === OrderStatus.COMPLETED
+      ) {
+        return freshOrder;
+      }
+
+      throw new BadRequestException('Не удалось перевести заказ в paid для recovery');
     }
 
     return this.fulfillOrder(orderId);
@@ -2526,6 +2597,15 @@ export class OrdersService {
       ...(reconciliation === 'needs_attention'
         ? {
             OR: [
+              {
+                status: OrderStatus.PENDING,
+                transactions: {
+                  some: {
+                    type: TransactionType.PAYMENT,
+                    status: TransactionStatus.SUCCEEDED,
+                  },
+                },
+              },
               {
                 status: OrderStatus.PAID,
                 transactions: {

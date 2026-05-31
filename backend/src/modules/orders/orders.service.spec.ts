@@ -490,6 +490,53 @@ describe('OrdersService', () => {
       );
     });
 
+    it('admin recoverPendingPaidOrder переводит pending-заказ с successful payment в canonical fulfillment pipeline', async () => {
+      const { service, prisma } = makeService();
+      prisma.order.findUnique.mockResolvedValueOnce(
+        makeOrder({
+          status: OrderStatus.PENDING,
+          transactions: [
+            {
+              type: TransactionType.PAYMENT,
+              status: TransactionStatus.SUCCEEDED,
+              amount: 100,
+              paymentProvider: 'cloudpayments',
+              paymentMethod: 'card',
+              metadata: {},
+            },
+          ],
+        }),
+      );
+
+      const result = await service.recoverPendingPaidOrder('order_1');
+
+      expect(prisma.order.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'order_1',
+          status: OrderStatus.PENDING,
+        },
+        data: {
+          status: OrderStatus.PAID,
+          errorMessage: null,
+        },
+      });
+      expect(result?.status).toBe(OrderStatus.COMPLETED);
+    });
+
+    it('admin recoverPendingPaidOrder отклоняет pending-заказ без successful payment', async () => {
+      const { service, prisma } = makeService();
+      prisma.order.findUnique.mockResolvedValueOnce(
+        makeOrder({
+          status: OrderStatus.PENDING,
+          transactions: [],
+        }),
+      );
+
+      await expect(service.recoverPendingPaidOrder('order_1')).rejects.toThrow(
+        'Нельзя запустить recovery без локально зафиксированной успешной payment transaction',
+      );
+    });
+
     it('admin finalizeReconciledOrder завершает purchase finalize-failure без повторного provider call', async () => {
       const { service, prisma, esimProviderService } = makeService();
       prisma.order.findUnique
@@ -1469,6 +1516,44 @@ describe('OrdersService', () => {
         paymentMethod: 'card',
         paymentAmount: 100,
         lastError: 'Provider issuance succeeded, local finalize failed: db down during complete',
+        repeatChargeAttemptId: null,
+        repeatChargeAttemptStatus: null,
+        providerReasonCode: null,
+        providerMessage: null,
+        ambiguousReason: null,
+      });
+    });
+
+    it('includes pending orders with successful payment in needs_attention', async () => {
+      const { service, prisma } = makeService();
+      prisma.order.findMany.mockResolvedValue([
+        makeOrder({
+          id: 'order_pending_paid',
+          status: OrderStatus.PENDING,
+          transactions: [
+            {
+              type: TransactionType.PAYMENT,
+              status: TransactionStatus.SUCCEEDED,
+              amount: 100,
+              paymentProvider: 'cloudpayments',
+              paymentMethod: 'card',
+              metadata: {},
+            },
+          ],
+        }),
+      ]);
+      prisma.order.count.mockResolvedValue(1);
+
+      const result = await service.findAll({ reconciliation: 'needs_attention' });
+
+      expect(result.data[0].reconciliation).toEqual({
+        needsAttention: true,
+        category: 'pending_paid_recovery',
+        refunded: false,
+        paymentProvider: 'cloudpayments',
+        paymentMethod: 'card',
+        paymentAmount: 100,
+        lastError: null,
         repeatChargeAttemptId: null,
         repeatChargeAttemptStatus: null,
         providerReasonCode: null,

@@ -25,6 +25,7 @@ const hasDiscount = (order: AdminOrder): boolean =>
 
 const CANCELLABLE = new Set<OrderStatus>(['PENDING', 'FAILED'])
 const RETRYABLE = new Set<OrderStatus>(['PAID'])
+const PENDING_PAID_RECOVERY = 'pending_paid_recovery'
 const RECONCILE_FINALIZABLE = new Set([
   'issued_but_finalize_failed',
   'topup_issued_but_finalize_failed',
@@ -238,6 +239,28 @@ export default function Orders() {
     }
   }
 
+  const handleRecoverPaidPending = async (orderId: string) => {
+    const confirmed = await confirmDialog({
+      title: 'Восстановить оплату заказа',
+      description: 'Перевести pending-заказ с уже зафиксированной оплатой обратно в canonical fulfillment pipeline?',
+      confirmLabel: 'Запустить recovery',
+    })
+    if (!confirmed) return
+
+    try {
+      await ordersApi.recoverPaidPending(orderId)
+      toast.success('Recovery оплаты запущен')
+      loadOrders()
+    } catch (error: unknown) {
+      console.error('Ошибка recovery оплаченного pending-заказа:', error)
+      const errorMessage =
+        typeof error === 'object' && error !== null && 'response' in error
+          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined
+      toast.error(errorMessage || 'Не удалось запустить recovery оплаты')
+    }
+  }
+
   const handleFinalizeReconcile = async (orderId: string) => {
     const confirmed = await confirmDialog({
       title: 'Дофинализировать заказ',
@@ -366,6 +389,9 @@ export default function Orders() {
                   const loyaltyAmt = Number(order.discount || 0)
                   const bonusAmt = Number(order.bonusUsed || 0)
                   const canRetryFulfillment = RETRYABLE.has(order.status)
+                  const canRecoverPaidPending =
+                    order.status === 'PENDING' &&
+                    order.reconciliation?.category === PENDING_PAID_RECOVERY
                   const canFinalizeReconcile =
                     order.status === 'PROCESSING' &&
                     RECONCILE_FINALIZABLE.has(order.reconciliation?.category || '')
@@ -437,6 +463,16 @@ export default function Orders() {
                             className="px-0 text-xs text-blue-600 hover:bg-transparent hover:text-blue-700"
                           >
                             Retry fulfillment
+                          </Button>
+                        )}
+                        {canRecoverPaidPending && (
+                          <Button
+                            onClick={() => handleRecoverPaidPending(order.id)}
+                            variant="ghost"
+                            size="sm"
+                            className="px-0 text-xs text-blue-600 hover:bg-transparent hover:text-blue-700"
+                          >
+                            Recovery оплаты
                           </Button>
                         )}
                         {canFinalizeReconcile && (

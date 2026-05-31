@@ -93,6 +93,13 @@ export class OrdersController {
     return this.ordersService.retryFulfillment(id);
   }
 
+  @Post(':id/recover-paid-pending')
+  @UseGuards(JwtAdminGuard)
+  @ApiOperation({ summary: 'Запустить recovery для PENDING-заказа с уже успешной оплатой' })
+  async recoverPaidPending(@Param('id') id: string) {
+    return this.ordersService.recoverPendingPaidOrder(id);
+  }
+
   @Post(':id/finalize-reconcile')
   @UseGuards(JwtAdminGuard)
   @ApiOperation({ summary: 'Дофинализировать PROCESSING-заказ с issued snapshot' })

@@ -7,6 +7,7 @@ describe('OrdersController', () => {
     findAll: jest.fn(),
     cancelOrder: jest.fn(),
     retryFulfillment: jest.fn(),
+    recoverPendingPaidOrder: jest.fn(),
     finalizeReconciledOrder: jest.fn(),
     assertOwnership: jest.fn(),
     findById: jest.fn(),
@@ -83,6 +84,15 @@ describe('OrdersController', () => {
     const result = await controller.retryFulfillment('order_1');
 
     expect(ordersService.retryFulfillment).toHaveBeenCalledWith('order_1');
+    expect(result).toEqual({ id: 'order_1', status: OrderStatus.PROCESSING });
+  });
+
+  it('recoverPaidPending вызывает admin paid-pending recovery path', async () => {
+    ordersService.recoverPendingPaidOrder.mockResolvedValue({ id: 'order_1', status: OrderStatus.PROCESSING });
+
+    const result = await controller.recoverPaidPending('order_1');
+
+    expect(ordersService.recoverPendingPaidOrder).toHaveBeenCalledWith('order_1');
     expect(result).toEqual({ id: 'order_1', status: OrderStatus.PROCESSING });
   });
 

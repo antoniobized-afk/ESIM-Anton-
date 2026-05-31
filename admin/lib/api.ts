@@ -98,6 +98,7 @@ export const ordersApi = {
   getByUser: (userId: string) => api.get<AdminOrder[]>(`/orders/user/${userId}`),
   cancel: (id: string) => api.patch<AdminOrder>(`/orders/${id}/cancel`),
   retryFulfillment: (id: string) => api.post<AdminOrder>(`/orders/${id}/retry-fulfillment`),
+  recoverPaidPending: (id: string) => api.post<AdminOrder>(`/orders/${id}/recover-paid-pending`),
   finalizeReconcile: (id: string) => api.post<AdminOrder>(`/orders/${id}/finalize-reconcile`),
 }
 
