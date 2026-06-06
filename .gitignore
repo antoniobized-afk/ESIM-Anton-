@@ -26,6 +26,7 @@ dist/
 .env.production
 
 # IDE
+.agents
 .kilo
 .vscode/
 .idea/

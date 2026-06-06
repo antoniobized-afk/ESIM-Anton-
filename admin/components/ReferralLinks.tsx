@@ -652,7 +652,7 @@ function StatsModal({ data, loading, onClose }: StatsModalProps) {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <StatCard label="Регистрации" value={stats.registrations} />
-        <StatCard label="Покупки" value={stats.ordersCount} />
+        <StatCard label="Покупки с бонусом" value={stats.ordersCount} />
         <StatCard
           label="Выручка (primary)"
           value={`${num(stats.commissionableRevenue).toFixed(2)} ₽`}
@@ -682,8 +682,8 @@ function StatsModal({ data, loading, onClose }: StatsModalProps) {
                 <TableRow className="bg-slate-50/50">
                   <TableHeaderCell>Имя</TableHeaderCell>
                   <TableHeaderCell>Дата</TableHeaderCell>
-                  <TableHeaderCell>Заказы</TableHeaderCell>
-                  <TableHeaderCell>Потрачено</TableHeaderCell>
+                  <TableHeaderCell>С бонусом</TableHeaderCell>
+                  <TableHeaderCell>База бонуса</TableHeaderCell>
                 </TableRow>
               </TableHead>
               <TableBody className="divide-y divide-slate-100">

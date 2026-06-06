@@ -96,8 +96,9 @@
 - `Transaction.referralLinkId` является индексируемым source of truth для
   партнёрских referral bonus analytics. JSON metadata не использовать как
   аналитический ключ.
-- Partner commission и primary analytics считаются по completed purchase orders
-  без `parentOrderId`; top-up остаётся некомиссионным в V1. Если нужен LTV с
+- Partner commission analytics считается по completed purchase orders без
+  `parentOrderId`, для которых есть successful `REFERRAL_BONUS` ledger с этим
+  `referralLinkId`; top-up остаётся некомиссионным в V1. Если нужен LTV с
   top-up, он показывается отдельной secondary метрикой, не смешанной с
   `commissionableRevenue`.
 - Деньги и проценты в backend считать через `Prisma.Decimal`.
@@ -174,7 +175,7 @@
 - Admin flow:
   - admin создаёт/редактирует партнёрскую ссылку;
   - список отдаёт summary stats без per-link N+1;
-  - detail stats показывает registrations, primary purchase orders,
+  - detail stats показывает registrations, rewarded primary purchase orders,
     `commissionableRevenue` и earnings;
   - top-up/LTV revenue, если нужен, показывается отдельной secondary метрикой;
   - sidebar содержит раздел `Партнёрские ссылки`.

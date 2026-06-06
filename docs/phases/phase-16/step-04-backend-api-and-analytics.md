@@ -38,19 +38,19 @@
 - `GET /referrals/links` summary stats реализовать без per-link N+1:
   - `registrations`: groupBy/count по `User.referralLinkId`;
   - `totalReferrerEarnings`: groupBy/sum по `Transaction.referralLinkId`;
-  - `ordersCount` и `commissionableRevenue`: один агрегирующий запрос или raw
-    SQL aggregation по completed primary purchase orders
-    (`parentOrderId IS NULL`);
+  - `ordersCount` и `commissionableRevenue`: агрегировать по completed primary
+    orders (`parentOrderId IS NULL`), у которых есть successful
+    `REFERRAL_BONUS` ledger с этим `referralLinkId`;
   - `lifetimeRevenueIncludingTopups`: optional secondary metric, если admin UI
     должен видеть LTV; не использовать как commission base.
 - `GET /referrals/links/:id/stats` возвращает:
   - link;
   - registrations;
-  - ordersCount;
-  - commissionableRevenue;
+  - ordersCount как число rewarded primary orders;
+  - commissionableRevenue как сумма rewarded primary orders;
   - optional lifetimeRevenueIncludingTopups;
   - totalReferrerEarnings;
-  - referredUsers с totalOrders/totalSpent.
+  - referredUsers с totalOrders/totalSpent по rewarded primary orders.
 
 ## Результат шага
 
@@ -107,7 +107,7 @@
 - Public endpoint не отдаёт private fields.
 - Public endpoint имеет rate/cache policy.
 - Summary stats не вызывают per-link query loop.
-- Detail stats корректно считает registrations, primary purchase orders,
-  commissionable revenue и earnings.
+- Detail stats корректно считает registrations, rewarded primary purchase
+  orders, commissionable revenue и earnings.
 - Top-up orders не попадают в `commissionableRevenue`; если LTV включён, top-up
   revenue виден только отдельной secondary метрикой.

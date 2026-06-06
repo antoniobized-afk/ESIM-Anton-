@@ -647,7 +647,7 @@ describe('ReferralsService', () => {
   });
 
   describe('getReferralLinkStats', () => {
-    it('считает primary aggregates через БД и ограничивает список referred users', async () => {
+    it('считает покупки и выручку только через successful reward ledger по referral link', async () => {
       const { service, prisma } = makeService();
       prisma.referralLink.findUnique.mockResolvedValue({
         id: 'link_1',
@@ -677,7 +677,26 @@ describe('ReferralsService', () => {
 
       const result = await service.getReferralLinkStats('link_1');
 
-      expect(prisma.order.aggregate).toHaveBeenCalled();
+      const rewardedPrimaryOrderWhere: Prisma.OrderWhereInput = {
+        status: 'COMPLETED',
+        parentOrderId: null,
+        transactions: {
+          some: {
+            referralLinkId: 'link_1',
+            type: TransactionType.REFERRAL_BONUS,
+            status: TransactionStatus.SUCCEEDED,
+          },
+        },
+      };
+      expect(prisma.order.aggregate).toHaveBeenCalledWith({
+        where: rewardedPrimaryOrderWhere,
+        _count: {
+          id: true,
+        },
+        _sum: {
+          totalAmount: true,
+        },
+      });
       expect(prisma.user.findMany).toHaveBeenCalledWith({
         where: { referralLinkId: 'link_1' },
         orderBy: { createdAt: 'desc' },
@@ -688,10 +707,7 @@ describe('ReferralsService', () => {
           firstName: true,
           createdAt: true,
           orders: {
-            where: {
-              status: 'COMPLETED',
-              parentOrderId: null,
-            },
+            where: rewardedPrimaryOrderWhere,
             select: {
               totalAmount: true,
             },

@@ -297,12 +297,19 @@ Order created with auto-promo → PromoCodeRedemption(RESERVED)
 
 **Detail stats** (`GET /referrals/links/:id/stats`):
 - `registrations` — count users с `referralLinkId`
-- `ordersCount` — completed primary orders (без top-up)
-- `commissionableRevenue` — sum `totalAmount` primary completed orders
+- `ordersCount` — completed primary orders, по которым есть successful
+  `REFERRAL_BONUS` ledger с этим `referralLinkId`
+- `commissionableRevenue` — sum `totalAmount` тех же rewarded primary orders
 - `totalReferrerEarnings` — sum `REFERRAL_BONUS` transactions по `referralLinkId`
 - `referredUsers[]` — top 50 users с заказами
 
-**Commissionable revenue исключает top-up** (`parentOrderId IS NULL`).
+**Commissionable revenue исключает top-up** (`parentOrderId IS NULL`) и не
+считает заказы только по текущей привязке пользователя. Для payout-статистики
+source of truth — successful `Transaction(type=REFERRAL_BONUS,
+status=SUCCEEDED, referralLinkId=<link.id>)`. Это защищает модалку блогера от
+завышения, когда у привлечённого пользователя есть pending/failed orders,
+ручной partner promo победил referral link или начисление по ссылке не было
+создано.
 
 **Admin edit form contract**:
 - `promoCodeId: null` означает intentional disconnect promo link;

@@ -354,19 +354,25 @@ export class ReferralsService {
       throw new NotFoundException('Referral link не найден');
     }
 
+    const rewardedPrimaryOrderWhere: Prisma.OrderWhereInput = {
+      status: 'COMPLETED',
+      parentOrderId: null,
+      transactions: {
+        some: {
+          referralLinkId: id,
+          type: TransactionType.REFERRAL_BONUS,
+          status: TransactionStatus.SUCCEEDED,
+        },
+      },
+    };
+
     const [registrations, primaryOrdersAggregate, totalReferrerEarnings, referredUsers] =
       await Promise.all([
         this.prisma.user.count({
           where: { referralLinkId: id },
         }),
         this.prisma.order.aggregate({
-          where: {
-            status: 'COMPLETED',
-            parentOrderId: null,
-            user: {
-              referralLinkId: id,
-            },
-          },
+          where: rewardedPrimaryOrderWhere,
           _count: {
             id: true,
           },
@@ -394,10 +400,7 @@ export class ReferralsService {
             firstName: true,
             createdAt: true,
             orders: {
-              where: {
-                status: 'COMPLETED',
-                parentOrderId: null,
-              },
+              where: rewardedPrimaryOrderWhere,
               select: {
                 totalAmount: true,
               },
