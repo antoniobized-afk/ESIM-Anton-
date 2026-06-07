@@ -14,7 +14,7 @@
 
 ## Поддерживающие документы
 
-- [gotchas.md](./gotchas.md) — подтвержденные риски и неочевидные моменты проекта.
+- [gotchas/README.md](./gotchas/README.md) — подтвержденные риски и неочевидные моменты проекта.
 - [guidelines.md](./guidelines.md) — локальные правила, которые уже диктует кодовая база.
 - [loyalty-runtime.md](./loyalty-runtime.md) — актуальный runtime-контракт системы лояльности.
 - [payment-flow-audit.md](./payment-flow-audit.md) — целостная карта payment lifecycle, pricing contract и checkout/top-up/balance вариаций.
