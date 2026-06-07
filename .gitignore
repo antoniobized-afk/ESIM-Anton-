@@ -27,6 +27,7 @@ dist/
 
 # IDE
 work
+.roo
 .agents
 .kilo
 .vscode/
