@@ -72,4 +72,6 @@
 - Пользовательский `client` уже существует и существенно шире, чем описано в старом `README.md`.
 - Платежная модель гибридная: CloudPayments и Robokassa сосуществуют.
 - eSIM lifecycle включает покупку, webhooks для моментальных уведомлений о трафике/статусе (push-модель), fallback usage polling (крон) и top-up.
-- Auth уже не только Telegram: есть phone OTP, OAuth, Telegram widget и Telegram WebApp auth.
+- Auth уже не только Telegram: live code подтверждает email OTP, OAuth
+  Google/Yandex/VK, Telegram Login Widget и Telegram WebApp auth. Phone сейчас
+  является profile/contact field, а не подтвержденным login flow.

@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { JwtUserGuard } from '@/common/auth/jwt-user.guard';
 import { AuthController } from './auth.controller';
@@ -27,18 +27,37 @@ describe('AuthController', () => {
     verifyTelegramWidget: jest.fn(),
     verifyTelegramWebAppInitData: jest.fn(),
   };
-  const configService = {
-    get: jest.fn(),
+  const identityManagementService = {
+    listForUser: jest.fn(),
+    startOAuthLink: jest.fn(),
+    linkEmail: jest.fn(),
+    linkTelegramProfile: jest.fn(),
+    unlinkIdentity: jest.fn(),
+    handleOAuthLinkCallback: jest.fn(),
+    isOAuthLinkState: jest.fn(),
+  };
+  const callbackUrlService = {
+    getOAuthCallbackUrl: jest.fn(),
+    getFrontendUrl: jest.fn(),
   };
 
   const controller = new AuthController(
     authService as any,
     emailCodeService as any,
     oauthService as any,
-    configService as any,
+    identityManagementService as any,
+    callbackUrlService as any,
   );
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    identityManagementService.handleOAuthLinkCallback.mockResolvedValue(null);
+    identityManagementService.isOAuthLinkState.mockReturnValue(false);
+    callbackUrlService.getOAuthCallbackUrl.mockReturnValue(
+      'https://api.example.com/api/auth/oauth/google/callback',
+    );
+    callbackUrlService.getFrontendUrl.mockReturnValue('https://app.example.com');
+  });
 
   // ─── Admin ────────────────────────────────────────────────────
 
@@ -140,6 +159,101 @@ describe('AuthController', () => {
       expect(emailCodeService.verifyCode).toHaveBeenCalledWith('test@example.com', '123456');
       expect(authService.loginWithEmail).toHaveBeenCalledWith('test@example.com');
       expect(result).toEqual({ access_token: 'jwt_token_123', userId: 'user_1' });
+    });
+  });
+
+  describe('OAuth callbacks', () => {
+    it('обычный OAuth login callback нормализует external state в safe returnTo', async () => {
+      oauthService.exchangeGoogleCode.mockResolvedValue({
+        provider: 'google',
+        providerId: 'google_1',
+      });
+      authService.loginWithOAuth.mockResolvedValue({ access_token: 'jwt_token' });
+      const res = { redirect: jest.fn() };
+
+      await controller.googleCallback(
+        { headers: {}, protocol: 'https' } as any,
+        'oauth-code',
+        'https://evil.example/phish',
+        res as any,
+      );
+
+      expect(identityManagementService.handleOAuthLinkCallback).toHaveBeenCalled();
+      expect(authService.loginWithOAuth).toHaveBeenCalled();
+      expect(res.redirect).toHaveBeenCalledWith(
+        302,
+        'https://app.example.com/login/callback?token=jwt_token&returnTo=%2F',
+      );
+    });
+
+    it('обычный OAuth login callback сохраняет только safe relative state', async () => {
+      oauthService.exchangeGoogleCode.mockResolvedValue({
+        provider: 'google',
+        providerId: 'google_1',
+      });
+      authService.loginWithOAuth.mockResolvedValue({ access_token: 'jwt_token' });
+      const res = { redirect: jest.fn() };
+
+      await controller.googleCallback(
+        { headers: {}, protocol: 'https' } as any,
+        'oauth-code',
+        '%2Fprofile%3Ftab%3Dlogin',
+        res as any,
+      );
+
+      expect(res.redirect).toHaveBeenCalledWith(
+        302,
+        'https://app.example.com/login/callback?token=jwt_token&returnTo=%2Fprofile%3Ftab%3Dlogin',
+      );
+    });
+
+    it('обычный OAuth login callback не падает на malformed state', async () => {
+      oauthService.exchangeGoogleCode.mockResolvedValue({
+        provider: 'google',
+        providerId: 'google_1',
+      });
+      authService.loginWithOAuth.mockResolvedValue({ access_token: 'jwt_token' });
+      const res = { redirect: jest.fn() };
+
+      await controller.googleCallback(
+        { headers: {}, protocol: 'https' } as any,
+        'oauth-code',
+        '%E0%A4%A',
+        res as any,
+      );
+
+      expect(res.redirect).toHaveBeenCalledWith(
+        302,
+        'https://app.example.com/login/callback?token=jwt_token&returnTo=%2F',
+      );
+    });
+
+    it('invalid signed OAuth link-state редиректит в profile error и не запускает login fallback', async () => {
+      oauthService.exchangeGoogleCode.mockResolvedValue({
+        provider: 'google',
+        providerId: 'google_1',
+      });
+      identityManagementService.handleOAuthLinkCallback.mockRejectedValue(
+        new UnauthorizedException({
+          code: 'OAUTH_LINK_STATE_INVALID',
+          message: 'OAuth link state is invalid or expired.',
+        }),
+      );
+      identityManagementService.isOAuthLinkState.mockReturnValue(true);
+      const res = { redirect: jest.fn() };
+
+      await controller.googleCallback(
+        { headers: {}, protocol: 'https' } as any,
+        'oauth-code',
+        'signed-like-state',
+        res as any,
+      );
+
+      expect(authService.loginWithOAuth).not.toHaveBeenCalled();
+      expect(res.redirect).toHaveBeenCalledWith(
+        302,
+        'https://app.example.com/profile?identityLink=error&identityError=OAUTH_LINK_STATE_INVALID',
+      );
     });
   });
 });

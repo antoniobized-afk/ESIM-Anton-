@@ -132,4 +132,6 @@
   - Запретить silent OAuth/email merge: новый provider привязывается только явно из авторизованной сессии или через admin/support flow.
   - Перевести email, OAuth, Telegram Widget/WebApp и bot registration на общий identity resolver без смены JWT subject (`sub=user.id`).
   - Добавить read-only identities API, user-facing link/unlink flow и admin/support duplicate preflight с audit trail.
+  - Локальная реализация и automated verification закрыты; production deploy
+    ожидает additive migration, identity backfill dry-run/apply и manual smoke.
   - Документ: [phase-18-account-identity-linking-and-merge.md](./phase-18-account-identity-linking-and-merge.md)

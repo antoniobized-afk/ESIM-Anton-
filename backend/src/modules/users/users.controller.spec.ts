@@ -18,8 +18,15 @@ describe('UsersController', () => {
     subscribe: jest.fn(),
     unsubscribe: jest.fn(),
   };
+  const mergePreflightService = {
+    preflight: jest.fn(),
+  };
 
-  const controller = new UsersController(usersService as any, pushService as any);
+  const controller = new UsersController(
+    usersService as any,
+    pushService as any,
+    mergePreflightService as any,
+  );
 
   beforeEach(() => jest.clearAllMocks());
 
@@ -31,6 +38,40 @@ describe('UsersController', () => {
   it('findOrCreate использует ServiceTokenGuard', () => {
     const guards = Reflect.getMetadata(GUARDS_METADATA, UsersController.prototype.findOrCreate);
     expect(guards).toEqual([ServiceTokenGuard]);
+  });
+
+  it('findOrCreate передает валидированный bot payload в UsersService', async () => {
+    usersService.findOrCreate.mockResolvedValue({ id: 'user_1', telegramId: 123456789n });
+
+    const result = await controller.findOrCreate({
+      telegramId: '123456789',
+      username: 'mojo_user',
+      utmSource: 'telegram',
+    });
+
+    expect(usersService.findOrCreate).toHaveBeenCalledWith(123456789n, {
+      username: 'mojo_user',
+      utmSource: 'telegram',
+    });
+    expect(result).toEqual({ id: 'user_1', telegramId: '123456789' });
+  });
+
+  it('mergePreflight использует JwtAdminGuard и вызывает read-only service', async () => {
+    const guards = Reflect.getMetadata(GUARDS_METADATA, UsersController.prototype.mergePreflight);
+    mergePreflightService.preflight.mockResolvedValue({ mode: 'read_only_preflight' });
+
+    const result = await controller.mergePreflight(
+      { sourceUserId: 'source_1', targetUserId: 'target_1' },
+      { id: 'admin_1', type: 'admin', role: 'SUPPORT' },
+    );
+
+    expect(guards).toEqual([JwtAdminGuard]);
+    expect(mergePreflightService.preflight).toHaveBeenCalledWith(
+      'source_1',
+      'target_1',
+      { id: 'admin_1', type: 'admin', role: 'SUPPORT' },
+    );
+    expect(result).toEqual({ mode: 'read_only_preflight' });
   });
 
   it('findOne запрещает user доступ к чужому профилю', async () => {
@@ -49,6 +90,13 @@ describe('UsersController', () => {
 
     expect(usersService.updateEmail).toHaveBeenCalledWith('user_1', 'new@example.com');
     expect(result).toEqual({ id: 'user_1', email: 'new@example.com' });
+  });
+
+  it('static push VAPID route объявлен раньше параметрического findOne', () => {
+    const methodOrder = Object.getOwnPropertyNames(UsersController.prototype);
+    expect(methodOrder.indexOf('getVapidPublicKey')).toBeLessThan(
+      methodOrder.indexOf('findOne'),
+    );
   });
 
   it('subscribePush запрещает чужой userId', async () => {

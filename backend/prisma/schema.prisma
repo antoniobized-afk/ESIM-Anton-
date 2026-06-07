@@ -41,6 +41,8 @@ model User {
   promoRewardSnapshots    PromoCodeRedemption[]    @relation("PromoRewardOwnerSnapshots")
   pushSubs                PushSubscription[]
   cloudPaymentsCardTokens CloudPaymentsCardToken[]
+  identities              UserIdentity[]
+  identityAudits          UserIdentityAudit[]
   loyaltyLevel            LoyaltyLevel?            @relation(fields: [loyaltyLevelId], references: [id])
   referredBy              User?                    @relation("Referrals", fields: [referredById], references: [id])
   referrals               User[]                   @relation("Referrals")
@@ -102,6 +104,50 @@ model EmailCode {
   createdAt DateTime @default(now())
 
   @@map("email_codes")
+}
+
+model UserIdentity {
+  id              String               @id @default(cuid())
+  userId          String
+  provider        AuthIdentityProvider
+  providerSubject String
+  email           String?
+  emailVerified   Boolean              @default(false)
+  displayName     String?
+  linkedAt        DateTime             @default(now())
+  lastLoginAt     DateTime?
+  metadata        Json?
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  audits          UserIdentityAudit[]
+
+  @@unique([provider, providerSubject])
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("user_identities")
+}
+
+model UserIdentityAudit {
+  id                     String                     @id @default(cuid())
+  event                  UserIdentityAuditEvent
+  identityId             String?
+  userId                 String?
+  actorType              UserIdentityAuditActorType
+  actorId                String?
+  provider               AuthIdentityProvider?
+  providerSubjectHash    String?
+  providerSubjectPreview String?
+  reason                 String?
+  before                 Json?
+  after                  Json?
+  metadata               Json?
+  createdAt              DateTime                   @default(now())
+  identity               UserIdentity?              @relation(fields: [identityId], references: [id], onDelete: SetNull)
+  user                   User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([identityId])
+  @@index([userId])
+  @@index([event, createdAt])
+  @@map("user_identity_audit")
 }
 
 model LoyaltyLevel {
@@ -466,6 +512,30 @@ enum NotificationType {
 
 enum EsimWebhookReceiptAuthMode {
   UNSIGNED_ACCESSCODE
+}
+
+enum AuthIdentityProvider {
+  EMAIL
+  TELEGRAM
+  GOOGLE
+  YANDEX
+  VK
+}
+
+enum UserIdentityAuditEvent {
+  BACKFILLED
+  LINKED
+  UNLINKED
+  LOGIN_CONFLICT
+  MERGE_PREFLIGHT
+  MERGED
+}
+
+enum UserIdentityAuditActorType {
+  SYSTEM
+  USER
+  ADMIN
+  SUPPORT
 }
 
 enum AdminRole {

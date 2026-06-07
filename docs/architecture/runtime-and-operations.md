@@ -48,14 +48,18 @@ Production topology по проверенным документам и коду
 
 Фактические пользовательские способы входа:
 
-- phone OTP
+- email OTP
 - Google OAuth
 - Yandex OAuth
 - VK OAuth
 - Telegram Login Widget
 - Telegram WebApp init data
 
-Отдельно существует admin login endpoint, но `admin` frontend сейчас его не использует и защищён PIN-кодом в браузере.
+Phone в live code сейчас является profile/contact field, а не подтвержденным
+login flow.
+
+Отдельно существует admin login endpoint, и текущий `admin` frontend использует
+его через `POST /api/auth/login`.
 
 ## Payments runtime
 

@@ -180,6 +180,25 @@ export interface ReferralStats {
   }>;
 }
 
+export type AuthIdentityProvider = 'EMAIL' | 'TELEGRAM' | 'GOOGLE' | 'YANDEX' | 'VK';
+
+export interface UserIdentitySummary {
+  id: string;
+  provider: AuthIdentityProvider;
+  label: string;
+  email: string | null;
+  emailVerified: boolean;
+  displayName: string | null;
+  linkedAt: string;
+  lastLoginAt: string | null;
+  canUnlink: boolean;
+}
+
+export interface UserIdentitiesResponse {
+  identities: UserIdentitySummary[];
+  availableProviders: AuthIdentityProvider[];
+}
+
 // API методы
 export const userApi = {
   // Получить текущего пользователя
@@ -192,6 +211,36 @@ export const userApi = {
   async getProfile(userId: string): Promise<User> {
     const { data } = await api.get(`/users/${userId}`);
     return data;
+  },
+};
+
+export const authIdentitiesApi = {
+  async getMine(): Promise<UserIdentitiesResponse> {
+    const { data } = await api.get('/auth/identities/me');
+    return data;
+  },
+
+  async startOAuthLink(provider: 'google' | 'yandex', returnTo = '/profile'): Promise<{ url: string }> {
+    const { data } = await api.post(`/auth/identities/link/oauth/${provider}/start`, { returnTo });
+    return data;
+  },
+
+  async sendEmailLinkCode(email: string): Promise<void> {
+    await api.post('/auth/identities/link/email/send-code', { email });
+  },
+
+  async verifyEmailLink(email: string, code: string): Promise<{ status: 'linked' | 'already_linked' }> {
+    const { data } = await api.post('/auth/identities/link/email/verify', { email, code });
+    return data;
+  },
+
+  async linkTelegramWebApp(initData: string): Promise<{ status: 'linked' | 'already_linked' }> {
+    const { data } = await api.post('/auth/identities/link/telegram/webapp', { initData });
+    return data;
+  },
+
+  async unlink(identityId: string): Promise<void> {
+    await api.delete(`/auth/identities/${identityId}`);
   },
 };
 

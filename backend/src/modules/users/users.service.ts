@@ -1,10 +1,14 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { AuthIdentityProvider, Prisma } from '@prisma/client';
+import { AuthIdentityResolverService } from '../auth/identity-resolver/auth-identity-resolver.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly identityResolver: AuthIdentityResolverService,
+  ) {}
 
   /**
    * Найти или создать пользователя по Telegram ID
@@ -18,34 +22,15 @@ export class UsersService {
       utmCampaign?: string;
     }
   ) {
-    let user = await this.prisma.user.findUnique({
-      where: { telegramId },
-      include: {
-        loyaltyLevel: true,
-        referredBy: true,
-      },
+    return this.identityResolver.resolveTelegramBotUser({
+      telegramId,
+      username: data?.username as string | undefined,
+      firstName: data?.firstName as string | undefined,
+      lastName: data?.lastName as string | undefined,
+      utmSource: data?.utmSource,
+      utmMedium: data?.utmMedium,
+      utmCampaign: data?.utmCampaign,
     });
-
-    if (!user) {
-      user = await this.prisma.user.create({
-        data: {
-          telegramId,
-          username: data?.username as string,
-          firstName: data?.firstName as string,
-          lastName: data?.lastName as string,
-          // UTM метки сохраняются при первой регистрации
-          utmSource: data?.utmSource,
-          utmMedium: data?.utmMedium,
-          utmCampaign: data?.utmCampaign,
-        },
-        include: {
-          loyaltyLevel: true,
-          referredBy: true,
-        },
-      });
-    }
-
-    return user;
   }
 
   /**
@@ -135,19 +120,32 @@ export class UsersService {
   async updateEmail(userId: string, email: string) {
     const normalized = email.trim().toLowerCase();
 
-    const existing = await this.prisma.user.findUnique({
-      where: { email: normalized },
-      select: { id: true },
-    });
+    const [existingUser, existingEmailIdentity] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { email: normalized },
+        select: { id: true },
+      }),
+      this.prisma.userIdentity.findUnique({
+        where: {
+          provider_providerSubject: {
+            provider: AuthIdentityProvider.EMAIL,
+            providerSubject: normalized,
+          },
+        },
+        select: { userId: true },
+      }),
+    ]);
 
-    if (existing) {
-      if (existing.id === userId) {
-        // Email уже привязан к этому пользователю — ничего делать не нужно
-        return this.prisma.user.findUnique({ where: { id: userId } });
-      }
+    const conflictingOwnerId = [existingUser?.id, existingEmailIdentity?.userId]
+      .find((ownerId) => ownerId !== undefined && ownerId !== userId);
+    if (conflictingOwnerId) {
       throw new ConflictException(
         'Этот email уже привязан к другому аккаунту. Укажите другой адрес или войдите через этот email.',
       );
+    }
+
+    if (existingUser?.id === userId) {
+      return this.prisma.user.findUnique({ where: { id: userId } });
     }
 
     try {

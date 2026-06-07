@@ -22,8 +22,12 @@
 
 Подтвержденные backend-модули:
 
-- `auth` — admin login, phone OTP, OAuth, Telegram auth, `/auth/me`
-- `users` — пользователи, find-or-create, stats, email update, web-push subscriptions
+- `auth` — admin login, email OTP, OAuth, Telegram auth, `/auth/me`,
+  customer identity resolver, identity backfill, user-facing link/unlink API
+  через отдельный identity controller
+- `users` — пользователи, bot find-or-create, stats, email update,
+  web-push subscriptions, read-only admin merge preflight с отдельными asset
+  count и audit providers
 - `products` — каталог, sync, dedupe, bulk activation/badge/markup operations
 - `orders` — заказ, free fulfill, usage, top-up flow, balance purchase flow
 - `payments` — Robokassa flow + CloudPayments webhooks/controllers
@@ -91,6 +95,8 @@ Next.js 15 Admin Panel (App Router, client-first rendering).
 `backend/prisma/schema.prisma` подтверждает ключевые сущности:
 
 - `User`
+- `UserIdentity`
+- `UserIdentityAudit`
 - `PushSubscription`
 - `SmsCode`
 - `LoyaltyLevel`
@@ -109,3 +115,6 @@ Next.js 15 Admin Panel (App Router, client-first rendering).
 - у `Order` есть cache полей usage/status (`lastUsageBytes`, `esimStatus`, `expiresAt`, ...)
 - есть self-relation `parentOrderId` для top-up заказов
 - у `User` есть поля под multi-auth и marketing attribution (`authProvider`, `providerId`, `utm*`)
+- `UserIdentity` является durable способом входа, но не owner key для заказов,
+  платежей, рефералок, промокодов или уведомлений; canonical owner остается
+  `User.id`

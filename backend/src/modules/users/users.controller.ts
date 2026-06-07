@@ -16,6 +16,11 @@ import { OrGuard } from '@/common/auth/or.guard';
 import { ServiceTokenGuard } from '@/common/auth/service-token.guard';
 import { UsersService } from './users.service';
 import { PushService } from '../notifications/push.service';
+import { UserMergePreflightService } from './user-merge-preflight.service';
+import { FindOrCreateUserDto } from './dto/find-or-create-user.dto';
+import { MergePreflightQueryDto } from './dto/merge-preflight.dto';
+import { PushSubscribeDto, PushUnsubscribeDto } from './dto/push-subscription.dto';
+import { UpdateMyEmailDto } from './dto/user-profile.dto';
 
 const UserAccessGuard = OrGuard(JwtAdminGuard, JwtUserGuard);
 
@@ -33,6 +38,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly pushService: PushService,
+    private readonly mergePreflightService: UserMergePreflightService,
   ) {}
 
   @Get()
@@ -49,6 +55,27 @@ export class UsersController {
       ...result,
       data: result.data.map(serializeUser),
     };
+  }
+
+  @Get('admin/merge-preflight')
+  @UseGuards(JwtAdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Read-only preflight для возможного merge пользователей' })
+  async mergePreflight(
+    @Query() query: MergePreflightQueryDto,
+    @CurrentUser() currentUser: AuthUser,
+  ) {
+    return this.mergePreflightService.preflight(
+      query.sourceUserId,
+      query.targetUserId,
+      currentUser,
+    );
+  }
+
+  @Get('push/vapid-public-key')
+  @ApiOperation({ summary: 'Получить VAPID публичный ключ для web push' })
+  getVapidPublicKey() {
+    return { publicKey: this.pushService.getPublicKey() };
   }
 
   @Get(':id')
@@ -78,15 +105,7 @@ export class UsersController {
   @Post('find-or-create')
   @UseGuards(ServiceTokenGuard)
   @ApiOperation({ summary: 'Найти или создать пользователя (для бота)' })
-  async findOrCreate(@Body() dto: {
-    telegramId: string;
-    username?: string;
-    firstName?: string;
-    lastName?: string;
-    utmSource?: string;
-    utmMedium?: string;
-    utmCampaign?: string;
-  }) {
+  async findOrCreate(@Body() dto: FindOrCreateUserDto) {
     const { telegramId, ...userData } = dto;
     const user = await this.usersService.findOrCreate(
       BigInt(telegramId),
@@ -101,16 +120,10 @@ export class UsersController {
   @ApiOperation({ summary: 'Сохранить email текущего пользователя' })
   async updateMyEmail(
     @CurrentUser() user: AuthUser,
-    @Body() dto: { email: string },
+    @Body() dto: UpdateMyEmailDto,
   ) {
     const updated = await this.usersService.updateEmail(user.id, dto.email);
     return serializeUser(updated);
-  }
-
-  @Get('push/vapid-public-key')
-  @ApiOperation({ summary: 'Получить VAPID публичный ключ для web push' })
-  getVapidPublicKey() {
-    return { publicKey: this.pushService.getPublicKey() };
   }
 
   @Post(':id/push/subscribe')
@@ -120,7 +133,7 @@ export class UsersController {
   async subscribePush(
     @Param('id') userId: string,
     @CurrentUser() user: AuthUser,
-    @Body() dto: { endpoint: string; p256dh: string; auth: string },
+    @Body() dto: PushSubscribeDto,
   ) {
     if (user.id !== userId) {
       throw new ForbiddenException('Нельзя подписывать чужой push endpoint');
@@ -136,7 +149,7 @@ export class UsersController {
   async unsubscribePush(
     @Param('id') userId: string,
     @CurrentUser() user: AuthUser,
-    @Body() dto: { endpoint: string },
+    @Body() dto: PushUnsubscribeDto,
   ) {
     if (user.id !== userId) {
       throw new ForbiddenException('Нельзя отписывать чужой push endpoint');

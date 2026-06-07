@@ -15,10 +15,17 @@ import {
 import type { Request, Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { ConfigService } from '@nestjs/config';
 import { AuthUser, CurrentUser, JwtAdminGuard, JwtUserGuard } from '@/common/auth/jwt-user.guard';
+import { AuthCallbackUrlService } from './auth-callback-url.service';
 import { AuthService } from './auth.service';
+import {
+  SendEmailAuthCodeDto,
+  TelegramWebAppAuthDto,
+  VerifyEmailAuthCodeDto,
+} from './dto/auth-login.dto';
 import { EmailCodeService } from './email-code.service';
+import { normalizeRelativeReturnTo } from './identity/auth-redirect-normalizer';
+import { AuthIdentityManagementService } from './identity-management/auth-identity-management.service';
 import { OAuthService } from './oauth.service';
 
 @ApiTags('auth')
@@ -30,7 +37,8 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly emailCodeService: EmailCodeService,
     private readonly oauthService: OAuthService,
-    private readonly configService: ConfigService,
+    private readonly identityManagementService: AuthIdentityManagementService,
+    private readonly callbackUrlService: AuthCallbackUrlService,
   ) {}
 
   // ─── Admin ───────────────────────────────────────────────────
@@ -67,7 +75,7 @@ export class AuthController {
   @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('email/send-code')
   @ApiOperation({ summary: 'Отправить код на email' })
-  async sendEmailCode(@Body() dto: { email: string }) {
+  async sendEmailCode(@Body() dto: SendEmailAuthCodeDto) {
     if (!dto.email) throw new BadRequestException('email required');
     await this.emailCodeService.sendCode(dto.email);
     return { success: true, message: 'Код отправлен на email' };
@@ -76,7 +84,7 @@ export class AuthController {
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('email/verify')
   @ApiOperation({ summary: 'Верифицировать email код и получить JWT' })
-  async verifyEmail(@Body() dto: { email: string; code: string }) {
+  async verifyEmail(@Body() dto: VerifyEmailAuthCodeDto) {
     if (!dto.email || !dto.code) throw new BadRequestException('email and code required');
     const email = dto.email.trim().toLowerCase();
     const valid = await this.emailCodeService.verifyCode(email, dto.code);
@@ -90,7 +98,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Redirect to Google OAuth' })
   @Redirect()
   googleRedirect(@Req() req: Request, @Query('state') state?: string) {
-    const redirectUri = this.getCallbackUrl('google', req);
+    const redirectUri = this.callbackUrlService.getOAuthCallbackUrl('google', req);
     let url = this.oauthService.getGoogleRedirectUrl(redirectUri);
     if (state) url += `&state=${encodeURIComponent(state)}`;
     return { url, statusCode: 302 };
@@ -106,13 +114,19 @@ export class AuthController {
   ) {
     if (!code) return this.redirectError(res, state, 'Google auth cancelled');
     try {
-      const redirectUri = this.getCallbackUrl('google', req);
+      const redirectUri = this.callbackUrlService.getOAuthCallbackUrl('google', req);
       const profile = await this.oauthService.exchangeGoogleCode(code, redirectUri);
+      const linkResult = await this.identityManagementService.handleOAuthLinkCallback(
+        profile,
+        state,
+      );
+      if (linkResult) return this.redirectLinkResult(res, linkResult);
       const { access_token } = await this.authService.loginWithOAuth(profile);
       return this.redirectSuccess(res, state, access_token);
     } catch (e: any) {
-      this.logger.error(`Google callback error: ${e.message}`);
-      return this.redirectError(res, state, e.message);
+      const error = this.authErrorMessage(e);
+      this.logger.error(`Google callback error: ${error}`);
+      return this.redirectCallbackError(res, state, error);
     }
   }
 
@@ -122,7 +136,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Redirect to Yandex OAuth' })
   @Redirect()
   yandexRedirect(@Req() req: Request, @Query('state') state?: string) {
-    const redirectUri = this.getCallbackUrl('yandex', req);
+    const redirectUri = this.callbackUrlService.getOAuthCallbackUrl('yandex', req);
     let url = this.oauthService.getYandexRedirectUrl(redirectUri);
     if (state) url += `&state=${encodeURIComponent(state)}`;
     return { url, statusCode: 302 };
@@ -138,13 +152,19 @@ export class AuthController {
   ) {
     if (!code) return this.redirectError(res, state, 'Yandex auth cancelled');
     try {
-      const redirectUri = this.getCallbackUrl('yandex', req);
+      const redirectUri = this.callbackUrlService.getOAuthCallbackUrl('yandex', req);
       const profile = await this.oauthService.exchangeYandexCode(code, redirectUri);
+      const linkResult = await this.identityManagementService.handleOAuthLinkCallback(
+        profile,
+        state,
+      );
+      if (linkResult) return this.redirectLinkResult(res, linkResult);
       const { access_token } = await this.authService.loginWithOAuth(profile);
       return this.redirectSuccess(res, state, access_token);
     } catch (e: any) {
-      this.logger.error(`Yandex callback error: ${e.message}`);
-      return this.redirectError(res, state, e.message);
+      const error = this.authErrorMessage(e);
+      this.logger.error(`Yandex callback error: ${error}`);
+      return this.redirectCallbackError(res, state, error);
     }
   }
 
@@ -154,7 +174,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Redirect to VK OAuth' })
   @Redirect()
   vkRedirect(@Req() req: Request, @Query('state') state?: string) {
-    const redirectUri = this.getCallbackUrl('vk', req);
+    const redirectUri = this.callbackUrlService.getOAuthCallbackUrl('vk', req);
     let url = this.oauthService.getVkRedirectUrl(redirectUri);
     if (state) url += `&state=${encodeURIComponent(state)}`;
     return { url, statusCode: 302 };
@@ -170,13 +190,19 @@ export class AuthController {
   ) {
     if (!code) return this.redirectError(res, state, 'VK auth cancelled');
     try {
-      const redirectUri = this.getCallbackUrl('vk', req);
+      const redirectUri = this.callbackUrlService.getOAuthCallbackUrl('vk', req);
       const profile = await this.oauthService.exchangeVkCode(code, redirectUri);
+      const linkResult = await this.identityManagementService.handleOAuthLinkCallback(
+        profile,
+        state,
+      );
+      if (linkResult) return this.redirectLinkResult(res, linkResult);
       const { access_token } = await this.authService.loginWithOAuth(profile);
       return this.redirectSuccess(res, state, access_token);
     } catch (e: any) {
-      this.logger.error(`VK callback error: ${e.message}`);
-      return this.redirectError(res, state, e.message);
+      const error = this.authErrorMessage(e);
+      this.logger.error(`VK callback error: ${error}`);
+      return this.redirectCallbackError(res, state, error);
     }
   }
 
@@ -192,7 +218,7 @@ export class AuthController {
 
   @Post('telegram/webapp')
   @ApiOperation({ summary: 'Автоматический вход через Telegram Mini App (initData)' })
-  async telegramWebAppAuth(@Body() dto: { initData: string }) {
+  async telegramWebAppAuth(@Body() dto: TelegramWebAppAuthDto) {
     if (!dto.initData) throw new BadRequestException('initData required');
     const profile = this.oauthService.verifyTelegramWebAppInitData(dto.initData);
     return this.authService.loginWithOAuth(profile);
@@ -210,58 +236,57 @@ export class AuthController {
 
   // ─── Helpers ──────────────────────────────────────────────────
 
-  private getCallbackUrl(provider: string, req?: Request): string {
-    const envBackendUrl = this.configService.get('BACKEND_URL');
-    const configuredBase = this.withApiBase(envBackendUrl);
-
-    // In production we prefer stable BACKEND_URL to avoid provider callback mismatch
-    // when requests arrive through alternate hosts/proxies.
-    const requestBase = req ? this.withApiBase(this.getRequestBaseUrl(req)) : null;
-    const shouldUseConfiguredBase =
-      Boolean(configuredBase) && !this.isLocalhostUrl(configuredBase as string);
-
-    const base =
-      (shouldUseConfiguredBase ? configuredBase : null) ||
-      requestBase ||
-      configuredBase ||
-      'http://localhost:3000/api';
-
-    return `${base}/auth/oauth/${provider}/callback`;
-  }
-
-  private isLocalhostUrl(url: string): boolean {
-    return /localhost|127\.0\.0\.1/.test(url);
-  }
-
-  private withApiBase(url?: string | null): string | null {
-    if (!url) return null;
-    const normalized = url.replace(/\/+$/, '');
-    return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
-  }
-
-  private getRequestBaseUrl(req: Request): string | null {
-    const host = req.headers['x-forwarded-host'] || req.headers.host;
-    const proto = req.headers['x-forwarded-proto'] || req.protocol;
-    if (!host) return null;
-    const hostValue = Array.isArray(host) ? host[0] : host;
-    const protoValue = Array.isArray(proto) ? proto[0] : proto || 'https';
-    return `${protoValue}://${hostValue}`;
-  }
-
-  private getFrontendUrl(): string {
-    return this.configService.get('FRONTEND_URL') || 'http://localhost:3002';
-  }
-
   private redirectSuccess(res: Response, state: string | undefined, token: string) {
-    const frontendUrl = this.getFrontendUrl();
-    const returnTo = state ? decodeURIComponent(state) : '/';
+    const frontendUrl = this.callbackUrlService.getFrontendUrl();
+    const returnTo = normalizeRelativeReturnTo(state, '/');
     const url = `${frontendUrl}/login/callback?token=${token}&returnTo=${encodeURIComponent(returnTo)}`;
     return res.redirect(302, url);
   }
 
   private redirectError(res: Response, state: string | undefined, error: string) {
-    const frontendUrl = this.getFrontendUrl();
+    const frontendUrl = this.callbackUrlService.getFrontendUrl();
     const url = `${frontendUrl}/login?error=${encodeURIComponent(error)}`;
     return res.redirect(302, url);
+  }
+
+  private redirectCallbackError(
+    res: Response,
+    state: string | undefined,
+    error: string,
+  ) {
+    if (this.identityManagementService.isOAuthLinkState(state)) {
+      return this.redirectLinkError(res, error);
+    }
+    return this.redirectError(res, state, error);
+  }
+
+  private redirectLinkResult(
+    res: Response,
+    result: { returnTo: string; status: string },
+  ) {
+    const frontendUrl = this.callbackUrlService.getFrontendUrl();
+    const separator = result.returnTo.includes('?') ? '&' : '?';
+    const url = `${frontendUrl}${result.returnTo}${separator}identityLink=${encodeURIComponent(result.status)}`;
+    return res.redirect(302, url);
+  }
+
+  private redirectLinkError(res: Response, error: string) {
+    const frontendUrl = this.callbackUrlService.getFrontendUrl();
+    const url = `${frontendUrl}/profile?identityLink=error&identityError=${encodeURIComponent(error)}`;
+    return res.redirect(302, url);
+  }
+
+  private authErrorMessage(error: any): string {
+    const response =
+      typeof error?.getResponse === 'function' ? error.getResponse() : null;
+
+    if (response && typeof response === 'object') {
+      const body = response as Record<string, unknown>;
+      if (typeof body.code === 'string') return body.code;
+      if (typeof body.message === 'string') return body.message;
+      if (Array.isArray(body.message)) return body.message.join(', ');
+    }
+
+    return error?.message || 'Auth failed';
   }
 }

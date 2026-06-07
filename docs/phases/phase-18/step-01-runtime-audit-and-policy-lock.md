@@ -13,9 +13,16 @@ linking как набора локальных патчей поверх `User.a
 - Описать, где `User.id` используется как owner key.
 - Зафиксировать affected surfaces: orders, payments, saved cards, referrals,
   promo codes, notifications, client, bot, admin.
+- Зафиксировать live divergences:
+  - bot path создает Telegram user по `telegramId` без legacy provider slot;
+  - backend имеет VK callback, но client login UI сейчас не показывает VK;
+  - phone OTP login flow в live code не найден, `User.phone` остается contact
+    field;
+  - текущий OAuth `state` является return redirect, а не signed link nonce.
 - Обновить architecture wiki с текущим и целевым identity contract.
 - Зафиксировать policy lock: no silent merge, no auto link by email, no business
-  asset movement inside login resolver.
+  asset movement inside login resolver, no OAuth link without signed
+  authenticated link state.
 
 ## Результат шага
 
@@ -39,6 +46,12 @@ linking как набора локальных патчей поверх `User.a
   и notification surfaces.
 - Зафиксировано, что `User` является business account, а не identity record.
 
+### 2026-06-07
+
+- Повторно сверены live auth/bot/downstream contracts перед стартом реализации.
+- В policy lock добавлены ограничения по phone/VK surface, signed OAuth link
+  state, normalized email preflight и audit trail для link/unlink.
+
 ## Файлы
 
 - `docs/architecture/auth-identity-runtime.md`
@@ -53,3 +66,5 @@ linking как набора локальных патчей поверх `User.a
 
 - Документ сверен с live files.
 - No code changes на этом шаге.
+- Перед следующими шагами нужно сохранить эти guardrails в schema/runtime
+  implementation, а не только в фазовом описании.
