@@ -19,6 +19,12 @@
 - При изменении платежного, auth или provider flow обновлять `system-overview.md` и `runtime-and-operations.md`.
 - При нахождении нового расхождения между legacy docs и кодом добавлять запись в `legacy-doc-audit.md` или `gotchas.md`.
 
+## Client App Router
+
+- Для крупных route-level client pages держать `page.tsx` тонким координатором: route flags, загрузочный skeleton, orchestration handlers и сборка секций.
+- Route-private хуки и презентационные компоненты размещать рядом в `app/<route>/_components`, если они не переиспользуются за пределами route segment.
+- API/data flow, localStorage preferences и UI секции не смешивать в одном компоненте; пример baseline — `client/app/profile/page.tsx` после SRP refactor.
+
 ## Что не делать
 
 - Не ссылаться на корневые документы как на source of truth без явной пометки `legacy`.
