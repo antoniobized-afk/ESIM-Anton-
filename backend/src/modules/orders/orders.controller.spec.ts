@@ -9,6 +9,7 @@ describe('OrdersController', () => {
     retryFulfillment: jest.fn(),
     recoverPendingPaidOrder: jest.fn(),
     finalizeReconciledOrder: jest.fn(),
+    retryCompletionAccounting: jest.fn(),
     assertOwnership: jest.fn(),
     findById: jest.fn(),
     findByUser: jest.fn(),
@@ -103,5 +104,14 @@ describe('OrdersController', () => {
 
     expect(ordersService.finalizeReconciledOrder).toHaveBeenCalledWith('order_1');
     expect(result).toEqual({ id: 'order_1', status: OrderStatus.COMPLETED });
+  });
+
+  it('retryCompletionAccounting вызывает admin accounting retry path', async () => {
+    ordersService.retryCompletionAccounting.mockResolvedValue({ orderId: 'order_1', status: 'APPLIED' });
+
+    const result = await controller.retryCompletionAccounting('order_1');
+
+    expect(ordersService.retryCompletionAccounting).toHaveBeenCalledWith('order_1');
+    expect(result).toEqual({ orderId: 'order_1', status: 'APPLIED' });
   });
 });

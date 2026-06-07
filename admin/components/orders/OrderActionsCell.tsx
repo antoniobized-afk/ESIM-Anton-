@@ -9,6 +9,7 @@ interface OrderActionsCellProps {
   onRecoverPaidPending: (orderId: string) => void
   onFulfillFree: (orderId: string) => void
   onFinalizeReconcile: (orderId: string) => void
+  onRetryCompletionAccounting: (orderId: string) => void
   onCancel: (orderId: string) => void
 }
 
@@ -19,6 +20,7 @@ export default function OrderActionsCell(props: OrderActionsCellProps) {
     onRecoverPaidPending,
     onFulfillFree,
     onFinalizeReconcile,
+    onRetryCompletionAccounting,
     onCancel,
   } = props
   const {
@@ -26,6 +28,7 @@ export default function OrderActionsCell(props: OrderActionsCellProps) {
     canRecoverPaidPending,
     canFulfillFree,
     canFinalizeReconcile,
+    canRetryCompletionAccounting,
     canCancel,
   } = getOrderActionAvailability(order)
 
@@ -73,6 +76,17 @@ export default function OrderActionsCell(props: OrderActionsCellProps) {
             className="px-0 text-xs text-amber-600 hover:bg-transparent hover:text-amber-700"
           >
             Дофинализировать
+          </Button>
+        )}
+
+        {canRetryCompletionAccounting && (
+          <Button
+            onClick={() => onRetryCompletionAccounting(order.id)}
+            variant="ghost"
+            size="sm"
+            className="px-0 text-xs text-amber-600 hover:bg-transparent hover:text-amber-700"
+          >
+            Повторить учёт
           </Button>
         )}
 

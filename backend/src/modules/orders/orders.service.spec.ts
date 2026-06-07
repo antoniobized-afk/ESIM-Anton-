@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  CompletionAccountingStatus,
   OrderStatus,
   PromoCodeRedemptionSource,
   PromoCodeSource,
@@ -38,6 +39,11 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
     transactions: [],
     repeatChargeAttempt: null,
     completionAccountingAppliedAt: null,
+    completionAccountingStatus: CompletionAccountingStatus.NOT_REQUIRED,
+    completionAccountingAttempts: 0,
+    completionAccountingLastAttemptAt: null,
+    completionAccountingNextRetryAt: null,
+    completionAccountingLastError: null,
     ...overrides,
   };
 }
@@ -211,6 +217,21 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     }),
   };
 
+  const completionAccountingService = {
+    attemptPurchaseAccounting: jest.fn().mockResolvedValue({
+      orderId: 'order_1',
+      status: CompletionAccountingStatus.APPLIED,
+      applied: true,
+      reason: 'applied',
+    }),
+    retryPurchaseAccounting: jest.fn().mockResolvedValue({
+      orderId: 'order_1',
+      status: CompletionAccountingStatus.APPLIED,
+      applied: true,
+      reason: 'applied',
+    }),
+  };
+
   const service = new OrdersService(
     prisma as any,
     productsService as any,
@@ -221,9 +242,8 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     emailService as any,
     pushService as any,
     systemSettingsService as any,
-    referralsService as any,
-    partnerRewardsService as any,
     loyaltyService as any,
+    completionAccountingService as any,
   );
 
   return {
@@ -237,6 +257,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     referralsService,
     partnerRewardsService,
     loyaltyService,
+    completionAccountingService,
     systemSettingsService,
   };
 }
@@ -245,17 +266,16 @@ describe('OrdersService', () => {
   beforeEach(() => jest.clearAllMocks());
 
   describe('fulfillOrder Phase 4 wiring', () => {
-    it('начисляет cashback, referral bonus и пересчитывает loyalty level после successful purchase', async () => {
+    it('завершает successful purchase короткой транзакцией и запускает completion accounting отдельно', async () => {
       const {
         service,
         prisma,
         usersService,
         esimProviderService,
         telegramNotification,
-        referralsService,
-        loyaltyService,
         emailService,
         pushService,
+        completionAccountingService,
       } = makeService();
 
       const result = await service.fulfillOrder('order_1');
@@ -269,58 +289,15 @@ describe('OrdersService', () => {
           activationCode: 'act-1',
           providerOrderId: 'provider-order-1',
           smdpAddress: 'smdp.example',
+          completionAccountingStatus: CompletionAccountingStatus.PENDING,
+          completionAccountingNextRetryAt: null,
+          completionAccountingLastError: null,
           completedAt: expect.any(Date),
         }),
       });
-      expect(prisma.order.updateMany).toHaveBeenCalledWith({
-        where: {
-          id: 'order_1',
-          status: OrderStatus.COMPLETED,
-          completionAccountingAppliedAt: null,
-        },
-        data: {
-          completionAccountingAppliedAt: expect.any(Date),
-        },
-      });
       expect(usersService.updateBalance).not.toHaveBeenCalled();
-      expect(prisma.user.update).toHaveBeenNthCalledWith(1, {
-        where: { id: 'user_1' },
-        data: {
-          bonusBalance: {
-            increment: 10,
-          },
-        },
-      });
-      expect(prisma.transaction.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          userId: 'user_1',
-          orderId: 'order_1',
-          type: TransactionType.BONUS_ACCRUAL,
-          status: TransactionStatus.SUCCEEDED,
-          amount: expect.anything(),
-          metadata: {
-            source: 'loyalty_cashback',
-            cashbackPercent: 10,
-          },
-        }),
-      });
-      expect(prisma.user.update).toHaveBeenNthCalledWith(2, {
-        where: { id: 'user_1' },
-        data: { totalSpent: { increment: 100 } },
-      });
-      expect(referralsService.awardReferralBonus).toHaveBeenCalledWith(
-        'ref_1',
-        100,
-        'order_1',
-        null,
-        expect.anything(),
-        expect.objectContaining({
-          settings: expect.objectContaining({ enabled: true }),
-          referralLink: null,
-        }),
-      );
-      expect(loyaltyService.updateUserLevel).toHaveBeenCalledWith('user_1');
-      expect(loyaltyService.getEffectiveLevelForSpent).toHaveBeenCalledWith(10000);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
       expect(esimProviderService.purchaseEsim).toHaveBeenCalledWith(
         'provider_plan_1',
         'user@example.com',
@@ -331,135 +308,36 @@ describe('OrdersService', () => {
       expect(telegramNotification.sendEsimDetails).not.toHaveBeenCalled();
       expect(emailService.sendEsimReady).toHaveBeenCalledTimes(1);
       expect(pushService.sendPaymentSuccess).toHaveBeenCalledTimes(1);
+      expect(completionAccountingService.attemptPurchaseAccounting).toHaveBeenCalledWith(
+        'order_1',
+        { force: true },
+      );
       expect(result.status).toBe(OrderStatus.COMPLETED);
+      expect(result.completionAccountingStatus).toBe(CompletionAccountingStatus.APPLIED);
     });
 
-    it('не применяет completion accounting повторно, если marker уже выставлен', async () => {
-      const { service, prisma, referralsService, loyaltyService } = makeService();
-      prisma.order.updateMany.mockResolvedValueOnce({ count: 0 });
-
-      const result = await (service as any).applyPurchaseCompletionEffects(
-        makeOrder({ status: OrderStatus.COMPLETED }),
-      );
-
-      expect(result).toEqual({ applied: false });
-      expect(prisma.user.update).not.toHaveBeenCalled();
-      expect(prisma.transaction.create).not.toHaveBeenCalled();
-      expect(referralsService.awardReferralBonus).not.toHaveBeenCalled();
-      expect(loyaltyService.updateUserLevel).not.toHaveBeenCalled();
-    });
-
-    it('начисляет reward владельцу manual partner promo и не создаёт referral reward по тому же order', async () => {
-      const { service, referralsService, partnerRewardsService } = makeService();
-
-      const result = await (service as any).applyPurchaseCompletionEffects(
-        makeOrder({
-          promoCodeRedemption: {
-            promoCodeId: 'promo_partner_1',
-            source: PromoCodeRedemptionSource.MANUAL,
-            rewardOwnerIdSnapshot: 'owner_1',
-            rewardBonusPercentSnapshot: '12.5',
-            rewardPayoutModeSnapshot: ReferralPayoutMode.EXTERNAL,
-          },
-          user: {
-            id: 'user_1',
-            totalSpent: 10000,
-            referralLinkId: 'link_1',
-            referredById: 'ref_1',
-          },
-        }),
-      );
-
-      expect(result).toEqual({ applied: true });
-      expect(partnerRewardsService.award).toHaveBeenCalledWith({
-        ownerId: 'owner_1',
-        orderAmount: 100,
+    it('не откатывает completed order в processing, если отдельный completion accounting падает', async () => {
+      const { service, prisma, emailService, completionAccountingService } = makeService();
+      completionAccountingService.attemptPurchaseAccounting.mockResolvedValueOnce({
         orderId: 'order_1',
-        source: {
-          kind: 'partner_promo_code',
-          promoCodeId: 'promo_partner_1',
-          bonusPercent: '12.5',
-          payoutMode: ReferralPayoutMode.EXTERNAL,
-        },
-        client: expect.anything(),
-      });
-      expect(referralsService.awardReferralBonus).not.toHaveBeenCalled();
-    });
-
-    it('не fallback-ится в referral reward, если manual partner promo snapshot принадлежит buyer', async () => {
-      const { service, referralsService, partnerRewardsService } = makeService();
-
-      await (service as any).applyPurchaseCompletionEffects(
-        makeOrder({
-          promoCodeRedemption: {
-            promoCodeId: 'promo_partner_1',
-            source: PromoCodeRedemptionSource.MANUAL,
-            rewardOwnerIdSnapshot: 'user_1',
-            rewardBonusPercentSnapshot: '12.5',
-            rewardPayoutModeSnapshot: ReferralPayoutMode.BALANCE,
-          },
-          user: {
-            id: 'user_1',
-            totalSpent: 10000,
-            referralLinkId: 'link_1',
-            referredById: 'ref_1',
-          },
-        }),
-      );
-
-      expect(partnerRewardsService.award).not.toHaveBeenCalled();
-      expect(referralsService.awardReferralBonus).not.toHaveBeenCalled();
-    });
-
-    it('оставляет заказ в processing для reconciliation, если referral awarding падает после выдачи eSIM', async () => {
-      const { service, prisma, referralsService, loyaltyService, emailService } = makeService();
-      referralsService.awardReferralBonus.mockRejectedValue(new Error('referral unavailable'));
-      prisma.order.update
-        .mockResolvedValueOnce({
-          id: 'order_1',
-          status: OrderStatus.COMPLETED,
-          providerOrderId: 'provider-order-1',
-          providerResponse: { order_id: 'provider-order-1' },
-          iccid: 'iccid-1',
-          qrCode: 'qr',
-          activationCode: 'act-1',
-          completedAt: expect.any(Date),
-        })
-        .mockResolvedValueOnce({
-        ...makeOrder({
-          status: OrderStatus.PROCESSING,
-          providerOrderId: 'provider-order-1',
-          providerResponse: { order_id: 'provider-order-1' },
-          iccid: 'iccid-1',
-          qrCode: 'qr',
-          activationCode: 'act-1',
-          errorMessage:
-            'Provider issuance succeeded, local finalize failed: referral unavailable',
-          transactions: [
-            {
-              type: TransactionType.PAYMENT,
-              status: TransactionStatus.SUCCEEDED,
-              amount: 100,
-              paymentProvider: 'cloudpayments',
-              paymentMethod: 'card',
-              metadata: {},
-            },
-          ],
-        }),
+        status: CompletionAccountingStatus.FAILED,
+        applied: false,
+        reason: 'failed',
+        error: 'referral unavailable',
       });
 
-      await expect(service.fulfillOrder('order_1')).rejects.toThrow('referral unavailable');
+      const result = await service.fulfillOrder('order_1');
 
-      expect(loyaltyService.updateUserLevel).not.toHaveBeenCalled();
-      expect(emailService.sendEsimReady).not.toHaveBeenCalled();
-      expect(prisma.order.update).toHaveBeenNthCalledWith(
-        2,
+      expect(result.status).toBe(OrderStatus.COMPLETED);
+      expect(result.completionAccountingStatus).toBe(CompletionAccountingStatus.FAILED);
+      expect(result.completionAccountingLastError).toBe('referral unavailable');
+      expect(emailService.sendEsimReady).toHaveBeenCalledTimes(1);
+      expect(prisma.order.update).toHaveBeenCalledTimes(1);
+      expect(prisma.order.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'order_1' },
           data: expect.objectContaining({
-            status: OrderStatus.PROCESSING,
-            errorMessage:
-              'Provider issuance succeeded, local finalize failed: referral unavailable',
+            status: OrderStatus.COMPLETED,
+            completionAccountingStatus: CompletionAccountingStatus.PENDING,
           }),
         }),
       );
@@ -1528,7 +1406,22 @@ describe('OrdersService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             OR: expect.arrayContaining([
-              expect.objectContaining({ status: OrderStatus.PROCESSING }),
+              expect.objectContaining({
+                status: {
+                  in: [
+                    OrderStatus.PENDING,
+                    OrderStatus.PAID,
+                    OrderStatus.PROCESSING,
+                    OrderStatus.FAILED,
+                  ],
+                },
+                transactions: {
+                  some: {
+                    type: TransactionType.PAYMENT,
+                    status: TransactionStatus.SUCCEEDED,
+                  },
+                },
+              }),
             ]),
           }),
         }),
@@ -1624,7 +1517,14 @@ describe('OrdersService', () => {
           where: expect.objectContaining({
             OR: expect.arrayContaining([
               {
-                status: OrderStatus.FAILED,
+                status: {
+                  in: [
+                    OrderStatus.PENDING,
+                    OrderStatus.PAID,
+                    OrderStatus.PROCESSING,
+                    OrderStatus.FAILED,
+                  ],
+                },
                 transactions: {
                   some: {
                     type: TransactionType.PAYMENT,

@@ -107,6 +107,13 @@ export class OrdersController {
     return this.ordersService.finalizeReconciledOrder(id);
   }
 
+  @Post(':id/retry-completion-accounting')
+  @UseGuards(JwtAdminGuard)
+  @ApiOperation({ summary: 'Повторить completion accounting без вызова провайдера' })
+  async retryCompletionAccounting(@Param('id') id: string) {
+    return this.ordersService.retryCompletionAccounting(id);
+  }
+
   @Post('quote')
   @UseGuards(JwtUserGuard)
   @ApiOperation({ summary: 'Посчитать актуальную цену заказа без создания order' })

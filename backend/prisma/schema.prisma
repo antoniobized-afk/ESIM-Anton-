@@ -177,6 +177,11 @@ model Order {
   updatedAt            DateTime             @updatedAt
   completedAt          DateTime?
   completionAccountingAppliedAt DateTime?
+  completionAccountingStatus CompletionAccountingStatus @default(NOT_REQUIRED)
+  completionAccountingAttempts Int                  @default(0)
+  completionAccountingLastAttemptAt DateTime?
+  completionAccountingNextRetryAt DateTime?
+  completionAccountingLastError String?
   // Кэш последнего известного использования трафика для активной eSIM (в байтах)
   lastUsageBytes       BigInt?
   // Кэш общего объёма трафика (приходит у провайдера вместе с usage),
@@ -214,6 +219,7 @@ model Order {
   @@index([status])
   @@index([createdAt])
   @@index([parentOrderId])
+  @@index([completionAccountingStatus, completionAccountingNextRetryAt], map: "orders_completion_accounting_retry_idx")
   @@map("orders")
 }
 
@@ -402,6 +408,13 @@ enum OrderStatus {
   FAILED
   REFUNDED
   CANCELLED
+}
+
+enum CompletionAccountingStatus {
+  NOT_REQUIRED
+  PENDING
+  APPLIED
+  FAILED
 }
 
 enum TransactionType {

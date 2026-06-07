@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
+import { OrderCompletionAccountingService } from './order-completion-accounting.service';
 import { ProductsModule } from '../products/products.module';
 import { UsersModule } from '../users/users.module';
 import { EsimProviderModule } from '../esim-provider/esim-provider.module';
@@ -24,7 +25,7 @@ import { LoyaltyModule } from '../loyalty/loyalty.module';
     forwardRef(() => NotificationsModule),
   ],
   controllers: [OrdersController],
-  providers: [OrdersService],
-  exports: [OrdersService],
+  providers: [OrdersService, OrderCompletionAccountingService],
+  exports: [OrdersService, OrderCompletionAccountingService],
 })
 export class OrdersModule {}

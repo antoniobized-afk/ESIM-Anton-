@@ -16,15 +16,17 @@ import { EmailService } from '../notifications/email.service';
 import { PushService } from '../notifications/push.service';
 import { SystemSettingsService } from '../system-settings/system-settings.service';
 import { EsimStatus } from '../esim-provider/esim-status';
-import { ReferralsService } from '../referrals/referrals.service';
-import { PartnerRewardsService } from '../referrals/partner-rewards.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import {
+  OrderCompletionAccountingService,
+  type CompletionAccountingAttemptResult,
+} from './order-completion-accounting.service';
+import {
+  CompletionAccountingStatus,
   OrderStatus,
   Prisma,
   PromoCodeRedemptionSource,
   PromoCodeSource,
-  ReferralPayoutMode,
   RepeatChargeAttemptStatus,
   TransactionStatus,
   TransactionType,
@@ -104,6 +106,7 @@ type ReconciliationCategory =
   | 'pending_paid_recovery'
   | 'webhook_acked_fulfillment_pending'
   | 'stuck_processing'
+  | 'completion_accounting_failed'
   | 'provider_failed_after_card_charge'
   | 'provider_failed_balance_refunded'
   | 'topup_failed_balance_refunded'
@@ -124,24 +127,6 @@ type ReconciliationSnapshot = {
   providerReasonCode: number | null;
   providerMessage: string | null;
   ambiguousReason: string | null;
-};
-
-type PurchaseAccountingOrder = {
-  id: string;
-  userId: string;
-  totalAmount: Prisma.Decimal | number;
-  user: {
-    totalSpent: Prisma.Decimal | number;
-    referralLinkId?: string | null;
-    referredById?: string | null;
-  };
-  promoCodeRedemption?: {
-    promoCodeId: string;
-    source: PromoCodeRedemptionSource;
-    rewardOwnerIdSnapshot: string | null;
-    rewardBonusPercentSnapshot: Prisma.Decimal | number | string | null;
-    rewardPayoutModeSnapshot: ReferralPayoutMode | null;
-  } | null;
 };
 
 type PurchaseFulfillmentNotificationOrder = {
@@ -190,9 +175,8 @@ export class OrdersService {
     private emailService: EmailService,
     private pushService: PushService,
     private systemSettingsService: SystemSettingsService,
-    private referralsService: ReferralsService,
-    private partnerRewardsService: PartnerRewardsService,
     private loyaltyService: LoyaltyService,
+    private completionAccountingService: OrderCompletionAccountingService,
   ) {}
 
   private metadataNumber(value: unknown): number {
@@ -213,6 +197,8 @@ export class OrdersService {
     iccid?: string | null;
     qrCode?: string | null;
     activationCode?: string | null;
+    completionAccountingStatus?: CompletionAccountingStatus | null;
+    completionAccountingLastError?: string | null;
     transactions?: Array<{
       type: TransactionType;
       status: TransactionStatus;
@@ -258,6 +244,26 @@ export class OrdersService {
         providerReasonCode: repeatChargeAttempt.providerReasonCode ?? null,
         providerMessage: repeatChargeAttempt.providerMessage ?? null,
         ambiguousReason: repeatChargeAttempt.ambiguousReason ?? null,
+      };
+    }
+
+    if (
+      order.status === OrderStatus.COMPLETED &&
+      order.completionAccountingStatus === CompletionAccountingStatus.FAILED
+    ) {
+      return {
+        needsAttention: true,
+        category: 'completion_accounting_failed',
+        refunded: false,
+        paymentProvider: paymentTx?.paymentProvider ?? null,
+        paymentMethod: paymentTx?.paymentMethod ?? null,
+        paymentAmount: paymentTx ? Number(paymentTx.amount) : null,
+        lastError: order.completionAccountingLastError ?? order.errorMessage ?? null,
+        repeatChargeAttemptId: repeatChargeAttempt?.id ?? null,
+        repeatChargeAttemptStatus: repeatChargeAttempt?.status ?? null,
+        providerReasonCode: repeatChargeAttempt?.providerReasonCode ?? null,
+        providerMessage: repeatChargeAttempt?.providerMessage ?? null,
+        ambiguousReason: repeatChargeAttempt?.ambiguousReason ?? null,
       };
     }
 
@@ -1458,6 +1464,9 @@ export class OrdersService {
           {
             providerOrderId: order.providerOrderId ?? undefined,
             providerResponse: order.providerResponse ?? undefined,
+            completionAccountingStatus: CompletionAccountingStatus.NOT_REQUIRED,
+            completionAccountingNextRetryAt: null,
+            completionAccountingLastError: null,
             errorMessage: null,
           },
           tx,
@@ -1479,9 +1488,8 @@ export class OrdersService {
       return completedOrder;
     }
 
-    const accountingOrder = await this.loadPurchaseAccountingOrder(orderId);
     const completedOrder = await this.prisma.$transaction(async (tx) => {
-      const completedOrder = await this.markOrderCompleted(
+      return this.markOrderCompleted(
         order.id,
         {
           qrCode: order.qrCode ?? undefined,
@@ -1490,16 +1498,18 @@ export class OrdersService {
           providerOrderId: order.providerOrderId ?? undefined,
           providerResponse: order.providerResponse ?? undefined,
           smdpAddress: order.smdpAddress ?? undefined,
+          completionAccountingStatus: CompletionAccountingStatus.PENDING,
+          completionAccountingNextRetryAt: null,
+          completionAccountingLastError: null,
           errorMessage: null,
         },
         tx,
       );
-      await this.applyPurchaseCompletionEffects(accountingOrder, tx);
-      return completedOrder;
     });
 
     await this.sendPurchaseFulfillmentNotifications(order);
-    return completedOrder;
+    const accountingResult = await this.runPurchaseCompletionAccounting(orderId);
+    return this.withCompletionAccountingResult(completedOrder, accountingResult);
   }
 
   async finalizeProviderIssuedProcessingOrder(orderId: string) {
@@ -1545,205 +1555,36 @@ export class OrdersService {
     };
   }
 
-  private async applyPurchaseCompletionEffects(
-    order: PurchaseAccountingOrder,
-    client?: Prisma.TransactionClient | PrismaService,
-  ) {
-    // ── Pre-fetch read-only data OUTSIDE the transaction ──
-    // Prisma interactive tx holds a connection from the pool.
-    // Queries via this.prisma inside the tx need ANOTHER connection.
-    // On Railway (small pool) this causes connection pool deadlock.
-    const currentLoyaltyLevel = await this.getEffectiveLoyaltyLevel(
-      Number(order.user.totalSpent),
-    );
-
-    const manualPartnerPromoReward = this.resolveManualPartnerPromoReward(order);
-    const manualPartnerPromoBlocksReferral = Boolean(
-      order.promoCodeRedemption?.source === PromoCodeRedemptionSource.MANUAL &&
-        order.promoCodeRedemption.rewardOwnerIdSnapshot,
-    );
-
-    let referralContext: {
-      settings: { enabled: boolean; bonusPercent: number; minPayout: number };
-      referralLink: { id: string; bonusPercent: any; payoutMode: any } | null;
-    } | null = null;
-
-    if (!manualPartnerPromoBlocksReferral && order.user.referredById) {
-      const [settings, referralLink] = await Promise.all([
-        this.systemSettingsService.getReferralSettings(),
-        order.user.referralLinkId
-          ? this.prisma.referralLink.findUnique({
-              where: { id: order.user.referralLinkId },
-              select: { id: true, bonusPercent: true, payoutMode: true },
-            })
-          : Promise.resolve(null),
-      ]);
-      referralContext = { settings, referralLink };
-    }
-
-    // ── Transaction: only tx-bound writes ──
-    const run = async (tx: Prisma.TransactionClient | PrismaService) => {
-      const claimed = await tx.order.updateMany({
-        where: {
-          id: order.id,
-          status: OrderStatus.COMPLETED,
-          completionAccountingAppliedAt: null,
-        },
-        data: {
-          completionAccountingAppliedAt: new Date(),
-        },
-      });
-
-      if (claimed.count !== 1) {
-        return false;
-      }
-
-      if (currentLoyaltyLevel) {
-        const cashback =
-          (Number(order.totalAmount) * Number(currentLoyaltyLevel.cashbackPercent)) / 100;
-
-        if (cashback > 0) {
-          await tx.user.update({
-            where: { id: order.userId },
-            data: {
-              bonusBalance: { increment: cashback },
-            },
-          });
-
-          await tx.transaction.create({
-            data: {
-              userId: order.userId,
-              orderId: order.id,
-              type: TransactionType.BONUS_ACCRUAL,
-              status: TransactionStatus.SUCCEEDED,
-              amount: new Prisma.Decimal(cashback),
-              metadata: {
-                source: 'loyalty_cashback',
-                cashbackPercent: Number(currentLoyaltyLevel.cashbackPercent),
-              },
-            },
-          });
-        }
-      }
-
-      await tx.user.update({
-        where: { id: order.userId },
-        data: { totalSpent: { increment: order.totalAmount } },
-      });
-
-      if (manualPartnerPromoReward) {
-        await this.partnerRewardsService.award({
-          ownerId: manualPartnerPromoReward.ownerId,
-          orderAmount: Number(order.totalAmount),
-          orderId: order.id,
-          source: {
-            kind: 'partner_promo_code',
-            promoCodeId: manualPartnerPromoReward.promoCodeId,
-            bonusPercent: manualPartnerPromoReward.bonusPercent,
-            payoutMode: manualPartnerPromoReward.payoutMode,
-          },
-          client: tx,
-        });
-      } else if (
-        !manualPartnerPromoBlocksReferral &&
-        order.user.referredById &&
-        referralContext
-      ) {
-        await this.referralsService.awardReferralBonus(
-          order.user.referredById,
-          Number(order.totalAmount),
-          order.id,
-          order.user.referralLinkId ?? null,
-          tx,
-          referralContext,
-        );
-      }
-
-      return true;
-    };
-
-    const accountingApplied = client
-      ? await run(client)
-      : await this.prisma.$transaction(async (tx) => run(tx));
-
-    if (!accountingApplied) {
-      return { applied: false };
-    }
-
-    try {
-      await this.loyaltyService.updateUserLevel(order.userId);
-    } catch (error: any) {
-      this.logger.error(
-        `Loyalty level recalculation failed for order ${order.id}: ${error.message}`,
-      );
-    }
-
-    return { applied: true };
+  async retryCompletionAccounting(orderId: string) {
+    return this.completionAccountingService.retryPurchaseAccounting(orderId);
   }
 
-  private resolveManualPartnerPromoReward(order: PurchaseAccountingOrder) {
-    const redemption = order.promoCodeRedemption;
-
-    if (
-      !redemption ||
-      redemption.source !== PromoCodeRedemptionSource.MANUAL ||
-      !redemption.rewardOwnerIdSnapshot
-    ) {
-      return null;
-    }
-
-    if (redemption.rewardOwnerIdSnapshot === order.userId) {
-      return null;
-    }
-
-    if (
-      !redemption.rewardBonusPercentSnapshot ||
-      !redemption.rewardPayoutModeSnapshot
-    ) {
-      throw new BadRequestException(
-        'Партнёрский промокод имеет неполный reward snapshot',
-      );
-    }
+  private withCompletionAccountingResult<
+    T extends {
+      completionAccountingStatus?: CompletionAccountingStatus | null;
+      completionAccountingLastError?: string | null;
+    },
+  >(order: T, result: CompletionAccountingAttemptResult | null): T {
+    if (!result) return order;
 
     return {
-      ownerId: redemption.rewardOwnerIdSnapshot,
-      promoCodeId: redemption.promoCodeId,
-      bonusPercent: redemption.rewardBonusPercentSnapshot,
-      payoutMode: redemption.rewardPayoutModeSnapshot,
+      ...order,
+      completionAccountingStatus: result.status,
+      completionAccountingLastError: result.error ?? null,
     };
   }
 
-  private async loadPurchaseAccountingOrder(orderId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      select: {
-        id: true,
-        userId: true,
-        totalAmount: true,
-        user: {
-          select: {
-            totalSpent: true,
-            referralLinkId: true,
-            referredById: true,
-          },
-        },
-        promoCodeRedemption: {
-          select: {
-            promoCodeId: true,
-            source: true,
-            rewardOwnerIdSnapshot: true,
-            rewardBonusPercentSnapshot: true,
-            rewardPayoutModeSnapshot: true,
-          },
-        },
-      },
-    });
-
-    if (!order) {
-      throw new BadRequestException('Заказ не найден');
+  private async runPurchaseCompletionAccounting(
+    orderId: string,
+  ): Promise<CompletionAccountingAttemptResult | null> {
+    try {
+      return await this.completionAccountingService.attemptPurchaseAccounting(orderId, { force: true });
+    } catch (error: any) {
+      this.logger.error(
+        `Completion accounting trigger failed for order ${orderId}: ${error.message}`,
+      );
+      return null;
     }
-
-    return order;
   }
 
   /**
@@ -1870,8 +1711,6 @@ export class OrdersService {
       return this.fulfillTopupOrder(order as any);
     }
 
-    const accountingOrder = await this.loadPurchaseAccountingOrder(orderId);
-
     try {
       const esimData = await this.esimProviderService.purchaseEsim(
         order.product.providerId,
@@ -1885,10 +1724,17 @@ export class OrdersService {
       let updatedOrder;
       try {
         updatedOrder = await this.prisma.$transaction(async (tx) => {
-          const completedOrder = await this.markOrderCompleted(orderId, issuedEsimSnapshot, tx);
-          await this.applyPurchaseCompletionEffects(accountingOrder, tx);
-          return completedOrder;
-        }, { timeout: 60_000 });
+          return this.markOrderCompleted(
+            orderId,
+            {
+              ...issuedEsimSnapshot,
+              completionAccountingStatus: CompletionAccountingStatus.PENDING,
+              completionAccountingNextRetryAt: null,
+              completionAccountingLastError: null,
+            },
+            tx,
+          );
+        });
       } catch (error: any) {
         await this.persistProviderIssuedButFinalizeFailed(
           orderId,
@@ -1905,8 +1751,8 @@ export class OrdersService {
         activationCode: esimData.activation_code ?? null,
         smdpAddress: esimData.smdp_address ?? null,
       });
-
-      return updatedOrder;
+      const accountingResult = await this.runPurchaseCompletionAccounting(orderId);
+      return this.withCompletionAccountingResult(updatedOrder, accountingResult);
     } catch (error) {
       if (this.isFulfillmentFinalizeError(error)) {
         throw error;
@@ -2613,6 +2459,9 @@ export class OrdersService {
       const topupSnapshot: Prisma.OrderUpdateInput = {
         providerOrderId: result.orderNo,
         providerResponse: result as any,
+        completionAccountingStatus: CompletionAccountingStatus.NOT_REQUIRED,
+        completionAccountingNextRetryAt: null,
+        completionAccountingLastError: null,
       };
 
       let updated;
@@ -2712,7 +2561,14 @@ export class OrdersService {
         ? {
             OR: [
               {
-                status: OrderStatus.PENDING,
+                status: {
+                  in: [
+                    OrderStatus.PENDING,
+                    OrderStatus.PAID,
+                    OrderStatus.PROCESSING,
+                    OrderStatus.FAILED,
+                  ],
+                },
                 transactions: {
                   some: {
                     type: TransactionType.PAYMENT,
@@ -2721,25 +2577,8 @@ export class OrdersService {
                 },
               },
               {
-                status: OrderStatus.PAID,
-                transactions: {
-                  some: {
-                    type: TransactionType.PAYMENT,
-                    status: TransactionStatus.SUCCEEDED,
-                  },
-                },
-              },
-              {
-                status: OrderStatus.PROCESSING,
-              },
-              {
-                status: OrderStatus.FAILED,
-                transactions: {
-                  some: {
-                    type: TransactionType.PAYMENT,
-                    status: TransactionStatus.SUCCEEDED,
-                  },
-                },
+                status: OrderStatus.COMPLETED,
+                completionAccountingStatus: CompletionAccountingStatus.FAILED,
               },
               {
                 repeatChargeAttempt: {

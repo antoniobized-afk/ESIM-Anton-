@@ -67,6 +67,7 @@ Live runtime eSIM Access оказался менее строгим, чем пр
 - duplicate/replay unsigned callback отклоняется через durable receipt barrier;
 - если enrichment или auto-finalize по `ORDER_STATUS/GOT_RESOURCE` падает, webhook не считается окончательно обработанным и остаётся retryable;
 - purchase flow передаёт локальный `order.id` в eSIM Access `transactionId`, чтобы webhook мог найти заказ даже до сохранения `providerOrderId`.
+- `ORDER_STATUS/GOT_RESOURCE` и admin `Дофинализировать` используют одну короткую completion boundary; purchase accounting запускается после completion отдельно и при ошибке уходит в `completion_accounting_failed`/retry без повторного provider purchase.
 
 ## 6. Итог
 

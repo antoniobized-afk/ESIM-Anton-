@@ -7,6 +7,7 @@ import type {
   AdminPromoCodeStats,
   AdminReferralLink,
   AdminReferralLinkStats,
+  CompletionAccountingRetryResponse,
   ApiMutationResponse,
   AuthLoginResponse,
   AutoUpdateExchangeRateResponse,
@@ -101,6 +102,8 @@ export const ordersApi = {
   recoverPaidPending: (id: string) => api.post<AdminOrder>(`/orders/${id}/recover-paid-pending`),
   fulfillFree: (id: string) => api.post<AdminOrder>(`/orders/${id}/fulfill-free`),
   finalizeReconcile: (id: string) => api.post<AdminOrder>(`/orders/${id}/finalize-reconcile`),
+  retryCompletionAccounting: (id: string) =>
+    api.post<CompletionAccountingRetryResponse>(`/orders/${id}/retry-completion-accounting`),
 }
 
 export const productsApi = {

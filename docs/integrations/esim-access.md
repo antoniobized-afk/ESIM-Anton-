@@ -63,6 +63,7 @@ ESIM_FALLBACK_API_KEY=
 - `CHECK_HEALTH` provider still sends unsigned by design;
 - `ORDER_STATUS` нужен не только как лог: статус `GOT_RESOURCE` используется для дообогащения локального заказа по `providerOrderId` или provider `transactionId`. Purchase flow передаёт в provider `transactionId = Order.id`, чтобы callback можно было связать с локальным заказом даже до сохранения `providerOrderId`.
 - если provider query вернул QR или activation/LPA, локальный `PROCESSING` заказ с successful `PAYMENT` может быть дофинализирован через canonical `OrdersService` без повторного `purchaseEsim()`;
+- после такой дофинализации purchase order становится `COMPLETED`, а cashback/referral/partner accounting запускается отдельно через `completionAccountingStatus`; ошибка accounting не блокирует eSIM и не требует повторной покупки у провайдера;
 - admin Telegram notification по `ORDER_STATUS` должен показывать не только сырой `orderStatus`, но и локальные поля `localAction`, `localOrderId`, `localFinalStatus`, `localReconciliation`;
 - retry policy: если enrichment или auto-finalize по `ORDER_STATUS/GOT_RESOURCE` падает на provider query/runtime error, backend не подтверждает событие окончательно и освобождает replay receipt, чтобы повторная доставка webhook не была потеряна.
 

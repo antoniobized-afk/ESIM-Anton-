@@ -214,9 +214,11 @@ Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `
   - issued snapshot сохраняется на `Order` даже при падении `markOrderCompleted()`;
   - заказ остаётся в `PROCESSING` с reconciliation category `issued_but_finalize_failed` или `topup_issued_but_finalize_failed`;
   - balance purchase / balance top-up не делают refund, если provider side-effect уже подтвердился, но локальная финализация упала.
-- purchase completion accounting для cashback и `totalSpent` теперь one-shot и durable:
+- purchase completion accounting для cashback, `totalSpent` и partner/referral reward теперь one-shot и durable:
+  - короткая completion transaction переводит purchase order в `COMPLETED`, сохраняет issued snapshot и выставляет `completionAccountingStatus = PENDING`;
+  - `OrderCompletionAccountingService` применяет cashback credit, `BONUS_ACCRUAL`, `user.totalSpent` и partner/referral reward отдельным retry-safe boundary;
   - `Order.completionAccountingAppliedAt` служит compare-and-set marker для purchase-only accounting boundary;
-  - cashback credit, `BONUS_ACCRUAL` ledger и `user.totalSpent` применяются внутри одной транзакции;
+  - ошибка accounting пишет `completionAccountingStatus = FAILED` и backoff, но не откатывает `Order.status = COMPLETED`;
   - повторный вход в accounting path после уже выставленного marker становится safe no-op вместо повторного начисления.
 - eSIM Access `ORDER_STATUS/GOT_RESOURCE` теперь закрывает provider-issued partial failure:
   - webhook enrichment сохраняет provider snapshot;
@@ -362,4 +364,5 @@ Runtime smoke:
    - purchase request содержит `transactionId = order.id`;
    - `ORDER_STATUS/GOT_RESOURCE` по provider `orderNo` дообогащает локальный order;
    - `PROCESSING + successful PAYMENT + QR/LPA snapshot` автоматически доходит до `COMPLETED` без повторного provider purchase;
+   - purchase accounting после webhook/admin дофинализации запускается отдельно; failure попадает в `completion_accounting_failed`, а eSIM остаётся выданной;
    - admin Telegram message показывает локальный outcome, а не только сырой provider `orderStatus`.

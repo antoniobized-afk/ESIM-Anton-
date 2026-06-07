@@ -3,6 +3,7 @@ import type { AdminOrder, OrderStatus } from '@/lib/types'
 export const CANCELLABLE = new Set<OrderStatus>(['PENDING', 'FAILED'])
 export const RETRYABLE = new Set<OrderStatus>(['PAID'])
 export const PENDING_PAID_RECOVERY = 'pending_paid_recovery'
+export const COMPLETION_ACCOUNTING_FAILED = 'completion_accounting_failed'
 export const RECONCILE_FINALIZABLE = new Set([
   'issued_but_finalize_failed',
   'topup_issued_but_finalize_failed',
@@ -18,6 +19,7 @@ export const RECONCILIATION_TEXT: Record<string, string> = {
   repeat_charge_ambiguous: 'Неясный итог оплаты картой',
   issued_but_finalize_failed: 'eSIM выдана, нужна финализация',
   topup_issued_but_finalize_failed: 'Top-up выдан, нужна финализация',
+  completion_accounting_failed: 'eSIM выдана, учёт не применился',
 }
 
 export const STATUS_OPTIONS = [
@@ -75,6 +77,9 @@ export function getOrderActionAvailability(order: AdminOrder) {
     canFinalizeReconcile:
       order.status === 'PROCESSING' &&
       RECONCILE_FINALIZABLE.has(order.reconciliation?.category || ''),
+    canRetryCompletionAccounting:
+      order.status === 'COMPLETED' &&
+      order.reconciliation?.category === COMPLETION_ACCOUNTING_FAILED,
     canCancel: CANCELLABLE.has(order.status),
   }
 }

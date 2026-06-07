@@ -197,9 +197,10 @@ Source:
 
 - `GET /api/orders?reconciliation=needs_attention` не даёт 500;
 - новые card orders создаются и доходят до callback path;
-- `GET /api/orders?reconciliation=needs_attention` показывает как минимум `webhook_acked_fulfillment_pending`, `stuck_processing`, `issued_but_finalize_failed`, если такие кейсы есть;
+- `GET /api/orders?reconciliation=needs_attention` показывает как минимум `webhook_acked_fulfillment_pending`, `stuck_processing`, `issued_but_finalize_failed`, `completion_accounting_failed`, если такие кейсы есть;
 - в админке для `PAID` доступен recovery action `Retry fulfillment`;
 - в админке для `PROCESSING` + `issued_but_finalize_failed` доступен recovery action `Дофинализировать` без повторного provider call;
+- в админке для `COMPLETED` + `completion_accounting_failed` доступен recovery action `Повторить учёт` без повторного provider call;
 - в админке есть фильтр `Требуют внимания`, а строка заказа показывает человекочитаемую reconciliation-причину под статусом `В обработке`;
 - новые `ORDER_STATUS/GOT_RESOURCE` уведомления в admin Telegram не ограничиваются сырым provider статусом и показывают локальный outcome;
 - saved-card purchase path не режет обычный widget purchase path;

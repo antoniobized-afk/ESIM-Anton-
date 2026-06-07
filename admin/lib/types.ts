@@ -151,6 +151,11 @@ export interface AdminOrder {
   createdAt: string
   updatedAt?: string
   completedAt?: string | null
+  completionAccountingStatus?: 'NOT_REQUIRED' | 'PENDING' | 'APPLIED' | 'FAILED'
+  completionAccountingAttempts?: number
+  completionAccountingLastAttemptAt?: string | null
+  completionAccountingNextRetryAt?: string | null
+  completionAccountingLastError?: string | null
   esimStatus?: string | null
   activatedAt?: string | null
   expiresAt?: string | null
@@ -159,6 +164,21 @@ export interface AdminOrder {
   user?: AdminUser
   product?: AdminProduct
   reconciliation?: OrderReconciliation
+}
+
+export interface CompletionAccountingRetryResponse {
+  orderId: string
+  status: 'NOT_REQUIRED' | 'PENDING' | 'APPLIED' | 'FAILED'
+  applied: boolean
+  reason:
+    | 'applied'
+    | 'already_applied'
+    | 'failed'
+    | 'not_completed'
+    | 'not_required'
+    | 'not_due'
+    | 'not_claimed'
+  error?: string
 }
 
 export interface DashboardStats {

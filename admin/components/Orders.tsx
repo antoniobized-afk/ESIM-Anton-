@@ -280,6 +280,28 @@ export default function Orders() {
     }
   }
 
+  const handleRetryCompletionAccounting = async (orderId: string) => {
+    const confirmed = await confirmDialog({
+      title: 'Повторить учёт заказа',
+      description: 'Повторить cashback/referral/partner accounting без повторного вызова провайдера?',
+      confirmLabel: 'Повторить учёт',
+    })
+    if (!confirmed) return
+
+    try {
+      await ordersApi.retryCompletionAccounting(orderId)
+      toast.success('Повторный учёт заказа запущен')
+      loadOrders()
+    } catch (error: unknown) {
+      console.error('Ошибка повторного completion accounting:', error)
+      const errorMessage =
+        typeof error === 'object' && error !== null && 'response' in error
+          ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined
+      toast.error(errorMessage || 'Не удалось повторить учёт заказа')
+    }
+  }
+
   const handleExport = async () => {
     try {
       setExporting(true)
@@ -389,6 +411,7 @@ export default function Orders() {
                         onRecoverPaidPending={handleRecoverPaidPending}
                         onFulfillFree={handleFulfillFree}
                         onFinalizeReconcile={handleFinalizeReconcile}
+                        onRetryCompletionAccounting={handleRetryCompletionAccounting}
                         onCancel={handleCancel}
                       />
                     </TableRow>
