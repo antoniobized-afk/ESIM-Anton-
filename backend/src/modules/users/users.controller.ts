@@ -16,6 +16,7 @@ import { OrGuard } from '@/common/auth/or.guard';
 import { ServiceTokenGuard } from '@/common/auth/service-token.guard';
 import { UsersService } from './users.service';
 import { PushService } from '../notifications/push.service';
+import { UserAdminDeletionService } from './user-admin-deletion.service';
 import { UserMergePreflightService } from './user-merge-preflight.service';
 import { FindOrCreateUserDto } from './dto/find-or-create-user.dto';
 import { MergePreflightQueryDto } from './dto/merge-preflight.dto';
@@ -38,6 +39,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly pushService: PushService,
+    private readonly adminDeletionService: UserAdminDeletionService,
     private readonly mergePreflightService: UserMergePreflightService,
   ) {}
 
@@ -100,6 +102,21 @@ export class UsersController {
       ...stats,
       user: serializeUser(stats.user),
     };
+  }
+
+  @Delete('admin/:id')
+  @UseGuards(JwtAdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Удалить пользователя без бизнес-данных' })
+  async deleteUser(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: AuthUser,
+  ) {
+    if (currentUser.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Only SUPER_ADMIN can delete users');
+    }
+
+    return this.adminDeletionService.deleteUser(id);
   }
 
   @Post('find-or-create')

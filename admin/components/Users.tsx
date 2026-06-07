@@ -3,25 +3,37 @@
 import { useCallback, useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { usersApi } from '@/lib/api'
-import { isUnauthorizedError } from '@/lib/auth'
-import type { AdminUser } from '@/lib/types'
+import { getAdminRoleFromToken, isUnauthorizedError } from '@/lib/auth'
+import { getErrorMessage } from '@/lib/errors'
+import type { AdminRole, AdminUser, AdminUserDeleteBlocker } from '@/lib/types'
 import Button from '@/components/ui/Button'
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 import Pagination from '@/components/ui/Pagination'
 import Spinner from '@/components/ui/Spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/Table'
-import { Users as UsersIcon } from 'lucide-react'
+import { useToast } from '@/components/ui/ToastProvider'
+import { Loader2, Trash2, Users as UsersIcon } from 'lucide-react'
 
 export default function Users() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const confirmDialog = useConfirmDialog()
+  const toast = useToast()
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [totalPages, setTotalPages] = useState(1)
   const [error, setError] = useState<string | null>(null)
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
+  const [adminRole, setAdminRole] = useState<AdminRole | null>(null)
 
   const rawPage = Number(searchParams.get('page') || '1')
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1
+  const canDeleteUsers = adminRole === 'SUPER_ADMIN'
+
+  useEffect(() => {
+    setAdminRole(getAdminRoleFromToken())
+  }, [])
 
   const loadUsers = useCallback(async () => {
     try {
@@ -58,6 +70,42 @@ export default function Users() {
     const nextParams = new URLSearchParams(searchParams.toString())
     nextParams.set('page', String(nextPage))
     router.replace(`${pathname}?${nextParams.toString()}`)
+  }
+
+  const userDisplayName = (user: AdminUser) => {
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
+    return fullName || user.username || user.email || `#${user.id.slice(0, 8)}`
+  }
+
+  const deleteErrorMessage = (error: unknown) => {
+    const data = (error as { response?: { data?: { message?: string; blockers?: AdminUserDeleteBlocker[] } } })
+      .response?.data
+    if (data?.blockers?.length) {
+      return `${data.message || 'Удаление заблокировано'} ${data.blockers.map((item) => item.message).join(' ')}`
+    }
+    return getErrorMessage(error, 'Не удалось удалить пользователя')
+  }
+
+  const handleDeleteUser = async (user: AdminUser) => {
+    const confirmed = await confirmDialog({
+      title: 'Удаление пользователя',
+      description:
+        `Удалить ${userDisplayName(user)}? Если у пользователя есть заказы, платежи, карты, баланс или партнёрские связи, backend заблокирует удаление.`,
+      confirmLabel: 'Удалить',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+
+    try {
+      setDeletingUserId(user.id)
+      const { data } = await usersApi.delete(user.id)
+      setUsers((current) => current.filter((item) => item.id !== data.deletedUserId))
+      toast.success('Пользователь удален')
+    } catch (e) {
+      toast.error(deleteErrorMessage(e))
+    } finally {
+      setDeletingUserId(null)
+    }
   }
 
   if (loading) {
@@ -109,6 +157,7 @@ export default function Users() {
                   <TableHeaderCell>Потрачено</TableHeaderCell>
                   <TableHeaderCell>Уровень</TableHeaderCell>
                   <TableHeaderCell>Дата</TableHeaderCell>
+                  {canDeleteUsers && <TableHeaderCell className="text-right">Действия</TableHeaderCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -155,6 +204,25 @@ export default function Users() {
                     <TableCell className="text-sm text-slate-600">
                       {new Date(user.createdAt).toLocaleDateString('ru-RU')}
                     </TableCell>
+                    {canDeleteUsers && (
+                      <TableCell className="text-right">
+                        <Button
+                          onClick={() => handleDeleteUser(user)}
+                          variant="ghost"
+                          size="sm"
+                          iconOnly
+                          aria-label="Удалить пользователя"
+                          disabled={Boolean(deletingUserId)}
+                          className="text-slate-500 hover:bg-red-50 hover:text-red-600"
+                        >
+                          {deletingUserId === user.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

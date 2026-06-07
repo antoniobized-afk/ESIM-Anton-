@@ -351,6 +351,11 @@ boundary.
   `GET /users/admin/merge-preflight` пишет `MERGE_PREFLIGHT` audit для source и
   target user с actor/conflict/asset metadata, но не переносит и не обновляет
   business rows.
+- Admin support cleanup добавил обычное удаление пустого duplicate user:
+  `DELETE /users/admin/:id` доступен только `SUPER_ADMIN`, чистит
+  `UserIdentity`, `UserIdentityAudit`, push subscriptions и notifications перед
+  удалением `User`, а при любых business rows или referral/promo attribution
+  возвращает `409`.
 - Дополнительный hardening pass закрыл merge-preflight response privacy gap:
   identity list в admin/support preflight больше не возвращает raw
   `providerSubject`; наружу идут hash/masked preview, а duplicate email details

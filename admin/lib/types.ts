@@ -232,6 +232,20 @@ export interface UserStatsResponse {
   totalSpent: NumericLike
 }
 
+export interface AdminUserDeleteResult {
+  success: true
+  deletedUserId: string
+  deletedIdentityCount: number
+  deletedIdentityAuditCount: number
+  deletedPushSubscriptionCount: number
+  deletedNotificationCount: number
+}
+
+export interface AdminUserDeleteBlocker {
+  code: string
+  message: string
+}
+
 export interface OrdersQueryParams {
   status?: OrderStatus
   reconciliation?: 'needs_attention'

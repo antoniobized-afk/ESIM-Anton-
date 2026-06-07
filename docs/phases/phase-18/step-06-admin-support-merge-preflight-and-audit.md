@@ -97,6 +97,12 @@
   saved cards, referrals, promos, push subscriptions и notifications не
   переносятся и не обновляются. Audit write является security/support trail, а
   не data-moving merge mutation.
+- Добавлен простой `SUPER_ADMIN` delete для пустых duplicate users:
+  `DELETE /users/admin/:id` удаляет `UserIdentity`, `UserIdentityAudit`, push
+  subscriptions, notifications и затем `User` в одной transaction. Если есть
+  заказы, платежи, карты, баланс, реферальная/партнерская атрибуция или другие
+  business rows, endpoint возвращает `409` с причинами. Это не merge и не
+  перенос данных между аккаунтами.
 
 ## Файлы
 
@@ -105,6 +111,7 @@
 - `backend/src/modules/users/user-merge-preflight-assets.service.ts`
 - `backend/src/modules/users/user-merge-preflight-audit.service.ts`
 - `backend/src/modules/users/user-merge-preflight.types.ts`
+- `backend/src/modules/users/user-admin-deletion.service.ts`
 - `backend/src/modules/users/dto/merge-preflight.dto.ts`
 - `backend/src/modules/auth/*`
 - `admin/components/Users.tsx`
@@ -113,10 +120,13 @@
 
 ## Тестирование / Верификация
 
-- `npx jest modules/users/ --runInBand` — passed, 10 tests.
+- `npx jest modules/users/user-admin-deletion.service.spec.ts modules/users/users.controller.spec.ts --runInBand`
+  — passed, 15 tests.
 - `npx jest modules/users/user-merge-preflight.service.spec.ts --runInBand` —
   passed, 3 tests after safe identity response and SRP hardening.
 - `npx tsc --noEmit -p tsconfig.json` в backend — passed.
+- `pnpm --filter admin exec tsc --noEmit -p tsconfig.json` — passed.
+- `npx prisma validate` — passed.
 - Tests доказывают, что preflight пишет `MERGE_PREFLIGHT` audit, но не меняет
   users, identities, orders, transactions и saved cards; отдельная проверка
   доказывает, что `result.identities` не содержит raw `providerSubject`.

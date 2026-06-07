@@ -18,6 +18,9 @@ describe('UsersController', () => {
     subscribe: jest.fn(),
     unsubscribe: jest.fn(),
   };
+  const adminDeletionService = {
+    deleteUser: jest.fn(),
+  };
   const mergePreflightService = {
     preflight: jest.fn(),
   };
@@ -25,6 +28,7 @@ describe('UsersController', () => {
   const controller = new UsersController(
     usersService as any,
     pushService as any,
+    adminDeletionService as any,
     mergePreflightService as any,
   );
 
@@ -72,6 +76,32 @@ describe('UsersController', () => {
       { id: 'admin_1', type: 'admin', role: 'SUPPORT' },
     );
     expect(result).toEqual({ mode: 'read_only_preflight' });
+  });
+
+  it('deleteUser доступен только SUPER_ADMIN и вызывает deletion service', async () => {
+    const guards = Reflect.getMetadata(GUARDS_METADATA, UsersController.prototype.deleteUser);
+    adminDeletionService.deleteUser.mockResolvedValue({
+      success: true,
+      deletedUserId: 'user_1',
+    });
+
+    const result = await controller.deleteUser(
+      'user_1',
+      { id: 'admin_1', type: 'admin', role: 'SUPER_ADMIN' },
+    );
+
+    expect(guards).toEqual([JwtAdminGuard]);
+    expect(adminDeletionService.deleteUser).toHaveBeenCalledWith('user_1');
+    expect(result).toEqual({ success: true, deletedUserId: 'user_1' });
+  });
+
+  it('deleteUser отклоняет non-SUPER_ADMIN', async () => {
+    await expect(
+      controller.deleteUser(
+        'user_1',
+        { id: 'admin_1', type: 'admin', role: 'SUPPORT' },
+      ),
+    ).rejects.toThrow(ForbiddenException);
   });
 
   it('findOne запрещает user доступ к чужому профилю', async () => {

@@ -5,6 +5,7 @@ import type {
   AdminOrder,
   AdminPayment,
   AdminPromoCodeStats,
+  AdminUserDeleteResult,
   AdminReferralLink,
   AdminReferralLinkStats,
   CompletionAccountingRetryResponse,
@@ -90,6 +91,7 @@ export const usersApi = {
     api.get<PaginatedResponse<AdminUser>>(`/users`, { params: { page, limit, search } }),
   getById: (id: string) => api.get<AdminUser>(`/users/${id}`),
   getStats: (id: string) => api.get<UserStatsResponse>(`/users/${id}/stats`),
+  delete: (id: string) => api.delete<AdminUserDeleteResult>(`/users/admin/${id}`),
 }
 
 export const ordersApi = {

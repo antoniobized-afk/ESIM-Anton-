@@ -486,6 +486,11 @@ diagnostic/preflight, а не перенос данных.
 - сервис не переносит business rows. Audit write считается security/support
   trail, а не data-moving merge mutation. Data-moving merge остается
   запрещенным до отдельной утвержденной per-relation policy.
+- Для удаления пустого duplicate user есть отдельный `SUPER_ADMIN` endpoint
+  `DELETE /users/admin/:id`. Это не merge: endpoint только удаляет самого user и
+  его login/notification хвосты (`UserIdentity`, `UserIdentityAudit`, push
+  subscriptions, notifications). Любые orders/payments/cards/balances/referral
+  или promo business links блокируют удаление через `409`.
 
 ## Affected Surfaces
 
