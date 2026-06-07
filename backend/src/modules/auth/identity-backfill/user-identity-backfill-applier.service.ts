@@ -7,23 +7,32 @@ import {
 } from './user-identity-backfill.types';
 import { auditSnapshot, identityMetadata, subjectHash, subjectPreview } from './user-identity-privacy';
 
+const BACKFILL_TRANSACTION_MAX_WAIT_MS = 10_000;
+const BACKFILL_TRANSACTION_TIMEOUT_MS = 60_000;
+
 @Injectable()
 export class UserIdentityBackfillApplier {
   constructor(private readonly prisma: PrismaService) {}
 
   async apply(candidates: IdentityCandidate[]): Promise<UserIdentityBackfillApplyResult> {
-    return this.prisma.$transaction(async (tx) => {
-      let created = 0;
-      let skipped = 0;
+    return this.prisma.$transaction(
+      async (tx) => {
+        let created = 0;
+        let skipped = 0;
 
-      for (const candidate of candidates) {
-        const result = await this.applyCandidate(tx, candidate);
-        created += result.created;
-        skipped += result.skipped;
-      }
+        for (const candidate of candidates) {
+          const result = await this.applyCandidate(tx, candidate);
+          created += result.created;
+          skipped += result.skipped;
+        }
 
-      return { created, skipped };
-    });
+        return { created, skipped };
+      },
+      {
+        maxWait: BACKFILL_TRANSACTION_MAX_WAIT_MS,
+        timeout: BACKFILL_TRANSACTION_TIMEOUT_MS,
+      },
+    );
   }
 
   private async applyCandidate(

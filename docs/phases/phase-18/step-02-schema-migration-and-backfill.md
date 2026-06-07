@@ -165,6 +165,9 @@
   живой контейнер. Нужно либо запускать через Railway CLI из checkout того же
   commit с production env injection, либо добавить отдельный compiled
   maintenance entrypoint и задеплоить его штатно.
+- Backfill apply использует явный Prisma transaction timeout, потому что запуск
+  через public Railway PostgreSQL URL может быть заметно медленнее внутренней
+  backend-сети и не должен падать на default interactive transaction timeout.
 - Backfill не объединяет разные `User` rows и не переносит заказы, баланс,
   saved cards, referrals или promo ownership. Он только создает недостающие
   `UserIdentity` rows для уже существующих legacy login/contact полей.

@@ -282,7 +282,8 @@ blocking `error` issues. CLI parse/report слой вынесен отдельн
 service: unknown args не игнорируются, `--apply` без confirm-флага не
 подключается к БД, stdout отдает operator report с counts/issues без internal
 candidates. `plannedIdentities` в отчете означает pending writes: уже
-существующие identities того же `User` повторно не планируются.
+существующие identities того же `User` повторно не планируются. Apply-транзакция
+имеет явный timeout для production/operator запусков через public DB URL.
 
 Backfill не является пользовательским merge-инструментом. Он не объединяет
 разные `User`, не переносит заказы, баланс, saved cards, referrals, partner

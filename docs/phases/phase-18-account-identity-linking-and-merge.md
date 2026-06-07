@@ -388,6 +388,9 @@ boundary.
   `backend` service env, а не из DB/client/admin/bot контейнеров. Отчет
   backfill теперь считает `plannedIdentities` как pending writes, поэтому
   повторный dry-run после apply должен показывать `counts.plannedIdentities=0`.
+- Production feedback hardening: backfill apply получил явный Prisma transaction
+  timeout, чтобы operator-запуск через public Railway PostgreSQL URL не падал
+  на default interactive transaction timeout.
 
 ## Ссылки
 

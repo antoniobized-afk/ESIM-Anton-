@@ -402,7 +402,7 @@ export class EsimAccessProvider {
    * поэтому при первой проблеме можно смотреть debug-лог полного ответа.
    */
   async getEsimInfo(iccid: string): Promise<any> {
-    this.logger.log(`🔍 Запрос информации об eSIM ${this.maskValue(iccid, 2, 4)}...`);
+    // this.logger.log(`🔍 Запрос информации об eSIM ${this.maskValue(iccid, 2, 4)}...`);
 
     try {
       const queryResponse = await this.client.post('/esim/query', {
