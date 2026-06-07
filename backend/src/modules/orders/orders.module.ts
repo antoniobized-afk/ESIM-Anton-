@@ -14,7 +14,7 @@ import { LoyaltyModule } from '../loyalty/loyalty.module';
 
 @Module({
   imports: [
-    ProductsModule,
+    forwardRef(() => ProductsModule),
     UsersModule,
     forwardRef(() => EsimProviderModule),
     PromoCodesModule,
