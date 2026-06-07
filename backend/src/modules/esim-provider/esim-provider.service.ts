@@ -142,7 +142,7 @@ export class EsimProviderService {
     if (this.esimAccessProvider) {
       try {
         return await this.esimAccessProvider.getPackages(country, dataType);
-      } catch (error) {
+      } catch (error: any) {
         this.logger.error('❌ Ошибка eSIM Access:', error.message);
         throw new BadRequestException('Ошибка получения пакетов: ' + error.message);
       }
@@ -168,7 +168,7 @@ export class EsimProviderService {
       }
 
       return [];
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка и у резервного провайдера:', error.message);
       throw new BadRequestException('Не удалось получить список пакетов от обоих провайдеров');
     }
@@ -321,10 +321,23 @@ export class EsimProviderService {
     return this.esimAccessProvider.topupEsim(iccid, packageCode, transactionId);
   }
 
-  async purchaseEsim(packageId: string, email?: string, periodNum?: number, providerPrice?: number): Promise<EsimGoPurchaseResponse> {
+  async purchaseEsim(
+    packageId: string,
+    email?: string,
+    periodNum?: number,
+    providerPrice?: number,
+    transactionId?: string,
+  ): Promise<EsimGoPurchaseResponse> {
     if (this.esimAccessProvider) {
       try {
-        const result = await this.esimAccessProvider.purchaseEsim(packageId, 1, undefined, periodNum, providerPrice || undefined, email || undefined);
+        const result = await this.esimAccessProvider.purchaseEsim(
+          packageId,
+          1,
+          transactionId,
+          periodNum,
+          providerPrice || undefined,
+          email || undefined,
+        );
         
         const esim = result.esimList?.[0];
         
@@ -337,7 +350,7 @@ export class EsimProviderService {
           smdp_address: esim?.smdpAddress || '',
           status: 'active',
         };
-      } catch (error) {
+      } catch (error: any) {
         this.logger.error('❌ Ошибка eSIM Access:', error.message);
         throw new BadRequestException('Ошибка провайдера eSIM: ' + error.message);
       }
@@ -375,7 +388,7 @@ export class EsimProviderService {
       }
 
       throw new Error('Некорректный ответ от резервного API');
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка покупки и у резервного провайдера:', error.message);
       throw new BadRequestException('Не удалось приобрести eSIM у обоих провайдеров');
     }
@@ -406,7 +419,7 @@ export class EsimProviderService {
       }
 
       throw new Error('Некорректный ответ от API');
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка проверки статуса:', error.message);
 
       // Если ошибка с основным - пробуем резервного
@@ -448,7 +461,7 @@ export class EsimProviderService {
         synced: packages.length,
         errors: 0,
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка синхронизации:', error.message);
       return {
         synced: 0,
@@ -472,7 +485,7 @@ export class EsimProviderService {
       try {
         result.esimAccess = await this.esimAccessProvider.healthCheck();
         this.logger.log(result.esimAccess ? '✅ eSIM Access доступен' : '⚠️ eSIM Access недоступен');
-      } catch (error) {
+      } catch (error: any) {
         result.esimAccess = false;
         this.logger.warn('⚠️ eSIM Access недоступен');
       }
@@ -483,7 +496,7 @@ export class EsimProviderService {
       await this.primaryClient.get('/health', { timeout: 5000 });
       result.primary = true;
       this.logger.log('✅ Основной провайдер доступен');
-    } catch (error) {
+    } catch (error: any) {
       this.logger.warn('⚠️ Основной провайдер недоступен');
     }
 
@@ -493,7 +506,7 @@ export class EsimProviderService {
         await this.fallbackClient.get('/health', { timeout: 5000 });
         result.fallback = true;
         this.logger.log('✅ Резервный провайдер доступен');
-      } catch (error) {
+      } catch (error: any) {
         this.logger.warn('⚠️ Резервный провайдер недоступен');
         result.fallback = false;
       }

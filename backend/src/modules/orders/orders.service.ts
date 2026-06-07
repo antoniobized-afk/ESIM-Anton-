@@ -144,6 +144,25 @@ type PurchaseAccountingOrder = {
   } | null;
 };
 
+type PurchaseFulfillmentNotificationOrder = {
+  id: string;
+  userId: string;
+  totalAmount: Prisma.Decimal | number;
+  qrCode?: string | null;
+  iccid?: string | null;
+  activationCode?: string | null;
+  smdpAddress?: string | null;
+  product?: {
+    name?: string | null;
+    country?: string | null;
+    dataAmount?: string | null;
+  } | null;
+  user?: {
+    telegramId?: bigint | number | string | null;
+    email?: string | null;
+  } | null;
+};
+
 export class FulfillmentFinalizeException extends Error {
   readonly kind = 'fulfillment_finalize_failed';
 
@@ -500,6 +519,93 @@ export class OrdersService {
     this.logReconciliationSignal(persisted, stage);
 
     throw new FulfillmentFinalizeException(message, orderId, stage);
+  }
+
+  private async sendPurchaseFulfillmentNotifications(
+    order: PurchaseFulfillmentNotificationOrder,
+  ) {
+    if (!order.product) {
+      this.logger.warn(`Purchase notifications skipped for ${order.id}: product snapshot is missing`);
+      return;
+    }
+
+    const country = order.product.country ?? order.product.name ?? 'eSIM';
+    const dataAmount = order.product.dataAmount ?? 'eSIM';
+    const esimDetails = {
+      country,
+      dataAmount,
+      iccid: order.iccid ?? undefined,
+      qrCode: order.qrCode ?? undefined,
+      activationCode: order.activationCode ?? undefined,
+      smdpAddress: order.smdpAddress ?? undefined,
+      orderId: order.id,
+    };
+
+    if (order.user?.telegramId) {
+      try {
+        await this.telegramNotification.sendEsimDetails(order.user.telegramId, esimDetails);
+      } catch (e: any) {
+        this.logger.error(`TG notification failed: ${e.message}`);
+      }
+    }
+
+    if (order.user?.email) {
+      try {
+        await this.emailService.sendEsimReady(order.user.email, {
+          orderId: order.id,
+          country,
+          dataAmount,
+          iccid: order.iccid ?? undefined,
+          qrCode: order.qrCode ?? undefined,
+          activationCode: order.activationCode ?? undefined,
+          price: Number(order.totalAmount),
+        });
+        this.logger.log(`✅ Email с eSIM отправлен на ${order.user.email}`);
+      } catch (e: any) {
+        this.logger.error(`Email notification failed: ${e.message}`);
+      }
+    }
+
+    try {
+      await this.pushService.sendPaymentSuccess(order.userId, {
+        orderId: order.id,
+        productName: order.product.name ?? country,
+        country,
+        dataAmount,
+        price: Number(order.totalAmount),
+      });
+    } catch (e: any) {
+      this.logger.error(`Push notification error: ${e.message}`);
+    }
+  }
+
+  private async sendTopupCompletionNotification(order: {
+    id: string;
+    userId: string;
+    user?: { telegramId?: bigint | number | string | null } | null;
+  }) {
+    let telegramId = order.user?.telegramId ?? null;
+    if (!telegramId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: order.userId },
+        select: { telegramId: true },
+      });
+      telegramId = user?.telegramId ?? null;
+    }
+
+    if (!telegramId) return;
+
+    try {
+      await this.telegramNotification.sendTextNotification(
+        telegramId,
+        '✅ <b>Пополнение eSIM выполнено</b>\n\n' +
+          'Свежий объём трафика уже доступен. ' +
+          'Откройте приложение, чтобы посмотреть остаток.',
+        { openMyEsim: true },
+      );
+    } catch (e: any) {
+      this.logger.warn(`Топ-ап уведомление не отправилось: ${e.message}`);
+    }
   }
 
   private isNonBlockingAutoPromoError(error: unknown) {
@@ -1346,7 +1452,7 @@ export class OrdersService {
     }
 
     if (order.parentOrderId) {
-      return this.prisma.$transaction(async (tx) => {
+      const completedOrder = await this.prisma.$transaction(async (tx) => {
         const completedOrder = await this.markOrderCompleted(
           order.id,
           {
@@ -1368,10 +1474,13 @@ export class OrdersService {
 
         return completedOrder;
       });
+
+      await this.sendTopupCompletionNotification(order);
+      return completedOrder;
     }
 
     const accountingOrder = await this.loadPurchaseAccountingOrder(orderId);
-    return this.prisma.$transaction(async (tx) => {
+    const completedOrder = await this.prisma.$transaction(async (tx) => {
       const completedOrder = await this.markOrderCompleted(
         order.id,
         {
@@ -1388,6 +1497,52 @@ export class OrdersService {
       await this.applyPurchaseCompletionEffects(accountingOrder, tx);
       return completedOrder;
     });
+
+    await this.sendPurchaseFulfillmentNotifications(order);
+    return completedOrder;
+  }
+
+  async finalizeProviderIssuedProcessingOrder(orderId: string) {
+    const order = await this.findById(orderId);
+
+    if (!order) {
+      return {
+        finalized: false,
+        orderStatus: null,
+        category: null,
+        reason: 'order_not_found',
+      };
+    }
+
+    const reconciliation = this.deriveReconciliationSnapshot(order);
+    if (order.status !== OrderStatus.PROCESSING) {
+      return {
+        finalized: false,
+        orderStatus: order.status,
+        category: reconciliation.category,
+        reason: 'not_processing',
+      };
+    }
+
+    if (
+      reconciliation.category !== 'issued_but_finalize_failed' &&
+      reconciliation.category !== 'topup_issued_but_finalize_failed'
+    ) {
+      return {
+        finalized: false,
+        orderStatus: order.status,
+        category: reconciliation.category,
+        reason: 'not_provider_issued_snapshot',
+      };
+    }
+
+    const completedOrder = await this.finalizeReconciledOrder(orderId);
+    return {
+      finalized: completedOrder?.status === OrderStatus.COMPLETED,
+      orderStatus: completedOrder?.status ?? null,
+      category: reconciliation.category,
+      reason: 'provider_issued_snapshot_finalized',
+    };
   }
 
   private async applyPurchaseCompletionEffects(
@@ -1723,6 +1878,7 @@ export class OrdersService {
         order.user.email,
         order.periodNum ?? undefined,
         Number(order.product.providerPrice) || undefined,
+        order.id,
       );
       const issuedEsimSnapshot = this.buildIssuedEsimSnapshot(esimData);
 
@@ -1742,55 +1898,13 @@ export class OrdersService {
         );
       }
 
-      // Отправляем уведомления с деталями eSIM
-      const esimDetails = {
-        country: order.product.country,
-        dataAmount: order.product.dataAmount,
-        iccid: esimData.iccid,
-        qrCode: esimData.qr_code,
-        activationCode: esimData.activation_code,
-        smdpAddress: esimData.smdp_address,
-        orderId: order.id,
-      };
-
-      // Telegram — отправляем QR + детали
-      if (order.user.telegramId) {
-        try {
-          await this.telegramNotification.sendEsimDetails(order.user.telegramId, esimDetails);
-        } catch (e: any) {
-          this.logger.error(`TG notification failed: ${e.message}`);
-        }
-      }
-
-      // Email — отправляем если есть адрес
-      if (order.user.email) {
-        try {
-          await this.emailService.sendEsimReady(order.user.email, {
-            orderId: order.id,
-            country: order.product.country,
-            dataAmount: order.product.dataAmount,
-            iccid: esimData.iccid,
-            qrCode: esimData.qr_code,
-            activationCode: esimData.activation_code,
-            price: Number(order.totalAmount),
-          });
-          this.logger.log(`✅ Email с eSIM отправлен на ${order.user.email}`);
-        } catch (e: any) {
-          this.logger.error(`Email notification failed: ${e.message}`);
-        }
-      }
-
-      try {
-        await this.pushService.sendPaymentSuccess(order.userId, {
-          orderId: order.id,
-          productName: order.product.name,
-          country: order.product.country,
-          dataAmount: order.product.dataAmount,
-          price: Number(order.totalAmount),
-        });
-      } catch (e: any) {
-        this.logger.error(`Push notification error: ${e.message}`);
-      }
+      await this.sendPurchaseFulfillmentNotifications({
+        ...order,
+        qrCode: esimData.qr_code ?? null,
+        iccid: esimData.iccid ?? null,
+        activationCode: esimData.activation_code ?? null,
+        smdpAddress: esimData.smdp_address ?? null,
+      });
 
       return updatedOrder;
     } catch (error) {

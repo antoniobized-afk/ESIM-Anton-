@@ -15,7 +15,7 @@ import { LoyaltyModule } from '../loyalty/loyalty.module';
   imports: [
     ProductsModule,
     UsersModule,
-    EsimProviderModule,
+    forwardRef(() => EsimProviderModule),
     PromoCodesModule,
     TelegramModule,
     SystemSettingsModule,

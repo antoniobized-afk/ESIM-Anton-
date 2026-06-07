@@ -231,6 +231,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     prisma,
     usersService,
     esimProviderService,
+    telegramNotification,
     emailService,
     pushService,
     referralsService,
@@ -249,6 +250,8 @@ describe('OrdersService', () => {
         service,
         prisma,
         usersService,
+        esimProviderService,
+        telegramNotification,
         referralsService,
         loyaltyService,
         emailService,
@@ -318,7 +321,16 @@ describe('OrdersService', () => {
       );
       expect(loyaltyService.updateUserLevel).toHaveBeenCalledWith('user_1');
       expect(loyaltyService.getEffectiveLevelForSpent).toHaveBeenCalledWith(10000);
+      expect(esimProviderService.purchaseEsim).toHaveBeenCalledWith(
+        'provider_plan_1',
+        'user@example.com',
+        undefined,
+        10,
+        'order_1',
+      );
+      expect(telegramNotification.sendEsimDetails).not.toHaveBeenCalled();
       expect(emailService.sendEsimReady).toHaveBeenCalledTimes(1);
+      expect(pushService.sendPaymentSuccess).toHaveBeenCalledTimes(1);
       expect(result.status).toBe(OrderStatus.COMPLETED);
     });
 
@@ -538,7 +550,7 @@ describe('OrdersService', () => {
     });
 
     it('admin finalizeReconciledOrder завершает purchase finalize-failure без повторного provider call', async () => {
-      const { service, prisma, esimProviderService } = makeService();
+      const { service, prisma, esimProviderService, emailService, pushService } = makeService();
       prisma.order.findUnique
         .mockResolvedValueOnce(
           makeOrder({
@@ -587,6 +599,19 @@ describe('OrdersService', () => {
       const result = await service.finalizeReconciledOrder('order_1');
 
       expect(esimProviderService.purchaseEsim).not.toHaveBeenCalled();
+      expect(emailService.sendEsimReady).toHaveBeenCalledWith(
+        'user@example.com',
+        expect.objectContaining({
+          orderId: 'order_1',
+          iccid: 'iccid-1',
+          qrCode: 'qr',
+          activationCode: 'act-1',
+        }),
+      );
+      expect(pushService.sendPaymentSuccess).toHaveBeenCalledWith(
+        'user_1',
+        expect.objectContaining({ orderId: 'order_1' }),
+      );
       expect(prisma.order.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'order_1' },

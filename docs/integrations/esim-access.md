@@ -61,8 +61,10 @@ ESIM_FALLBACK_API_KEY=
   - `eventGenerateTime` валиден и укладывается в freshness window (`ESIM_WEBHOOK_UNSIGNED_MAX_AGE_MS`, `ESIM_WEBHOOK_UNSIGNED_FUTURE_SKEW_MS`);
   - событие ещё не встречалось в `esim_webhook_receipts`;
 - `CHECK_HEALTH` provider still sends unsigned by design;
-- `ORDER_STATUS` нужен не только как лог: статус `GOT_RESOURCE` используется для дообогащения локального заказа по `providerOrderId`, если synchronous purchase response не принёс полный профиль.
-- retry policy: если enrichment по `ORDER_STATUS/GOT_RESOURCE` падает на provider query/runtime error, backend не подтверждает событие окончательно и освобождает replay receipt, чтобы повторная доставка webhook не была потеряна.
+- `ORDER_STATUS` нужен не только как лог: статус `GOT_RESOURCE` используется для дообогащения локального заказа по `providerOrderId` или provider `transactionId`. Purchase flow передаёт в provider `transactionId = Order.id`, чтобы callback можно было связать с локальным заказом даже до сохранения `providerOrderId`.
+- если provider query вернул QR или activation/LPA, локальный `PROCESSING` заказ с successful `PAYMENT` может быть дофинализирован через canonical `OrdersService` без повторного `purchaseEsim()`;
+- admin Telegram notification по `ORDER_STATUS` должен показывать не только сырой `orderStatus`, но и локальные поля `localAction`, `localOrderId`, `localFinalStatus`, `localReconciliation`;
+- retry policy: если enrichment или auto-finalize по `ORDER_STATUS/GOT_RESOURCE` падает на provider query/runtime error, backend не подтверждает событие окончательно и освобождает replay receipt, чтобы повторная доставка webhook не была потеряна.
 
 ## Маркеры пакетов и HK-роутинг
 

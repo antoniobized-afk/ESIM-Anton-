@@ -42,7 +42,7 @@
 5. CloudPayments widget получает `invoiceId = order.id` и `amount = order.totalAmount`.
 6. `CloudPaymentsService.checkOrder()` валидирует `InvoiceId` и `Amount`.
 7. Если `check` видит протухшую payment session, backend помечает заказ `CANCELLED` с `Payment session expired` и возвращает CloudPayments код `20`.
-8. `CloudPaymentsService.payOrder()` сначала durable-claim-ит право на переход заказа в `PAID`, пишет `PAYMENT/SUCCEEDED`, и только победитель этого claim-а вызывает `OrdersService.fulfillOrder()`.
+8. `CloudPaymentsService.payOrder()` durable-claim-ит право на переход заказа в `PAID`, пишет `PAYMENT/SUCCEEDED` и быстро отдаёт webhook ack; дальнейшую выдачу забирает server-side pickup worker через `OrdersService.fulfillOrder()`.
 9. Если `pay` пришёл поздно уже после auto-expire, backend может безопасно revive только заказ с marker `Payment session expired`; admin/manual cancelled orders не поднимаются.
 10. `fulfillOrder()` выдаёт eSIM, переводит заказ в `COMPLETED`, затем применяет purchase side effects:
    - finalize bonus hold;
@@ -50,6 +50,12 @@
    - increment `totalSpent`;
    - referral bonus;
    - recalculation `loyaltyLevel`.
+11. Provider purchase request передаёт локальный `order.id` в eSIM Access `transactionId`, чтобы поздний `ORDER_STATUS` webhook мог связать provider order с локальным заказом даже если `providerOrderId` ещё не был сохранён.
+12. `ORDER_STATUS/GOT_RESOURCE` больше не является только логом:
+   - webhook ищет локальный заказ по `providerOrderId` или `transactionId`;
+   - при необходимости запрашивает provider profile через query и сохраняет `providerOrderId`, ICCID, QR/LPA/SMDP и `providerResponse`;
+   - если локальный заказ находится в `PROCESSING`, уже имеет successful `PAYMENT` и provider query вернул QR или activation/LPA, он дофинализируется через canonical `OrdersService` completion path без повторного `purchaseEsim()`;
+   - после auto/manual finalize пользователь снова получает eSIM details notification, а admin webhook notification показывает local action/status/reconciliation.
 
 ### 1A. Purchase by saved card token
 
@@ -182,6 +188,7 @@ Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `
 - Repeat charge по saved card теперь обязан иметь один durable attempt на order; `IN_PROGRESS` и `AMBIGUOUS` attempt запрещают второй provider charge на тот же `orderId`.
 - Обычный CloudPayments widget `pay` callback тоже не должен иметь second-fulfill window: только один callback может durable-claim-ить переход заказа в `PAID`, после чего canonical pickup worker забирает его в `fulfillOrder()`.
 - После успешного provider issuance локальная ошибка финализации больше не должна откатывать заказ в обычный `FAILED` или запускать refund-компенсацию как будто provider side-effect не случился. Такой кейс обязан оставлять durable reconciliation state без повторного `purchaseEsim()` / `topupEsim()`.
+- `ORDER_STATUS/GOT_RESOURCE` от eSIM Access означает provider-side resource readiness, а не локальный `COMPLETED`. Локальная завершённость определяется только `Order.status`, но webhook может безопасно довести `PROCESSING + successful PAYMENT + installable provider snapshot` до `COMPLETED` через `finalizeProviderIssuedProcessingOrder()`.
 
 ## Confirmed Risks / Remaining Gaps
 
@@ -211,6 +218,11 @@ Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `
   - `Order.completionAccountingAppliedAt` служит compare-and-set marker для purchase-only accounting boundary;
   - cashback credit, `BONUS_ACCRUAL` ledger и `user.totalSpent` применяются внутри одной транзакции;
   - повторный вход в accounting path после уже выставленного marker становится safe no-op вместо повторного начисления.
+- eSIM Access `ORDER_STATUS/GOT_RESOURCE` теперь закрывает provider-issued partial failure:
+  - webhook enrichment сохраняет provider snapshot;
+  - auto-finalize использует тот же `OrdersService.finalizeReconciledOrder()` boundary, что и admin action, но только когда profile содержит QR или activation/LPA;
+  - ручная и webhook-дoфинализация отправляют клиенту eSIM/top-up уведомления после успешного локального completion;
+  - admin Telegram notification содержит `orderStatusMeaning`, `transactionId`, `localOrderId`, `localAction`, `localFinalStatus`, `localReconciliation`.
 
 ## Enterprise Refactor Baseline
 
@@ -346,3 +358,8 @@ Runtime smoke:
    - repeat charge success доводит order до `COMPLETED`;
    - token fail закрывает first order и создаёт fresh widget fallback order;
    - top-up и balance-topup не получают tokenized path раньше отдельной follow-up фазы.
+7. eSIM Access webhook recovery:
+   - purchase request содержит `transactionId = order.id`;
+   - `ORDER_STATUS/GOT_RESOURCE` по provider `orderNo` дообогащает локальный order;
+   - `PROCESSING + successful PAYMENT + QR/LPA snapshot` автоматически доходит до `COMPLETED` без повторного provider purchase;
+   - admin Telegram message показывает локальный outcome, а не только сырой provider `orderStatus`.

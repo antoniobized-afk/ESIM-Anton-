@@ -41,6 +41,7 @@
 - 3DS user path;
 - balance purchase end-to-end;
 - top-up card end-to-end;
+- eSIM Access `ORDER_STATUS/GOT_RESOURCE` callback delivery and auto-finalize recovery;
 - Robokassa compatibility smoke, пока path остаётся активным.
 
 ## Pre-deploy
@@ -55,6 +56,7 @@
 - terminal-side tokenization / card-save option реально включены в CloudPayments Back Office;
 - Robokassa credentials не сломаны, если path всё ещё поддерживается;
 - support понимает policy `Payment session expired` и умеет читать reconciliation signals.
+- support понимает, что provider `GOT_RESOURCE` означает readiness у eSIM Access, а локальный outcome нужно смотреть по `localAction/localFinalStatus/localReconciliation` в admin Telegram notification и по `Order.status`.
 
 ## CloudPayments Test Mode
 
@@ -172,7 +174,16 @@ Source:
   - при provider success top-up завершён;
   - при provider fail баланс возвращается.
 
-### 8. Robokassa compatibility
+### 8. eSIM Access ORDER_STATUS recovery
+
+- На staging/test provider-событии или контролируемом live order проверить:
+  - purchase request у провайдера содержит `transactionId = order.id`;
+  - `ORDER_STATUS/GOT_RESOURCE` дообогащает локальный order по `providerOrderId` или `transactionId`;
+  - `PROCESSING + issued snapshot + successful PAYMENT` доходит до `COMPLETED` без повторного `purchaseEsim()`;
+  - пользователь получает eSIM details notification после auto/manual finalize;
+  - admin Telegram message показывает `orderStatusMeaning`, `localOrderId`, `localAction`, `localFinalStatus`, `localReconciliation`.
+
+### 9. Robokassa compatibility
 
 - Минимум один smoke:
   - создание Robokassa payment для order;
@@ -189,6 +200,8 @@ Source:
 - `GET /api/orders?reconciliation=needs_attention` показывает как минимум `webhook_acked_fulfillment_pending`, `stuck_processing`, `issued_but_finalize_failed`, если такие кейсы есть;
 - в админке для `PAID` доступен recovery action `Retry fulfillment`;
 - в админке для `PROCESSING` + `issued_but_finalize_failed` доступен recovery action `Дофинализировать` без повторного provider call;
+- в админке есть фильтр `Требуют внимания`, а строка заказа показывает человекочитаемую reconciliation-причину под статусом `В обработке`;
+- новые `ORDER_STATUS/GOT_RESOURCE` уведомления в admin Telegram не ограничиваются сырым provider статусом и показывают локальный outcome;
 - saved-card purchase path не режет обычный widget purchase path;
 - support/admin видят корректный `paymentMethod` и финансовые поля;
 - нет всплеска `Payment session expired` для свежих заказов;

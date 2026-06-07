@@ -94,6 +94,8 @@ export class TrafficMonitorService {
 
     let checked = 0;
     let lowDetected = 0;
+    const now = new Date();
+    const cooldownMs = this.NOTIFY_COOLDOWN_HOURS * 60 * 60 * 1000;
 
     type LowItem = {
       orderId: string;
@@ -149,11 +151,16 @@ export class TrafficMonitorService {
         if (!isLow) continue;
 
         if (order.lowTrafficNotifiedAt) {
-          // this.logger.log(
-          //   `⏸️ ${order.id.slice(-6)}: low=${remainingPercent.toFixed(1)}%, уже уведомляли ранее (без спама)`,
-          // );
-          lowDetected++;
-          continue;
+          const notifiedAt = new Date(order.lowTrafficNotifiedAt).getTime();
+          const cooldownActive = Number.isFinite(notifiedAt) &&
+            now.getTime() - notifiedAt < cooldownMs;
+          if (cooldownActive) {
+            // this.logger.log(
+            //   `⏸️ ${order.id.slice(-6)}: low=${remainingPercent.toFixed(1)}%, cooldown ещё активен`,
+            // );
+            lowDetected++;
+            continue;
+          }
         }
 
         if (!order.user?.telegramId) {
@@ -197,7 +204,7 @@ export class TrafficMonitorService {
 
         await this.prisma.order.updateMany({
           where: { id: { in: orderIds } },
-          data: { lowTrafficNotifiedAt: new Date() },
+          data: { lowTrafficNotifiedAt: now },
         });
         this.logger.log(`📨 Уведомление о низком трафике отправлено пользователю ${telegramId} (заказов: ${orderIds.length})`);
         notified++;

@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { OrderStatus } from '@prisma/client';
 import { EsimProviderService } from './esim-provider.service';
+import { OrdersService } from '../orders/orders.service';
 
 /**
  * Payload, приходящий от eSIM Access на наш webhook endpoint.
@@ -36,6 +37,18 @@ export interface EsimWebhookPayload {
   };
 }
 
+type OrderStatusWebhookResult = {
+  localAction: string;
+  localOrderId?: string;
+  localOrderStatus?: string | null;
+  localFinalStatus?: string | null;
+  localReconciliation?: string | null;
+  profileFound?: boolean;
+  autoFinalized?: boolean;
+  ignoredReason?: string;
+  error?: string;
+};
+
 @Injectable()
 export class EsimWebhookService {
   private readonly logger = new Logger(EsimWebhookService.name);
@@ -44,6 +57,8 @@ export class EsimWebhookService {
     private prisma: PrismaService,
     private telegramNotification: TelegramNotificationService,
     private esimProviderService: EsimProviderService,
+    @Inject(forwardRef(() => OrdersService))
+    private ordersService: OrdersService,
   ) {}
 
   /**
@@ -59,20 +74,22 @@ export class EsimWebhookService {
       return;
     }
 
-    // Уведомляем админа о каждом входящем вебхуке (fire-and-forget)
-    this.telegramNotification.notifyAdmin(`📨 Webhook: ${notifyType}`, {
-      iccid: content?.iccid,
-      orderNo: content?.orderNo,
-      ...this.extractWebhookDetails(notifyType, content),
-      notifyId: payload.notifyId,
-      time: payload.eventGenerateTime,
-    }).catch(() => {});
-
     switch (notifyType) {
-      case 'ORDER_STATUS':
-        await this.handleOrderStatus(content);
+      case 'ORDER_STATUS': {
+        try {
+          const result = await this.handleOrderStatus(content);
+          this.notifyAdminWebhook(payload, result);
+        } catch (error: any) {
+          this.notifyAdminWebhook(payload, {
+            localAction: 'error',
+            error: error?.message ?? 'unknown error',
+          });
+          throw error;
+        }
         break;
+      }
       case 'DATA_USAGE':
+        this.notifyAdminWebhook(payload);
         if (!content?.iccid) {
           this.logger.warn('DATA_USAGE webhook без ICCID, пропускаем');
           return;
@@ -84,6 +101,7 @@ export class EsimWebhookService {
         await this.handleDataUsage(content);
         break;
       case 'VALIDITY_USAGE':
+        this.notifyAdminWebhook(payload);
         if (!content?.iccid) {
           this.logger.warn('VALIDITY_USAGE webhook без ICCID, пропускаем');
           return;
@@ -95,6 +113,7 @@ export class EsimWebhookService {
         await this.handleValidityUsage(content);
         break;
       case 'ESIM_STATUS':
+        this.notifyAdminWebhook(payload);
         if (!content?.iccid) {
           this.logger.warn('ESIM_STATUS webhook без ICCID, пропускаем');
           return;
@@ -106,8 +125,26 @@ export class EsimWebhookService {
         await this.handleEsimStatus(content);
         break;
       default:
+        this.notifyAdminWebhook(payload);
         this.logger.warn(`Неизвестный тип webhook: ${notifyType}`);
     }
+  }
+
+  private notifyAdminWebhook(
+    payload: EsimWebhookPayload,
+    localDetails: Record<string, unknown> = {},
+  ) {
+    const { notifyType, content } = payload;
+
+    this.telegramNotification.notifyAdmin(`📨 Webhook: ${notifyType}`, {
+      iccid: content?.iccid,
+      orderNo: content?.orderNo,
+      transactionId: content?.transactionId,
+      ...this.extractWebhookDetails(notifyType, content),
+      ...localDetails,
+      notifyId: payload.notifyId,
+      time: payload.eventGenerateTime,
+    }).catch(() => {});
   }
 
   /**
@@ -119,35 +156,57 @@ export class EsimWebhookService {
    * - `GOT_RESOURCE` — сигнал сходить в provider query и попытаться получить
    *   ICCID / QR / activation code / SMDP.
    */
-  private async handleOrderStatus(content: EsimWebhookPayload['content']) {
+  private async handleOrderStatus(
+    content: EsimWebhookPayload['content'],
+  ): Promise<OrderStatusWebhookResult> {
     this.logger.log(`📨 ORDER_STATUS: orderNo=${content.orderNo}, status=${content.orderStatus}`);
 
     if (!content.orderNo) {
       this.logger.warn('ORDER_STATUS webhook без orderNo, пропускаем');
-      return;
+      return {
+        localAction: 'ignored',
+        ignoredReason: 'missing_orderNo',
+      };
     }
 
     if (content.orderStatus !== 'GOT_RESOURCE') {
-      return;
+      return {
+        localAction: 'ignored',
+        ignoredReason: 'non_got_resource_status',
+      };
     }
+
+    const localOrderLookup = [
+      { providerOrderId: content.orderNo },
+      ...(content.transactionId ? [{ id: content.transactionId }] : []),
+    ];
 
     const localOrder = await this.prisma.order.findFirst({
       where: {
-        providerOrderId: content.orderNo,
+        OR: localOrderLookup,
       },
       select: {
         id: true,
+        status: true,
         iccid: true,
         qrCode: true,
         activationCode: true,
         smdpAddress: true,
+        providerOrderId: true,
       },
       orderBy: { createdAt: 'desc' },
     });
 
     if (!localOrder) {
-      this.logger.warn(`ORDER_STATUS: локальный заказ с providerOrderId=${content.orderNo} не найден`);
-      return;
+      this.logger.warn(
+        `ORDER_STATUS: локальный заказ с providerOrderId=${content.orderNo}` +
+          (content.transactionId ? ` или transactionId=${content.transactionId}` : '') +
+          ' не найден',
+      );
+      return {
+        localAction: 'local_order_not_found',
+        profileFound: false,
+      };
     }
 
     if (
@@ -157,7 +216,17 @@ export class EsimWebhookService {
       localOrder.smdpAddress
     ) {
       this.logger.log(`ORDER_STATUS: локальный заказ ${localOrder.id} уже обогащён, query не нужен`);
-      return;
+      const recovery = await this.ordersService.finalizeProviderIssuedProcessingOrder(localOrder.id);
+      return {
+        localAction: recovery.finalized ? 'auto_finalized' : 'already_enriched',
+        localOrderId: localOrder.id,
+        localOrderStatus: localOrder.status,
+        localFinalStatus: recovery.orderStatus,
+        localReconciliation: recovery.category,
+        autoFinalized: recovery.finalized,
+        profileFound: true,
+        ignoredReason: recovery.finalized ? undefined : recovery.reason,
+      };
     }
 
     try {
@@ -168,12 +237,18 @@ export class EsimWebhookService {
         this.logger.warn(
           `ORDER_STATUS: provider query по ${content.orderNo} не вернул профиль для локального заказа ${localOrder.id}`,
         );
-        return;
+        return {
+          localAction: 'provider_profile_missing',
+          localOrderId: localOrder.id,
+          localOrderStatus: localOrder.status,
+          profileFound: false,
+        };
       }
 
       await this.prisma.order.update({
         where: { id: localOrder.id },
         data: {
+          providerOrderId: content.orderNo,
           ...(profile.iccid ? { iccid: profile.iccid } : {}),
           ...(profile.qrCode ? { qrCode: profile.qrCode } : {}),
           ...(profile.activationCode ? { activationCode: profile.activationCode } : {}),
@@ -185,6 +260,29 @@ export class EsimWebhookService {
       this.logger.log(
         `ORDER_STATUS: локальный заказ ${localOrder.id} дообогащён по provider order ${content.orderNo}`,
       );
+
+      const hasInstallableProfile = Boolean(profile.qrCode || profile.activationCode);
+      if (!hasInstallableProfile) {
+        return {
+          localAction: 'profile_enriched',
+          localOrderId: localOrder.id,
+          localOrderStatus: localOrder.status,
+          profileFound: true,
+          ignoredReason: 'profile_without_installation_data',
+        };
+      }
+
+      const recovery = await this.ordersService.finalizeProviderIssuedProcessingOrder(localOrder.id);
+      return {
+        localAction: recovery.finalized ? 'auto_finalized' : 'profile_enriched',
+        localOrderId: localOrder.id,
+        localOrderStatus: localOrder.status,
+        localFinalStatus: recovery.orderStatus,
+        localReconciliation: recovery.category,
+        autoFinalized: recovery.finalized,
+        profileFound: true,
+        ignoredReason: recovery.finalized ? undefined : recovery.reason,
+      };
     } catch (error: any) {
       this.logger.warn(
         `ORDER_STATUS: provider query по ${content.orderNo} завершился ошибкой: ${error.message}`,
@@ -434,9 +532,21 @@ export class EsimWebhookService {
       case 'ESIM_STATUS':
         return { esimStatus: content.esimStatus, smdpStatus: content.smdpStatus };
       case 'ORDER_STATUS':
-        return { orderStatus: content.orderStatus };
+        return {
+          orderStatus: content.orderStatus,
+          orderStatusMeaning: this.describeOrderStatus(content.orderStatus),
+        };
       default:
         return {};
+    }
+  }
+
+  private describeOrderStatus(status: unknown): string {
+    switch (String(status ?? '').trim().toUpperCase()) {
+      case 'GOT_RESOURCE':
+        return 'Провайдер выделил eSIM ресурс; профиль можно получить через query и локально финализировать заказ';
+      default:
+        return 'Сервисный статус заказа у провайдера, не равен локальному статусу оплаты или завершения';
     }
   }
 }

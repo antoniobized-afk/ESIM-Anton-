@@ -11,52 +11,16 @@ import Pagination from '@/components/ui/Pagination'
 import Spinner from '@/components/ui/Spinner'
 import { SortableHeader, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/Table'
 import { useToast } from '@/components/ui/ToastProvider'
-import { Package, Download } from 'lucide-react'
+import { Package } from 'lucide-react'
+import OrderActionsCell from '@/components/orders/OrderActionsCell'
+import OrderPriceCell from '@/components/orders/OrderPriceCell'
+import OrderStatusCell from '@/components/orders/OrderStatusCell'
+import OrdersToolbar from '@/components/orders/OrdersToolbar'
+import { STATUS_OPTIONS, STATUS_TEXT } from '@/components/orders/orders.constants'
 
 // -- Helpers ----------------------------------------------------------
 
-const fmtPrice = (v: unknown): string =>
-  `₽${Number(v || 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}`
-
-const hasDiscount = (order: AdminOrder): boolean =>
-  Number(order.promoDiscount || 0) > 0 ||
-  Number(order.discount || 0) > 0 ||
-  Number(order.bonusUsed || 0) > 0
-
-const CANCELLABLE = new Set<OrderStatus>(['PENDING', 'FAILED'])
-const RETRYABLE = new Set<OrderStatus>(['PAID'])
-const PENDING_PAID_RECOVERY = 'pending_paid_recovery'
-const RECONCILE_FINALIZABLE = new Set([
-  'issued_but_finalize_failed',
-  'topup_issued_but_finalize_failed',
-])
-
 type SortField = 'createdAt' | 'totalAmount' | 'productPrice' | 'status'
-
-const STATUS_OPTIONS = [
-  { value: '', label: 'Все статусы' },
-  { value: 'PENDING', label: 'Ожидает оплаты' },
-  { value: 'PAID', label: 'Оплачен' },
-  { value: 'PROCESSING', label: 'В обработке' },
-  { value: 'COMPLETED', label: 'Выполнен' },
-  { value: 'FAILED', label: 'Ошибка' },
-  { value: 'CANCELLED', label: 'Отменен' },
-  { value: 'REFUNDED', label: 'Возврат' },
-] as const
-
-const STATUS_TEXT: Record<string, string> = Object.fromEntries(
-  STATUS_OPTIONS.filter(o => o.value).map(o => [o.value, o.label]),
-)
-
-const STATUS_COLOR: Record<string, string> = {
-  COMPLETED: 'bg-green-100 text-green-700',
-  PAID: 'bg-blue-100 text-blue-700',
-  PENDING: 'bg-yellow-100 text-yellow-700',
-  PROCESSING: 'bg-purple-100 text-purple-700',
-  FAILED: 'bg-red-100 text-red-700',
-  CANCELLED: 'bg-gray-100 text-gray-700',
-  REFUNDED: 'bg-gray-100 text-gray-700',
-}
 
 // -- CSV Export --------------------------------------------------------
 
@@ -119,6 +83,7 @@ export default function Orders() {
   const statusFilter = STATUS_OPTIONS.some((option) => option.value === rawStatus)
     ? (rawStatus as OrderStatus | '')
     : ''
+  const needsAttentionOnly = searchParams.get('reconciliation') === 'needs_attention'
   const rawSortBy = searchParams.get('sortBy')
   const sortBy: SortField =
     rawSortBy === 'createdAt' ||
@@ -141,13 +106,14 @@ export default function Orders() {
     const normalized = new URLSearchParams()
     normalized.set('page', String(page))
     if (statusFilter) normalized.set('status', statusFilter)
+    if (needsAttentionOnly) normalized.set('reconciliation', 'needs_attention')
     if (sortBy !== 'createdAt') normalized.set('sortBy', sortBy)
     if (sortOrder !== 'desc') normalized.set('sortOrder', sortOrder)
 
     if (normalized.toString() !== searchParams.toString()) {
       router.replace(`${pathname}?${normalized.toString()}`)
     }
-  }, [page, pathname, router, searchParams, sortBy, sortOrder, statusFilter])
+  }, [needsAttentionOnly, page, pathname, router, searchParams, sortBy, sortOrder, statusFilter])
 
   const loadOrders = useCallback(async () => {
     try {
@@ -155,6 +121,7 @@ export default function Orders() {
       setError(null)
       const params: OrdersQueryParams = { page, limit: 20, sortBy, sortOrder }
       if (statusFilter) params.status = statusFilter
+      if (needsAttentionOnly) params.reconciliation = 'needs_attention'
       const response = await ordersApi.getAll(params)
       if (response.data) {
         setOrders(response.data.data || [])
@@ -168,7 +135,7 @@ export default function Orders() {
     } finally {
       setLoading(false)
     }
-  }, [page, sortBy, sortOrder, statusFilter])
+  }, [needsAttentionOnly, page, sortBy, sortOrder, statusFilter])
 
   useEffect(() => { loadOrders() }, [loadOrders])
 
@@ -190,6 +157,14 @@ export default function Orders() {
         params.set('sortBy', field)
         params.delete('sortOrder')
       }
+      params.set('page', '1')
+    })
+  }
+
+  const handleNeedsAttentionToggle = () => {
+    replaceParams((params) => {
+      if (needsAttentionOnly) params.delete('reconciliation')
+      else params.set('reconciliation', 'needs_attention')
       params.set('page', '1')
     })
   }
@@ -310,6 +285,7 @@ export default function Orders() {
       setExporting(true)
       const params: OrdersQueryParams = { page: 1, limit: 10000, sortBy, sortOrder }
       if (statusFilter) params.status = statusFilter
+      if (needsAttentionOnly) params.reconciliation = 'needs_attention'
       const response = await ordersApi.getAll(params)
       exportOrdersCsv(response.data?.data || [])
     } catch (error) {
@@ -344,39 +320,17 @@ export default function Orders() {
 
   return (
     <div className="glass-card glass-card--static p-6">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h2 className="text-2xl font-bold">
-          Все заказы
-          <span className="ml-2 text-base font-normal text-slate-500">({totalCount})</span>
-        </h2>
-
-        <div className="flex items-center gap-3">
-          <select
-            value={statusFilter}
-            onChange={e => handleStatusChange(e.target.value as OrderStatus | '')}
-            className="px-3 py-2 rounded-lg border border-slate-200 bg-white/80 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          >
-            {STATUS_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-
-          <Button
-            onClick={handleExport}
-            disabled={exporting || orders.length === 0}
-            variant="secondary"
-            className="bg-green-50 text-green-700 hover:bg-green-100"
-          >
-            <Download className="w-4 h-4" />
-            {exporting ? 'Экспорт…' : 'Excel'}
-          </Button>
-
-          <Button onClick={loadOrders} variant="ghost" size="sm" className="px-0 text-blue-600 hover:bg-transparent hover:text-blue-700">
-            Обновить
-          </Button>
-        </div>
-      </div>
+      <OrdersToolbar
+        totalCount={totalCount}
+        statusFilter={statusFilter}
+        needsAttentionOnly={needsAttentionOnly}
+        exporting={exporting}
+        hasOrders={orders.length > 0}
+        onStatusChange={handleStatusChange}
+        onNeedsAttentionToggle={handleNeedsAttentionToggle}
+        onExport={handleExport}
+        onRefresh={loadOrders}
+      />
 
       {orders.length === 0 ? (
         <div className="text-center py-12 text-slate-500">
@@ -406,21 +360,6 @@ export default function Orders() {
               </TableHead>
               <TableBody>
                 {orders.map((order) => {
-                  const discounted = hasDiscount(order)
-                  const promoAmt = Number(order.promoDiscount || 0)
-                  const loyaltyAmt = Number(order.discount || 0)
-                  const bonusAmt = Number(order.bonusUsed || 0)
-                  const canRetryFulfillment = RETRYABLE.has(order.status)
-                  const canRecoverPaidPending =
-                    order.status === 'PENDING' &&
-                    order.reconciliation?.category === PENDING_PAID_RECOVERY
-                  const canFulfillFree =
-                    order.status === 'PENDING' &&
-                    Number(order.totalAmount || 0) <= 0
-                  const canFinalizeReconcile =
-                    order.status === 'PROCESSING' &&
-                    RECONCILE_FINALIZABLE.has(order.reconciliation?.category || '')
-
                   return (
                     <TableRow
                       key={order.id}
@@ -436,96 +375,22 @@ export default function Orders() {
                         {order.product?.name || 'N/A'}
                       </TableCell>
                       <TableCell>
-                        {discounted ? (
-                          <div className="text-sm space-y-0.5">
-                            <div className="text-slate-400 line-through">
-                              {fmtPrice(order.productPrice)}
-                            </div>
-                            {promoAmt > 0 && (
-                              <div className="text-orange-600">
-                                −{fmtPrice(promoAmt)}{' '}
-                                {order.promoCode && (
-                                  <span className="inline-block px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 text-xs font-medium">
-                                    {order.promoCode}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                            {loyaltyAmt > 0 && (
-                              <div className="text-purple-600">
-                                −{fmtPrice(loyaltyAmt)} лояльность
-                              </div>
-                            )}
-                            {bonusAmt > 0 && (
-                              <div className="text-green-600">
-                                −{fmtPrice(bonusAmt)} бонусы
-                              </div>
-                            )}
-                            <div className="font-bold text-slate-900 pt-0.5 border-t border-slate-200">
-                              {fmtPrice(order.totalAmount)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="font-bold">
-                            {fmtPrice(order.totalAmount)}
-                          </span>
-                        )}
+                        <OrderPriceCell order={order} />
                       </TableCell>
                       <TableCell>
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLOR[order.status] || 'bg-gray-100 text-gray-700'}`}>
-                          {STATUS_TEXT[order.status] || order.status}
-                        </span>
+                        <OrderStatusCell order={order} />
                       </TableCell>
                       <TableCell className="text-sm text-slate-600">
                         {new Date(order.createdAt).toLocaleDateString('ru-RU')}
                       </TableCell>
-                      <TableCell>
-                        {canRetryFulfillment && (
-                          <Button
-                            onClick={() => handleRetryFulfillment(order.id)}
-                            variant="ghost"
-                            size="sm"
-                            className="px-0 text-xs text-blue-600 hover:bg-transparent hover:text-blue-700"
-                          >
-                            Retry fulfillment
-                          </Button>
-                        )}
-                        {canRecoverPaidPending && (
-                          <Button
-                            onClick={() => handleRecoverPaidPending(order.id)}
-                            variant="ghost"
-                            size="sm"
-                            className="px-0 text-xs text-blue-600 hover:bg-transparent hover:text-blue-700"
-                          >
-                            Recovery оплаты
-                          </Button>
-                        )}
-                        {canFulfillFree && (
-                          <Button
-                            onClick={() => handleFulfillFree(order.id)}
-                            variant="ghost"
-                            size="sm"
-                            className="px-0 text-xs text-emerald-600 hover:bg-transparent hover:text-emerald-700"
-                          >
-                            Выполнить бесплатно
-                          </Button>
-                        )}
-                        {canFinalizeReconcile && (
-                          <Button
-                            onClick={() => handleFinalizeReconcile(order.id)}
-                            variant="ghost"
-                            size="sm"
-                            className="px-0 text-xs text-amber-600 hover:bg-transparent hover:text-amber-700"
-                          >
-                            Дофинализировать
-                          </Button>
-                        )}
-                        {CANCELLABLE.has(order.status) && (
-                          <Button onClick={() => handleCancel(order.id)} variant="ghost" size="sm" className="px-0 text-xs text-red-500 hover:bg-transparent hover:text-red-700">
-                            Отменить
-                          </Button>
-                        )}
-                      </TableCell>
+                      <OrderActionsCell
+                        order={order}
+                        onRetryFulfillment={handleRetryFulfillment}
+                        onRecoverPaidPending={handleRecoverPaidPending}
+                        onFulfillFree={handleFulfillFree}
+                        onFinalizeReconcile={handleFinalizeReconcile}
+                        onCancel={handleCancel}
+                      />
                     </TableRow>
                   )
                 })}

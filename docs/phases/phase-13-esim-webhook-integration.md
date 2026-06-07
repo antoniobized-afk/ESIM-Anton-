@@ -40,7 +40,8 @@ Endpoint защищен классом `EsimWebhookGuard`, который:
 В `EsimWebhookService` реализована обработка всех типов событий:
 - **Умные уведомления по трафику:** Вместо абсолютных значений используется процентное соотношение. Добавлена градации: "Использовано 80%" (мягкое предупреждение) и "Трафик исчерпан" (100%).
 - **Дедупликация (Cooldown):** Чтобы не спамить пользователя, в `Order` добавлены поля `lowTrafficNotifiedAt` и `expiryNotifiedAt`. Уведомления о малом трафике и скором истечении не отправляются чаще, чем раз в 24 часа.
-- **ORDER_STATUS enrichment:** событие `ORDER_STATUS` со статусом `GOT_RESOURCE` теперь используется не только как лог, но и как шанс дообогатить локальный `Order` по `providerOrderId`, если synchronous purchase path не вернул ICCID / QR / LPA / SMDP.
+- **ORDER_STATUS enrichment + finalize recovery:** событие `ORDER_STATUS` со статусом `GOT_RESOURCE` теперь используется не только как лог. Webhook ищет локальный `Order` по `providerOrderId` или provider `transactionId`, дообогащает его через provider query и, если локально есть `PROCESSING + successful PAYMENT + QR/LPA snapshot`, дофинализирует заказ через canonical `OrdersService` без повторной покупки у провайдера.
+- **Admin webhook visibility:** Telegram-уведомление администратору по `ORDER_STATUS` должно содержать не только сырой provider `orderStatus`, но и смысл статуса, `transactionId`, локальный `orderId`, `localAction`, итоговый локальный статус и reconciliation category.
 - **Гибридный подход (Fallback):** Существующие Cron-задачи были переписаны и оставлены в качестве "сети безопасности" (safety net) на случай недоставки webhook-а. Cron `monitorExpiringEsims` проверяет eSIM, у которых срок действия истекает менее чем через 24 часа, и отправляет уведомление.
 
 ## 4. Затронутые файлы и структура БД
@@ -64,7 +65,8 @@ Live runtime eSIM Access оказался менее строгим, чем пр
 - unsigned fallback ограничен только `ORDER_STATUS`, а не любыми notifyType;
 - для unsigned path действует freshness window;
 - duplicate/replay unsigned callback отклоняется через durable receipt barrier;
-- если enrichment по `ORDER_STATUS/GOT_RESOURCE` падает, webhook не считается окончательно обработанным и остаётся retryable.
+- если enrichment или auto-finalize по `ORDER_STATUS/GOT_RESOURCE` падает, webhook не считается окончательно обработанным и остаётся retryable;
+- purchase flow передаёт локальный `order.id` в eSIM Access `transactionId`, чтобы webhook мог найти заказ даже до сохранения `providerOrderId`.
 
 ## 6. Итог
 
