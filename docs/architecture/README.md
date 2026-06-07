@@ -30,6 +30,7 @@
 - [payment-flow-audit.md](./payment-flow-audit.md) — целостная карта payment lifecycle, pricing contract и checkout/top-up/balance вариаций.
 - [promo-codes-runtime.md](./promo-codes-runtime.md) — текущий runtime-контракт промокодов и policy lock для Phase 17 Partner Promo Codes.
 - [referrals-runtime.md](./referrals-runtime.md) — актуальный runtime-контракт referral flow после referral follow-up.
+- [auth-identity-runtime.md](./auth-identity-runtime.md) — текущий auth/account contract и целевая граница `User` vs `UserIdentity` для Phase 18.
 
 ## Правило source of truth
 

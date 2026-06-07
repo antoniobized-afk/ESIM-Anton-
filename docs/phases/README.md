@@ -125,3 +125,11 @@
   - Snapshot-ить reward policy в `PromoCodeRedemption`, чтобы admin edits не меняли pending/historical orders.
   - Доработать shared reward ledger, order completion, admin PromoCodes UI, analytics и runtime wiki.
   - Документ: [phase-17-partner-promo-codes.md](./phase-17-partner-promo-codes.md)
+
+- [ ] **Phase 18: Account Identity Linking & Merge**
+  - Вынести способы входа из legacy `User.authProvider/providerId` в durable `UserIdentity`.
+  - Оставить `User` canonical business account для денег, заказов, eSIM, referrals, partner rewards, saved cards и уведомлений.
+  - Запретить silent OAuth/email merge: новый provider привязывается только явно из авторизованной сессии или через admin/support flow.
+  - Перевести email, OAuth, Telegram Widget/WebApp и bot registration на общий identity resolver без смены JWT subject (`sub=user.id`).
+  - Добавить read-only identities API, user-facing link/unlink flow и admin/support duplicate preflight с audit trail.
+  - Документ: [phase-18-account-identity-linking-and-merge.md](./phase-18-account-identity-linking-and-merge.md)
