@@ -30,6 +30,17 @@ export class UserIdentityBackfillService {
       return this.dryRunResult(report);
     }
 
+    if (internal.candidates.length === 0) {
+      return {
+        dryRun: false,
+        applied: true,
+        reason: 'applied',
+        created: 0,
+        skipped: 0,
+        report,
+      };
+    }
+
     const applied = await this.applier.apply(internal.candidates);
 
     return {

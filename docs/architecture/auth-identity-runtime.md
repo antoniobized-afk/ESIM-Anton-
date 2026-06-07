@@ -281,7 +281,8 @@ CLI `phase18:identity-backfill` по умолчанию запускает dry-r
 blocking `error` issues. CLI parse/report слой вынесен отдельно от backfill
 service: unknown args не игнорируются, `--apply` без confirm-флага не
 подключается к БД, stdout отдает operator report с counts/issues без internal
-candidates.
+candidates. `plannedIdentities` в отчете означает pending writes: уже
+существующие identities того же `User` повторно не планируются.
 
 Backfill не является пользовательским merge-инструментом. Он не объединяет
 разные `User`, не переносит заказы, баланс, saved cards, referrals, partner

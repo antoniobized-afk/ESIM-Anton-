@@ -221,7 +221,7 @@ describe('UserIdentityBackfillService', () => {
     );
   });
 
-  it('apply идемпотентно пропускает identity, если она уже принадлежит тому же user', async () => {
+  it('preflight не планирует identity, если она уже принадлежит тому же user', async () => {
     const { service, prisma } = makeService();
     prisma.user.findMany.mockResolvedValue([
       makeUser({ id: 'google_user', authProvider: 'google', providerId: 'google_1' }),
@@ -234,18 +234,38 @@ describe('UserIdentityBackfillService', () => {
         providerSubject: 'google_1',
       },
     ]);
-    prisma.userIdentity.findUnique.mockResolvedValue({
-      id: 'identity_existing',
-      userId: 'google_user',
+
+    const report = await service.preflight();
+
+    expect(report).toMatchObject({
+      ok: true,
+      plannedIdentities: 0,
     });
+    expect(report.plannedByProvider[AuthIdentityProvider.GOOGLE]).toBe(0);
+  });
+
+  it('apply идемпотентно делает no-op, если identity уже принадлежит тому же user', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findMany.mockResolvedValue([
+      makeUser({ id: 'google_user', authProvider: 'google', providerId: 'google_1' }),
+    ]);
+    prisma.userIdentity.findMany.mockResolvedValue([
+      {
+        id: 'identity_existing',
+        userId: 'google_user',
+        provider: AuthIdentityProvider.GOOGLE,
+        providerSubject: 'google_1',
+      },
+    ]);
 
     const result = await service.backfill({ dryRun: false });
 
     expect(result).toMatchObject({
       applied: true,
       created: 0,
-      skipped: 1,
+      skipped: 0,
     });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(prisma.userIdentity.create).not.toHaveBeenCalled();
     expect(prisma.userIdentityAudit.create).not.toHaveBeenCalled();
   });

@@ -28,6 +28,7 @@ export class UserIdentityPreflightService {
   async build(): Promise<InternalUserIdentityPreflight> {
     const [users, existingIdentities] = await this.loadRuntimeState();
     const { candidates, issues } = this.buildCandidates(users);
+    const pendingCandidates = this.findPendingCandidates(candidates, existingIdentities);
     const allIssues = [
       ...issues,
       ...this.findDuplicateEmails(users),
@@ -43,11 +44,11 @@ export class UserIdentityPreflightService {
       ok: issueCounts.error === 0,
       checkedUsers: users.length,
       existingIdentities: existingIdentities.length,
-      plannedIdentities: candidates.length,
-      plannedByProvider: this.plannedByProvider(candidates),
+      plannedIdentities: pendingCandidates.length,
+      plannedByProvider: this.plannedByProvider(pendingCandidates),
       issueCounts,
       issues: allIssues,
-      candidates,
+      candidates: pendingCandidates,
     };
   }
 
@@ -262,6 +263,26 @@ export class UserIdentityPreflightService {
           ),
         },
       }];
+    });
+  }
+
+  private findPendingCandidates(
+    candidates: IdentityCandidate[],
+    existingIdentities: ExistingIdentityRecord[],
+  ): IdentityCandidate[] {
+    const existingBySubject = new Map(
+      existingIdentities.map((identity) => [
+        identityKey(identity.provider, identity.providerSubject),
+        identity,
+      ]),
+    );
+
+    return candidates.filter((candidate) => {
+      const existing = existingBySubject.get(
+        identityKey(candidate.provider, candidate.providerSubject),
+      );
+
+      return !existing || existing.userId !== candidate.userId;
     });
   }
 

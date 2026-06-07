@@ -152,8 +152,19 @@
   2. dry-run `pnpm phase18:identity-backfill`;
   3. если нет blocking `error` issues, apply
      `pnpm phase18:identity-backfill -- --apply --confirm-phase18-identity-backfill`;
-  4. повторный dry-run и проверка идемпотентности.
+  4. повторный dry-run и проверка `status=dry_run_ok`,
+     `counts.plannedIdentities=0`.
   `prisma migrate dev` не является production-командой.
+- В контейнерной production-среде backfill запускается в окружении `backend`
+  service, а не в PostgreSQL, `client`, `admin` или `bot` контейнере. Если
+  shell открыт из корня monorepo, использовать root-команду:
+  `pnpm phase18:identity-backfill`. Если shell открыт внутри `backend/`,
+  использовать `pnpm run phase18:identity-backfill`.
+- Если production image собран без dev-зависимостей и команда падает на
+  отсутствии `ts-node`, backfill нельзя чинить ad-hoc установкой пакетов в
+  живой контейнер. Нужно либо запускать через Railway CLI из checkout того же
+  commit с production env injection, либо добавить отдельный compiled
+  maintenance entrypoint и задеплоить его штатно.
 - Backfill не объединяет разные `User` rows и не переносит заказы, баланс,
   saved cards, referrals или promo ownership. Он только создает недостающие
   `UserIdentity` rows для уже существующих legacy login/contact полей.

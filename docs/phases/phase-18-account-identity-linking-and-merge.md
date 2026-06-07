@@ -384,6 +384,10 @@ boundary.
   root-команда могла создать ложное ощущение, что migration нужно запускать
   вручную каждый раз. Root `phase18:identity-backfill` оставлен как разовая
   operator-команда для миграции старых identity rows после deploy.
+- Production container clarification: identity backfill запускается из
+  `backend` service env, а не из DB/client/admin/bot контейнеров. Отчет
+  backfill теперь считает `plannedIdentities` как pending writes, поэтому
+  повторный dry-run после apply должен показывать `counts.plannedIdentities=0`.
 
 ## Ссылки
 
