@@ -108,4 +108,3 @@
 
 - [Корневой документ wiki](../README.md)
 - [Architecture module map](../architecture/module-map.md)
-- [Codebase audit](../architecture/codebase-audit.md)

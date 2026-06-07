@@ -17,7 +17,6 @@
 - расширена runtime-проверка backend/admin/client HTTP сценариями;
 - исправлены два подтвержденных frontend/backend mismatch в `client`.
 - создан tracker клиентских багов: [../info/bug-resolution.md](../info/bug-resolution.md).
-- проведён codebase/docs audit, findings вынесены в [../architecture/codebase-audit.md](../architecture/codebase-audit.md).
 
 ## Оценка
 

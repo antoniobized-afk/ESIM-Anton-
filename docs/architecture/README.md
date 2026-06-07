@@ -11,16 +11,6 @@
    Короткая карта продукта, рантаймов и главных интеграций.
 2. [module-map.md](./module-map.md)
    Детальная раскладка приложений, backend-модулей и ownership по папкам.
-3. [runtime-and-operations.md](./runtime-and-operations.md)
-   Что нужно для запуска, какие сервисы реально используются и где operational риски.
-4. [legacy-doc-audit.md](./legacy-doc-audit.md)
-   Сверка старой документации из корня репозитория с фактическим кодом.
-5. [railway-production-baseline.md](./railway-production-baseline.md)
-   Пошаговый план безопасного перевода уже существующего Railway production на baseline migration flow.
-6. [../operations/railway-runbook.md](../operations/railway-runbook.md)
-   Практический порядок действий для Railway autodeploy перед merge/push в `main`.
-7. [codebase-audit.md](./codebase-audit.md)
-   Findings по безопасности, runtime wiring и документации после Phase 2 smoke verification.
 
 ## Поддерживающие документы
 

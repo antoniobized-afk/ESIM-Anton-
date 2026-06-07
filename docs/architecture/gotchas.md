@@ -16,7 +16,7 @@
 
 - Исторический `ESIMACCESS_INTEGRATION.md` содержал чувствительные доступы внутри репозитория. Это следует считать инцидентом конфигурационной безопасности; актуальный очищенный документ теперь лежит в [../integrations/esim-access.md](../integrations/esim-access.md).
 - Admin frontend сейчас защищён browser-side PIN-кодом, а не полноценной серверной авторизацией.
-- Часть admin write endpoints на backend не закрыта `JwtAdminGuard`; подробности в [codebase-audit.md](./codebase-audit.md).
+- Часть admin write endpoints на backend не закрыта `JwtAdminGuard`;
 - После реализации Phase 3 bot-only backend mutations нельзя вызывать из client/browser-кода: `POST /users/find-or-create` и `POST /referrals/register` теперь требуют `x-telegram-bot-token`, а user-facing профиль должен читаться через `/auth/me` или owner-guarded routes с user JWT.
 - Admin JWT теперь живёт 8 часов и требует `type: 'admin'`; старые токены без `type` после деплоя будут отвергаться `JwtAdminGuard`, поэтому admin runtime должен уметь переживать принудительный re-login.
 - Client redirect-параметры `returnTo` нельзя передавать напрямую в `router.push()` или `router.replace()`: все user-controlled значения должны проходить через `sanitizeRedirect()` из `client/lib/security.ts`. Sanitizer разрешает только same-origin relative URL, но сохраняет query/hash, потому что product/country/balance auto-buy flow использует вложенные внутренние `returnTo`.

@@ -10,7 +10,7 @@
 ├── admin/     Next.js 15 admin panel
 ├── client/    Next.js 14 user-facing web / Telegram mini app
 ├── bot/       Grammy Telegram bot
-├── shared/    Shared TypeScript types
+├── shared/    Shared TypeScript types и контракты
 └── docs/      Project wiki
 ```
 
@@ -18,103 +18,67 @@
 
 ### `backend`
 
-Главный API и orchestration layer.
+Главный API и orchestration layer. Top-level модули (`backend/src/modules/`):
 
-Подтвержденные backend-модули:
-
-- `auth` — admin login, email OTP, OAuth, Telegram auth, `/auth/me`,
-  customer identity resolver, identity backfill, user-facing link/unlink API
-  через отдельный identity controller
-- `users` — пользователи, bot find-or-create, stats, email update,
-  web-push subscriptions, read-only admin merge preflight с отдельными asset
-  count и audit providers
-- `products` — каталог, sync, dedupe, bulk activation/badge/markup operations
-- `orders` — заказ, free fulfill, usage, top-up flow, balance purchase flow
-- `payments` — Robokassa flow + CloudPayments webhooks/controllers
-- `referrals` — регистрация рефералов, партнёрские ссылки (CRUD, analytics), статистика
-- `loyalty` — client-facing `/loyalty/me`, admin CRUD уровней лояльности и пересчёт уровня пользователя после purchase completion
 - `analytics` — dashboard, top-products, sales-chart
-- `esim-provider` — eSIM Access integration, health, purchase, order info, webhook handling
-- `system-settings` — referral settings, pricing, exchange rate, auto update
-- `telegram` — Telegram notifications
-- `notifications` — email, web push
-- `traffic-monitor` — hourly fallback traffic/validity monitoring cron
-- `promo-codes` — CRUD и validation промокодов
+- `auth` — admin login, email OTP, OAuth, Telegram auth, `/auth/me`, customer identity resolver, link/unlink API
+- `esim-provider` — eSIM Access integration, webhook handling
+- `loyalty` — `/loyalty/me`, CRUD уровней, пересчёт уровня после purchase
+- `notifications` — email, web push. (Включает подмодуль `traffic-monitor` для мониторинга трафика/валидности)
+- `orders` — заказ, free fulfill, usage, top-up flow, balance purchase flow
+- `payments` — Robokassa flow + CloudPayments (сохранение карт, рекуррентные списания)
+- `products` — каталог, sync, dedupe, bulk operations
+- `promo-codes` — CRUD и валидация промокодов
+- `referrals` — регистрация рефералов, партнёрские ссылки
+- `system-settings` — настройки, pricing, exchange rate, auto update
+- `telegram` — отправка Telegram notifications
+- `users` — bot find-or-create, stats, email update, admin merge preflight
 
 ### `admin`
 
-Next.js 15 Admin Panel (App Router, client-first rendering).
+Next.js 15 Admin Panel (App Router).
 
-**Архитектура (после Phase 11):**
-
-- **Routing:** App Router с route group `(admin)` для защищённых маршрутов, отдельный segment `/login`.
-- **Auth:** `AuthProvider` (Context API) → `AuthGuard` (redirect) → Axios interceptor (401 → `CustomEvent('app:logout')`).
-- **UI Primitives:** `Button`, `Modal`, `Toast/ToastProvider`, `ConfirmDialog`, `Table/SortableHeader`, `Spinner`, `Pagination` в `components/ui/`.
-- **Error/Loading boundaries:** `error.tsx` и `loading.tsx` на уровне `(admin)` route group и `/login`.
-- **URL State:** Фильтры и пагинация синхронизированы с `searchParams` через `router.replace()`.
-
-Админка с вкладками:
-
-- `dashboard`
-- `orders` — сортировка, фильтрация, CSV export
-- `users`
-- `products` — декомпозирован: `ProductsPage`, `useProducts` hook, `ProductsFilters`, `ProductsTable`, `ProductEditModal` и др. (12 файлов в `components/products/`)
-- `promo`
-- `referral-links` — партнёрские ссылки (CRUD, copy links, analytics)
-- `settings` — вкладки pricing / referrals / loyalty (URL tab sync)
-
-Вкладки `payments` и `analytics` присутствуют в UI-navigation, но в текущем коде отрисовывают заглушки «в разработке».
+**Архитектура:**
+- `(admin)` — защищённые роуты: `dashboard`, `orders`, `users`, `products`, `promo`, `referral-links`, `settings`, `analytics`, `payments`
+- `/login` — публичный auth сегмент
+- **UI Primitives:** `Button`, `Modal`, `Toast/ToastProvider`, `ConfirmDialog`, `Table`, `Pagination` (`components/ui/`)
+- **State:** URL State (фильтры/сортировки синхронизируются через `searchParams`).
 
 ### `client`
 
-Пользовательский интерфейс с реальными route-группами:
+Пользовательский интерфейс (Next.js 14). Текущие роуты (`client/app/`):
 
-- каталог и landing: `/`
-- страна / тариф: `/country/[country]`, `/product/[id]`
-- профиль и заказы: `/profile`, `/orders`, `/order/[id]`, `/my-esim`, `/loyalty`
-- баланс и top-up: `/balance`, `/topup/[orderId]`
-- auth: `/login`, `/login/callback`
-- справка / legal: `/help/*`, `/offer`, `/agreement`
-- referral/device/support pages: `/referrals`, `/devices`
-- partner landing: `/ref/[code]`
+- **Каталог:** `/`, `/country`, `/product`
+- **Профиль:** `/profile`, `/my-esim`, `/loyalty`
+- **Заказы:** `/order`, `/orders`
+- **Пополнение:** `/balance`, `/topup`
+- **Auth:** `/login`
+- **Партнерская программа:** `/ref`, `/referrals`
+- **Info:** `/help`, `/agreement`, `/offer`, `/devices`, `/mojo-animation`
 
 ### `bot`
 
-Минимальный Telegram bot runtime:
-
-- поднимает bot session/conversations
-- регистрирует пользователя в backend
-- использует backend API для products, orders, payments, referrals
+Telegram bot runtime (Grammy).
+- Содержит `commands`, `scenes`, API интеграцию.
+- Служит точкой входа пользователя в Telegram Web App (TWA).
 
 ### `shared`
 
-Содержит только `types.ts` и не выглядит как полноценно используемая shared package со сборкой/экспортами.
+- `types.ts` — общие интерфейсы.
+- `contracts/` — (напр. `checkout.ts`) общие контракты, расшаренные между приложениями.
 
 ## Data Layer
 
-`backend/prisma/schema.prisma` подтверждает ключевые сущности:
+`backend/prisma/schema.prisma` содержит:
 
-- `User`
-- `UserIdentity`
-- `UserIdentityAudit`
-- `PushSubscription`
-- `SmsCode`
-- `LoyaltyLevel`
-- `EsimProduct`
-- `Order`
-- `Transaction`
-- `ReferralLink`
-- `PromoCodeRedemption`
-- `Notification`
-- `PromoCode`
-- `SystemSettings`
-- `Admin`
+- **Users & Auth:** `User`, `UserIdentity`, `UserIdentityAudit`, `EmailCode`, `PushSubscription`
+- **Catalog & Orders:** `EsimProduct`, `Order`, `PromoCode`, `PromoCodeRedemption`, `LoyaltyLevel`
+- **Payments:** `Transaction`, `CloudPaymentsCardToken`, `RepeatChargeAttempt`
+- **Providers:** `EsimWebhookReceipt`
+- **Marketing:** `ReferralLink`
+- **System:** `SystemSettings`, `Admin`, `Notification`
 
-Дополнительные поля, которые важны для понимания проекта:
-
-- у `Order` есть cache полей usage/status (`lastUsageBytes`, `esimStatus`, `expiresAt`, ...)
-- есть self-relation `parentOrderId` для top-up заказов
-- у `User` есть поля под multi-auth и marketing attribution (`authProvider`, `providerId`, `utm*`)
-- `UserIdentity` является durable способом входа, но не owner key для заказов,
-  платежей, рефералок, промокодов или уведомлений; canonical owner остается
-  `User.id`
+**Ключевые архитектурные паттерны БД:**
+- `Order` кэширует usage (`lastUsageBytes`, `esimStatus`, `expiresAt`) и поддерживает `parentOrderId` для top-up заказов.
+- `User` является canonical owner для всех заказов, рефералок, транзакций.
+- `UserIdentity` (OAuth, Telegram) выступает исключительно как durable point of entry (средство входа), но не владелец ресурсов.
