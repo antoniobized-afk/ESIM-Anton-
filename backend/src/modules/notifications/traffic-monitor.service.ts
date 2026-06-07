@@ -137,10 +137,10 @@ export class TrafficMonitorService {
         const remainingMB = usage.remainingBytes / (1024 * 1024);
         const totalMB_dbg = usage.totalBytes / (1024 * 1024);
         const remainingPercent = (usage.remainingBytes / usage.totalBytes) * 100;
-        this.logger.debug(
-          `📊 ${order.id.slice(-6)}: ${remainingMB.toFixed(1)}/${totalMB_dbg.toFixed(1)} MB ` +
-          `(${remainingPercent.toFixed(1)}%), порог=${this.LOW_REMAINING_PERCENT}%`,
-        );
+        // this.logger.debug(
+        //   `📊 ${order.id.slice(-6)}: ${remainingMB.toFixed(1)}/${totalMB_dbg.toFixed(1)} MB ` +
+        //   `(${remainingPercent.toFixed(1)}%), порог=${this.LOW_REMAINING_PERCENT}%`,
+        // );
 
         // Только процентный порог. Абсолютный (MB) убран — ранние предупреждения
         // приходят через webhook DATA_USAGE от eSIM Access (80%/100% использования).
@@ -149,17 +149,17 @@ export class TrafficMonitorService {
         if (!isLow) continue;
 
         if (order.lowTrafficNotifiedAt) {
-          this.logger.log(
-            `⏸️ ${order.id.slice(-6)}: low=${remainingPercent.toFixed(1)}%, уже уведомляли ранее (без спама)`,
-          );
+          // this.logger.log(
+          //   `⏸️ ${order.id.slice(-6)}: low=${remainingPercent.toFixed(1)}%, уже уведомляли ранее (без спама)`,
+          // );
           lowDetected++;
           continue;
         }
 
         if (!order.user?.telegramId) {
-          this.logger.log(
-            `⏸️ ${order.id.slice(-6)}: low=${remainingPercent.toFixed(1)}%, но нет telegramId`,
-          );
+          // this.logger.log(
+          //   `⏸️ ${order.id.slice(-6)}: low=${remainingPercent.toFixed(1)}%, но нет telegramId`,
+          // );
           lowDetected++;
           continue;
         }

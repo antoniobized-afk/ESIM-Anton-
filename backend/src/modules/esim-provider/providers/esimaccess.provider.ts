@@ -140,7 +140,7 @@ export class EsimAccessProvider {
       }
 
       throw new Error(response.data?.errorMsg || 'Ошибка получения баланса');
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка получения баланса:', error.message);
       throw error;
     }
@@ -203,7 +203,7 @@ export class EsimAccessProvider {
             .filter((name: any) => typeof name === 'string' && name.trim().length > 0)
           : [],
       }));
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка получения пакетов:', error.message);
       throw error;
     }
@@ -277,7 +277,7 @@ export class EsimAccessProvider {
                 esimList = [queryObj];
               }
             }
-          } catch (queryError) {
+          } catch (queryError: any) {
             this.logger.warn(`⚠️ Не удалось запросить профили: ${queryError.message}`);
           }
         }
@@ -296,7 +296,7 @@ export class EsimAccessProvider {
       }
 
       throw new Error(response.data?.errorMsg || `API returned error (success=${String(response.data?.success)})`);
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка покупки eSIM:', error.message);
       throw error;
     }
@@ -323,7 +323,7 @@ export class EsimAccessProvider {
       this.logger.log(`✅ Информация о заказе получена`);
 
       return response.data.obj;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка получения информации о заказе:', error.message);
       throw error;
     }
@@ -351,7 +351,7 @@ export class EsimAccessProvider {
       this.logger.log(`✅ Получено ${orders.length} заказов`);
 
       return orders;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка получения истории заказов:', error.message);
       throw error;
     }
@@ -383,7 +383,7 @@ export class EsimAccessProvider {
       }
 
       throw new Error(response.data?.errorMsg || 'Ошибка пополнения eSIM');
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка пополнения eSIM:', error.message);
       throw error;
     }
@@ -423,15 +423,15 @@ export class EsimAccessProvider {
       const esimCount = Array.isArray(obj?.esimList) ? obj.esimList.length 
                       : Array.isArray(obj?.profileList) ? obj.profileList.length
                       : obj?.iccid ? 1 : 0;
-      this.logger.log(
-        `✅ Информация об eSIM получена через /esim/query (iccid=${this.maskValue(iccid, 2, 4)}, count=${esimCount})`,
-      );
+      // this.logger.log(
+      //   `✅ Информация об eSIM получена через /esim/query (iccid=${this.maskValue(iccid, 2, 4)}, count=${esimCount})`,
+      // );
       this.logRawDebug(`getEsimInfo /esim/query raw response for ${this.maskValue(iccid, 2, 4)}`, queryResponse.data);
 
       if (esimCount === 0) {
-        this.logger.warn(
-          `⚠️ Результат пуст для ICCID ${this.maskValue(iccid, 2, 4)}. Возможно, провайдер ещё не отдаёт расход или ICCID не найден.`,
-        );
+        // this.logger.warn(
+        //   `⚠️ Результат пуст для ICCID ${this.maskValue(iccid, 2, 4)}. Возможно, провайдер ещё не отдаёт расход или ICCID не найден.`,
+        // );
       }
 
       return obj;
@@ -484,7 +484,7 @@ export class EsimAccessProvider {
             .filter((name: any) => typeof name === 'string' && name.trim().length > 0)
           : [],
       }));
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('❌ Ошибка получения пакетов для пополнения:', error.message);
       throw error;
     }
@@ -497,7 +497,7 @@ export class EsimAccessProvider {
     try {
       await this.getBalance();
       return true;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.warn('⚠️ Health check failed:', error.message);
       return false;
     }
