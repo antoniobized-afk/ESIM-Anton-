@@ -252,6 +252,7 @@ export class AuthIdentityManagementService {
     userId: string,
     input: AuthIdentityInput,
   ): Promise<void> {
+    if (input.provider !== AuthIdentityProvider.EMAIL) return;
     if (!input.email) return;
 
     const [existingEmailUser, existingEmailIdentity] = await Promise.all([

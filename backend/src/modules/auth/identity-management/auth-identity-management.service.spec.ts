@@ -313,7 +313,7 @@ describe('AuthIdentityManagementService', () => {
     ).rejects.toThrow(UnauthorizedException);
   });
 
-  it('explicit OAuth link не обходит collision, если email занят EMAIL identity другого user', async () => {
+  it('explicit OAuth link допускает provider link, если OAuth email является contact/email identity другого user', async () => {
     const { service, prisma } = makeService();
     const { url } = await service.startOAuthLink({
       userId: 'user_1',
@@ -326,42 +326,54 @@ describe('AuthIdentityManagementService', () => {
     prisma.user.findUnique
       .mockResolvedValueOnce({ id: 'user_1', isBlocked: false })
       .mockResolvedValueOnce(null);
-    prisma.userIdentity.findUnique.mockResolvedValueOnce({
-      id: 'email_identity',
-      userId: 'other_user',
+
+    const result = await service.handleOAuthLinkCallback(
+      {
+        provider: 'google',
+        providerId: 'google_1',
+        email: 'owner@example.com',
+      },
+      state,
+    );
+
+    expect(result).toEqual({
+      handled: true,
+      returnTo: '/profile',
+      status: 'linked',
     });
-
-    await expect(
-      service.handleOAuthLinkCallback(
-        {
-          provider: 'google',
-          providerId: 'google_1',
-          email: 'owner@example.com',
+    expect(prisma.userIdentity.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        provider: AuthIdentityProvider.GOOGLE,
+        providerSubject: 'google_1',
+        email: 'owner@example.com',
+        user: { connect: { id: 'user_1' } },
+      }),
+      select: { id: true },
+    });
+    expect(prisma.userIdentity.findUnique).not.toHaveBeenCalledWith({
+      where: {
+        provider_providerSubject: {
+          provider: AuthIdentityProvider.EMAIL,
+          providerSubject: 'owner@example.com',
         },
-        state,
-      ),
-    ).rejects.toThrow(ConflictException);
-
-    expect(prisma.userIdentity.create).not.toHaveBeenCalled();
+      },
+      select: { userId: true },
+    });
     expect(prisma.userIdentityAudit.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        event: UserIdentityAuditEvent.LOGIN_CONFLICT,
+        event: UserIdentityAuditEvent.LINKED,
         userId: 'user_1',
         actorId: 'user_1',
         provider: AuthIdentityProvider.GOOGLE,
-        reason: 'EMAIL_ALREADY_USED_BY_ANOTHER_ACCOUNT',
+        reason: 'explicit_oauth_link',
         metadata: expect.objectContaining({
           source: 'identity_management_explicit_link',
-          attemptedUserId: 'user_1',
-          conflictingUserId: 'other_user',
-          emailPreview: 'ow***@example.com',
-          rawProviderPayloadStored: false,
         }),
       }),
     });
   });
 
-  it('explicit OAuth link не обходит EMAIL identity другого user через совпавший User.email текущего user', async () => {
+  it('explicit OAuth link допускает provider link, даже если OAuth email совпадает с User.email текущего user и EMAIL identity другого user', async () => {
     const { service, prisma } = makeService();
     const { url } = await service.startOAuthLink({
       userId: 'user_1',
@@ -374,21 +386,58 @@ describe('AuthIdentityManagementService', () => {
     prisma.user.findUnique
       .mockResolvedValueOnce({ id: 'user_1', isBlocked: false })
       .mockResolvedValueOnce({ id: 'user_1' });
-    prisma.userIdentity.findUnique.mockResolvedValueOnce({
-      id: 'email_identity',
-      userId: 'other_user',
-    });
 
-    await expect(
-      service.handleOAuthLinkCallback(
-        {
-          provider: 'google',
-          providerId: 'google_1',
-          email: 'owner@example.com',
+    const result = await service.handleOAuthLinkCallback(
+      {
+        provider: 'google',
+        providerId: 'google_1',
+        email: 'owner@example.com',
+      },
+      state,
+    );
+
+    expect(result?.status).toBe('linked');
+    expect(prisma.userIdentity.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        provider: AuthIdentityProvider.GOOGLE,
+        providerSubject: 'google_1',
+        email: 'owner@example.com',
+        user: { connect: { id: 'user_1' } },
+      }),
+      select: { id: true },
+    });
+    expect(prisma.userIdentity.findUnique).not.toHaveBeenCalledWith({
+      where: {
+        provider_providerSubject: {
+          provider: AuthIdentityProvider.EMAIL,
+          providerSubject: 'owner@example.com',
         },
-        state,
-      ),
-    ).rejects.toThrow(ConflictException);
+      },
+      select: { userId: true },
+    });
+    expect(prisma.userIdentityAudit.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        event: UserIdentityAuditEvent.LINKED,
+        userId: 'user_1',
+        actorId: 'user_1',
+        provider: AuthIdentityProvider.GOOGLE,
+        reason: 'explicit_oauth_link',
+        metadata: expect.objectContaining({
+          source: 'identity_management_explicit_link',
+        }),
+      }),
+    });
+  });
+
+  it('explicit email link продолжает блокировать email другого аккаунта', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique
+      .mockResolvedValueOnce({ id: 'user_1', isBlocked: false })
+      .mockResolvedValueOnce({ id: 'other_user' });
+
+    await expect(service.linkEmail('user_1', 'owner@example.com')).rejects.toThrow(
+      ConflictException,
+    );
 
     expect(prisma.userIdentity.create).not.toHaveBeenCalled();
     expect(prisma.userIdentityAudit.create).toHaveBeenCalledWith({
@@ -396,14 +445,8 @@ describe('AuthIdentityManagementService', () => {
         event: UserIdentityAuditEvent.LOGIN_CONFLICT,
         userId: 'user_1',
         actorId: 'user_1',
-        provider: AuthIdentityProvider.GOOGLE,
+        provider: AuthIdentityProvider.EMAIL,
         reason: 'EMAIL_ALREADY_USED_BY_ANOTHER_ACCOUNT',
-        metadata: expect.objectContaining({
-          source: 'identity_management_explicit_link',
-          attemptedUserId: 'user_1',
-          conflictingUserId: 'other_user',
-          emailPreview: 'ow***@example.com',
-        }),
       }),
     });
   });

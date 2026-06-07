@@ -56,8 +56,12 @@ Source of truth по логике:
 - `UserIdentity(provider, providerSubject)`;
 - exact legacy `authProvider + providerId` continuity;
 - `telegramId` для Telegram bot-only continuity;
-- email collision проверяется через `users.email` и `UserIdentity(EMAIL)`, но
-  не делает silent OAuth link.
+- обычный OAuth login проверяет email collision через `users.email` и
+  `UserIdentity(EMAIL)`, но не делает silent OAuth link;
+- explicit OAuth link из авторизованной сессии проверяет provider subject, а не
+  блокирует Google/Yandex только из-за совпавшего contact email другого legacy
+  аккаунта. Такой link не переносит заказы, баланс, saved cards или email
+  contact field.
 
 Следствие:
 

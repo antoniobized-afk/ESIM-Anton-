@@ -109,10 +109,11 @@
 - Дополнительно закрыт merge-preflight audit gap: read-only admin/support
   preflight пишет `MERGE_PREFLIGHT` audit для source/target users, но не
   выполняет data-moving merge.
-- Дополнительно закрыт contact-email split-brain gap: contact email update
-  проверяет занятость `UserIdentity(EMAIL)` другого пользователя, а explicit
-  OAuth link не обходит такую collision через совпавший `User.email` текущего
-  пользователя.
+- Дополнительно закрыт contact-email split-brain gap: contact email update и
+  explicit email link проверяют занятость `UserIdentity(EMAIL)` другого
+  пользователя. Explicit OAuth link из авторизованной сессии не блокируется
+  только из-за occupied contact email, потому что Google/Yandex provider subject
+  является отдельным login identity и не переносит email/contact/business rows.
 - Дополнительно закрыт Telegram split-brain gap: login/link блокирует drift
   между `TELEGRAM` identity и `users.telegramId` другого пользователя или
   identity owner.

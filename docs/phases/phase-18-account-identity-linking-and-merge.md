@@ -280,8 +280,9 @@ boundary.
   data-moving merge допускается только после утвержденной per-relation policy.
 - Локально реализован Step 2 additive schema/backfill контур: Prisma
   `UserIdentity`/`UserIdentityAudit`, ручная миграция, dry-run/apply CLI и
-  разделенные SRP-компоненты `identity-backfill/*`. Login resolver, public
-  auth routes, UI и data-moving merge пока не переключались.
+  разделенные SRP-компоненты `identity-backfill/*`. Backfill не объединяет
+  разные `User` rows и не переносит business ownership; login resolver, public
+  auth routes, UI и data-moving merge на тот момент еще не переключались.
 - Backfill CLI дополнительно усилен как operator surface: запись требует
   `--apply --confirm-phase18-identity-backfill`, unknown args не
   игнорируются, `--apply` без confirm-флага завершается до DB connect, а
@@ -357,6 +358,14 @@ boundary.
 - Дополнительный hardening pass закрыл contact-email split-brain gap:
   `PATCH /users/me/email` теперь валидируется через DTO и проверяет занятость
   email не только в `users.email`, но и в `UserIdentity(EMAIL)`.
+- Production feedback hardening: explicit OAuth link больше не блокируется
+  `EMAIL_ALREADY_USED_BY_ANOTHER_ACCOUNT`, если Google/Yandex profile email
+  принадлежит другому legacy аккаунту. Это остается conflict для обычного OAuth
+  login без signed link-state и для explicit email link, но не для explicit
+  provider link из авторизованной сессии.
+- Production feedback hardening: profile Telegram link в обычном web теперь
+  использует Telegram Login Widget, а не показывает кнопку, которая работает
+  только из Mini App.
 - Дополнительный hardening pass закрыл Telegram split-brain gap: Telegram
   login/link теперь блокирует ситуацию, где `TELEGRAM` identity одного `User`
   конфликтует с `users.telegramId` другого `User` или расходится с contact
@@ -370,6 +379,11 @@ boundary.
   affected asset counts вынесены в `UserMergePreflightAssetsService`, а
   `MERGE_PREFLIGHT` audit write/metadata — в
   `UserMergePreflightAuditService`.
+- Clarification pass убрал root `db:deploy`: текущий backend deploy уже
+  выполняет `prisma migrate deploy` в `start/start:prod`, поэтому отдельная
+  root-команда могла создать ложное ощущение, что migration нужно запускать
+  вручную каждый раз. Root `phase18:identity-backfill` оставлен как разовая
+  operator-команда для миграции старых identity rows после deploy.
 
 ## Ссылки
 

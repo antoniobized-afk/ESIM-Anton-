@@ -18,6 +18,7 @@
     "lint": "pnpm --parallel lint",
     "test": "pnpm --parallel test",
     "db:migrate": "pnpm --filter backend exec prisma migrate dev",
+    "phase18:identity-backfill": "pnpm --filter backend run phase18:identity-backfill",
     "db:studio": "pnpm --filter backend prisma studio"
   },
   "devDependencies": {

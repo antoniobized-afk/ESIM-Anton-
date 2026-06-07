@@ -85,10 +85,16 @@
   входа.
 - Audit `LINKED/UNLINKED` snapshots не хранят raw email или raw
   `providerSubject`; email фиксируется как `emailHash/emailPreview`.
-- Explicit email/OAuth/Telegram link conflicts пишут `LOGIN_CONFLICT` audit
+- Explicit email/Telegram/provider-subject link conflicts пишут
+  `LOGIN_CONFLICT` audit
   вне rollback-transaction: support видит attempted/conflicting user context,
   но публичный response не раскрывает чужой `User.id`, raw provider subject или
   полный email.
+- Explicit OAuth link больше не блокируется только из-за того, что
+  Google/Yandex profile email уже есть у другого legacy account: email в OAuth
+  payload не является `EMAIL` login identity и не переносит contact/business
+  ownership. Обычный OAuth login без signed link-state по-прежнему блокирует
+  такую email collision.
 - Explicit Telegram link не меняет `User.telegramId`, но запрещает привязку,
   если verified Telegram subject уже является Telegram contact другого
   пользователя.
@@ -98,7 +104,8 @@
   `AuthCallbackUrlService`.
 - В `client/app/profile/page.tsx` добавлен раздел "Способы входа": список
   identities, email link через код, OAuth link Google/Yandex, Telegram link из
-  Mini App, unlink с confirm и refresh `/auth/me` + identities после mutation.
+  Mini App или Telegram Login Widget в web, unlink с confirm и refresh
+  `/auth/me` + identities после mutation.
 - Admin/support merge controls в пользовательский UI не добавлялись.
 
 ## Файлы
@@ -114,6 +121,7 @@
 - `backend/src/modules/auth/auth-identity.controller.spec.ts`
 - `backend/src/modules/auth/auth-callback-url.service.spec.ts`
 - `client/app/profile/page.tsx`
+- `client/components/TelegramLoginWidgetButton.tsx`
 - `client/lib/api.ts`
 - `client/lib/auth.ts`
 
@@ -125,7 +133,8 @@
 - Tests покрывают: user-facing providers без VK, запрет unlink последней
   identity, audit перед unlink, signed OAuth link start, invalid signed-like
   link state без fallback в login flow, explicit OAuth link provider allowlist,
-  explicit link `LOGIN_CONFLICT` audit, отсутствие raw email/provider subject в
+  explicit OAuth link при occupied contact email, explicit link
+  `LOGIN_CONFLICT` audit, отсутствие raw email/provider subject в
   `LINKED/UNLINKED` snapshots и Telegram identity/contact split-brain conflict.
 - Browser/manual smoke еще не запускался: нужно проверить profile identities UI
   после применения миграции/backfill на dev DB.

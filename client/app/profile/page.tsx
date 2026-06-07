@@ -19,6 +19,7 @@ import {
 import BottomNav from '@/components/BottomNav'
 import { useAuth } from '@/components/AuthProvider'
 import { useTheme } from '@/components/ThemeProvider'
+import TelegramLoginWidgetButton from '@/components/TelegramLoginWidgetButton'
 import packageJson from '@/package.json'
 
 interface UserProfile {
@@ -36,6 +37,7 @@ interface UserProfile {
 type Language = 'ru' | 'en'
 
 const LINKABLE_PROVIDER_ORDER: AuthIdentityProvider[] = ['EMAIL', 'TELEGRAM', 'GOOGLE', 'YANDEX']
+const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || 'mojo_mobile_bot'
 
 const IDENTITY_PROVIDER_META: Record<AuthIdentityProvider, {
   label: string
@@ -94,6 +96,7 @@ export default function ProfilePage() {
   const [emailLinkStep, setEmailLinkStep] = useState<'email' | 'code'>('email')
   const [emailLinkValue, setEmailLinkValue] = useState('')
   const [emailLinkCode, setEmailLinkCode] = useState('')
+  const [telegramWebAppAvailable, setTelegramWebAppAvailable] = useState(false)
 
   // Modals
   const [showThemeModal, setShowThemeModal] = useState(false)
@@ -205,6 +208,38 @@ export default function ProfilePage() {
     if (savedLang) setLanguage(savedLang)
     if (savedNotifications !== null) setNotifications(savedNotifications === 'true')
   }, [authLoading, loadIdentities, loadReferralStats, loadUserData])
+
+  useEffect(() => {
+    setTelegramWebAppAvailable(Boolean((window as any).Telegram?.WebApp?.initData))
+  }, [])
+
+  useEffect(() => {
+    ;(window as any).onTelegramIdentityLink = async (userData: Record<string, string>) => {
+      setIdentityAction('telegram')
+      setIdentityMessage(null)
+      try {
+        const result = await authIdentitiesApi.linkTelegramWidget(userData)
+        setIdentityMessage({
+          type: 'success',
+          text: result.status === 'already_linked'
+            ? 'Telegram уже привязан.'
+            : 'Telegram привязан.',
+        })
+        await Promise.all([loadIdentities(), refreshUser()])
+      } catch (e: any) {
+        setIdentityMessage({
+          type: 'error',
+          text: e?.response?.data?.message || 'Не удалось привязать Telegram.',
+        })
+      } finally {
+        setIdentityAction(null)
+      }
+    }
+
+    return () => {
+      delete (window as any).onTelegramIdentityLink
+    }
+  }, [loadIdentities, refreshUser])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -617,6 +652,22 @@ export default function ProfilePage() {
                   const meta = IDENTITY_PROVIDER_META[provider]
                   const Icon = providerIcon(provider)
                   const loadingProvider = identityAction === provider.toLowerCase()
+                  if (provider === 'TELEGRAM' && !telegramWebAppAvailable) {
+                    return (
+                      <TelegramLoginWidgetButton
+                        key={provider}
+                        botUsername={BOT_USERNAME}
+                        onAuthFunctionName="onTelegramIdentityLink"
+                        title={meta.label}
+                        subtitle="Привязать"
+                        loading={loadingProvider}
+                        disabled={Boolean(identityAction)}
+                        fallbackText="Для привязки Telegram откройте приложение через бота"
+                        fallbackCta="Открыть в Telegram"
+                        fallbackStart="link"
+                      />
+                    )
+                  }
                   return (
                     <button
                       key={provider}

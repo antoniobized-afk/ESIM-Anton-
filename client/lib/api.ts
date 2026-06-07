@@ -239,6 +239,11 @@ export const authIdentitiesApi = {
     return data;
   },
 
+  async linkTelegramWidget(payload: Record<string, string>): Promise<{ status: 'linked' | 'already_linked' }> {
+    const { data } = await api.post('/auth/identities/link/telegram', payload);
+    return data;
+  },
+
   async unlink(identityId: string): Promise<void> {
     await api.delete(`/auth/identities/${identityId}`);
   },

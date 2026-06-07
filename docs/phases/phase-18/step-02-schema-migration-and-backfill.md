@@ -146,3 +146,16 @@
 - DB migration/backfill на реальной БД еще не запускались. Перед
   `--apply --confirm-phase18-identity-backfill` нужен dry-run/preflight report
   без blocking `error` issues.
+- Production порядок для текущего Railway runtime:
+  1. deploy backend: `backend/start` уже выполняет `prisma migrate deploy`
+     перед `node dist/main`;
+  2. dry-run `pnpm phase18:identity-backfill`;
+  3. если нет blocking `error` issues, apply
+     `pnpm phase18:identity-backfill -- --apply --confirm-phase18-identity-backfill`;
+  4. повторный dry-run и проверка идемпотентности.
+  `prisma migrate dev` не является production-командой.
+- Backfill не объединяет разные `User` rows и не переносит заказы, баланс,
+  saved cards, referrals или promo ownership. Он только создает недостающие
+  `UserIdentity` rows для уже существующих legacy login/contact полей.
+  Команда нужна один раз после выката Phase 18 на существующую БД, а не при
+  каждом пользовательском link/unlink.

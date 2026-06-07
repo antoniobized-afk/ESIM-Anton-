@@ -283,6 +283,13 @@ service: unknown args не игнорируются, `--apply` без confirm-ф
 подключается к БД, stdout отдает operator report с counts/issues без internal
 candidates.
 
+Backfill не является пользовательским merge-инструментом. Он не объединяет
+разные `User`, не переносит заказы, баланс, saved cards, referrals, partner
+promo ownership или notification contacts. Его задача — один раз после
+production deploy создать отсутствующие `UserIdentity` rows из legacy
+`users.email`, `users.telegramId` и `users.authProvider/providerId`, чтобы старые
+аккаунты продолжили входить через новый resolver.
+
 ### Login Resolver Rules
 
 - Сначала искать `UserIdentity(provider, providerSubject)`.
@@ -398,8 +405,12 @@ candidates.
 - `returnTo` внутри signed link-state проходит backend normalization и не
   принимает backslash/encoded-backslash variants;
 - email link требует email code verification;
-- explicit OAuth/email link проверяет email collision не только по
-  `User.email`, но и по уже существующей `EMAIL` identity другого пользователя;
+- explicit email link проверяет email collision не только по `User.email`, но и
+  по уже существующей `EMAIL` identity другого пользователя;
+- explicit OAuth link из авторизованной сессии не блокируется из-за contact
+  email другого legacy аккаунта: для Google/Yandex link canonical key —
+  `(provider, providerSubject)`, а provider email хранится как metadata/label и
+  не переносит `User.email`, `EMAIL` identity или business rows;
 - `PATCH /users/me/email` остается contact-field update, но проходит DTO
   validation и запрещает сохранить email, уже занятый `UserIdentity(EMAIL)`
   другого пользователя;
@@ -413,7 +424,9 @@ candidates.
 - backend запрещает второй active identity того же provider для одного
   canonical `User`; для смены provider subject нужен explicit unlink/link или
   отдельная support policy;
-- Telegram link доступен через verified Telegram Widget/WebApp payload;
+- Telegram link доступен через verified Telegram Widget/WebApp payload; client
+  profile использует Mini App `initData` внутри Telegram и Telegram Login
+  Widget в обычном web-контексте;
 - explicit Telegram link не меняет `User.telegramId`, но запрещает привязку,
   если verified Telegram subject уже является `users.telegramId` другого
   пользователя;
