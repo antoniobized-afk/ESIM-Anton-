@@ -739,7 +739,7 @@ export class OrdersService {
           const discountPercent = Number(promoPreview.discountPercent);
           promoDiscount = (totalAmount * discountPercent) / 100;
           totalAmount -= promoDiscount;
-        } catch (error) {
+        } catch (error: any) {
           if (!this.isNonBlockingAutoPromoError(error)) {
             throw error;
           }
@@ -1753,7 +1753,7 @@ export class OrdersService {
       });
       const accountingResult = await this.runPurchaseCompletionAccounting(orderId);
       return this.withCompletionAccountingResult(updatedOrder, accountingResult);
-    } catch (error) {
+    } catch (error: any) {
       if (this.isFulfillmentFinalizeError(error)) {
         throw error;
       }
