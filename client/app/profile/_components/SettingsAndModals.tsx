@@ -198,7 +198,7 @@ export function NotificationsModal({ notifications, onClose, onToggle }: {
 
 function BottomSheet({ title, onClose, children }: BottomSheetProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50" onClick={onClose}>
       <div
         className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-t-3xl p-6 animate-slide-up"
         onClick={(e) => e.stopPropagation()}
@@ -224,7 +224,7 @@ function LanguageOption({ active, flag, label, onClick }: {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center justify-between px-4 py-4 rounded-xl transition-colors ${active ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
+      className={`w-full flex items-center justify-between px-4 py-4 rounded-xl transition-colors ${active ? 'bg-orange-50 dark:bg-[#f77430]/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
     >
       <div className="flex items-center gap-3">
         <span className="text-2xl">{flag}</span>
@@ -244,7 +244,7 @@ function ThemeOption({ active, icon, label, onClick }: {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center justify-between px-4 py-4 rounded-xl transition-colors ${active ? 'bg-orange-50' : 'hover:bg-gray-50'}`}
+      className={`w-full flex items-center justify-between px-4 py-4 rounded-xl transition-colors ${active ? 'bg-orange-50 dark:bg-[#f77430]/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
     >
       <div className="flex items-center gap-3">
         {icon}
