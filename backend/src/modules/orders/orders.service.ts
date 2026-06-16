@@ -636,6 +636,8 @@ export class OrdersService {
         return 'Промокод по партнёрской ссылке исчерпан. Покупка продолжится без этой скидки.';
       case 'Промокод не найден':
         return 'Промокод по партнёрской ссылке больше не найден. Покупка продолжится без этой скидки.';
+      case 'Промокод уже использован':
+        return 'Промокод по партнёрской ссылке можно применить только один раз. Покупка продолжится без этой скидки.';
       default:
         return 'Промокод по партнёрской ссылке сейчас недоступен. Покупка продолжится без этой скидки.';
     }
@@ -693,6 +695,7 @@ export class OrdersService {
     if (normalizedManualPromoCode) {
       const promoPreview = await this.promoCodesService.validateForReservation(
         normalizedManualPromoCode,
+        user.id,
       );
       if (promoPreview.partnerRewardPolicy?.ownerId === user.id) {
         throw new BadRequestException(
@@ -731,6 +734,7 @@ export class OrdersService {
         try {
           const promoPreview = await this.promoCodesService.validateForReservation(
             referralLink.promoCode.code,
+            user.id,
           );
           promoId = promoPreview.promoId;
           promoCode = promoPreview.code;

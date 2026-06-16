@@ -418,6 +418,9 @@ model PromoCodeRedemption {
   @@index([promoCodeId, status])
   @@index([userId, status])
   @@index([rewardOwnerIdSnapshot, status])
+  // Raw partial unique index (см. миграцию 20260616120000_add_promo_once_per_user):
+  // promo_code_redemptions_consumed_once_per_user UNIQUE (promoCodeId, userId) WHERE status = 'CONSUMED'.
+  // Гарантия «один пользователь — один промокод» на уровне БД.
   @@map("promo_code_redemptions")
 }
 

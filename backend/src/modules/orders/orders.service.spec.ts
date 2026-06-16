@@ -670,7 +670,10 @@ describe('OrdersService', () => {
         promoCode: 'sale10',
       });
 
-      expect(promoCodesService.validateForReservation).toHaveBeenCalledWith('SALE10');
+      expect(promoCodesService.validateForReservation).toHaveBeenCalledWith(
+        'SALE10',
+        'user_1',
+      );
       expect(prisma.order.create).not.toHaveBeenCalled();
       expect(quote).toEqual(
         expect.objectContaining({
@@ -779,7 +782,10 @@ describe('OrdersService', () => {
 
       const quote = await service.previewPricing('user_1', 'product_1');
 
-      expect(promoCodesService.validateForReservation).toHaveBeenCalledWith('NEW20');
+      expect(promoCodesService.validateForReservation).toHaveBeenCalledWith(
+        'NEW20',
+        'user_1',
+      );
       expect(quote).toEqual(
         expect.objectContaining({
           promoCode: 'NEW20',

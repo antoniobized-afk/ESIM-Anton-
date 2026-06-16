@@ -442,6 +442,92 @@ describe('PromoCodesService', () => {
     });
   });
 
+  it('validateForReservation отклоняет повторное использование промокода тем же пользователем', async () => {
+    const { service, prisma } = makeService();
+    prisma.promoCode.findUnique.mockResolvedValue({
+      id: 'promo_1',
+      code: 'PROMO10',
+      isActive: true,
+      expiresAt: null,
+      maxUses: null,
+      usedCount: 1,
+      discountPercent: 10,
+    });
+    prisma.promoCodeRedemption.count.mockResolvedValue(1);
+
+    await expect(
+      service.validateForReservation('promo10', 'user_1'),
+    ).rejects.toThrow('Промокод уже использован');
+
+    expect(prisma.promoCodeRedemption.count).toHaveBeenCalledWith({
+      where: {
+        promoCodeId: 'promo_1',
+        userId: 'user_1',
+        status: {
+          in: [
+            PromoCodeRedemptionStatus.RESERVED,
+            PromoCodeRedemptionStatus.CONSUMED,
+          ],
+        },
+      },
+    });
+  });
+
+  it('validateForReservation без userId не выполняет per-user проверку (public/anonymous контекст)', async () => {
+    const { service, prisma } = makeService();
+    prisma.promoCode.findUnique.mockResolvedValue({
+      id: 'promo_1',
+      code: 'PROMO10',
+      isActive: true,
+      expiresAt: null,
+      maxUses: null,
+      usedCount: 5,
+      discountPercent: 10,
+    });
+
+    await expect(service.validateForReservation('promo10')).resolves.toEqual(
+      expect.objectContaining({ valid: true, promoId: 'promo_1' }),
+    );
+    expect(prisma.promoCodeRedemption.count).not.toHaveBeenCalled();
+  });
+
+  it('reserveForOrder отклоняет повторную попытку того же пользователя под локом', async () => {
+    const { service, tx } = makeService();
+    tx.promoCode.findUnique
+      .mockResolvedValueOnce({
+        id: 'promo_1',
+        code: 'PROMO10',
+        isActive: true,
+        expiresAt: null,
+        maxUses: null,
+        usedCount: 1,
+        discountPercent: 10,
+      })
+      .mockResolvedValueOnce({
+        id: 'promo_1',
+        code: 'PROMO10',
+        isActive: true,
+        expiresAt: null,
+        maxUses: null,
+        usedCount: 1,
+        discountPercent: 10,
+      });
+    tx.promoCodeRedemption.count
+      .mockResolvedValueOnce(0) // глобальный RESERVED count
+      .mockResolvedValueOnce(1); // per-user активные погашения
+
+    await expect(
+      service.reserveForOrder(
+        'PROMO10',
+        'user_1',
+        'order_2',
+        PromoCodeRedemptionSource.REFERRAL_LINK_AUTO,
+      ),
+    ).rejects.toThrow('Промокод уже использован');
+
+    expect(tx.promoCodeRedemption.create).not.toHaveBeenCalled();
+  });
+
   it('validate не раскрывает partner owner/reward metadata в public endpoint contract', async () => {
     const { service, prisma } = makeService();
     prisma.promoCode.findUnique.mockResolvedValue({

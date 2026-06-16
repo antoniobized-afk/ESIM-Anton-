@@ -129,6 +129,31 @@ export class PromoCodesService {
     return promo;
   }
 
+  /**
+   * Сколько раз пользователь уже занял этот промокод действующим погашением.
+   * RESERVED (заказ в процессе) и CONSUMED (завершённый заказ) считаются
+   * использованием; RELEASED от отменённых заказов не учитывается. Единый
+   * источник правды для правила «один пользователь — один промокод».
+   */
+  private async countActiveUserRedemptions(
+    client: PrismaLikeClient,
+    promoCodeId: string,
+    userId: string,
+  ) {
+    return client.promoCodeRedemption.count({
+      where: {
+        promoCodeId,
+        userId,
+        status: {
+          in: [
+            PromoCodeRedemptionStatus.RESERVED,
+            PromoCodeRedemptionStatus.CONSUMED,
+          ],
+        },
+      },
+    });
+  }
+
   private buildReservationRewardPolicy(promo: {
     referralOwnerId?: string | null;
     referralBonusPercent?: Prisma.Decimal | null;
@@ -323,12 +348,24 @@ export class PromoCodesService {
     };
   }
 
-  async validateForReservation(code: string) {
+  async validateForReservation(code: string, userId?: string) {
     const normalized = this.normalizeCode(code);
     const promo = await this.loadValidPromo(this.prisma, normalized);
 
     if (promo.maxUses !== null && promo.usedCount >= promo.maxUses) {
       throw new BadRequestException('Промокод исчерпан');
+    }
+
+    if (userId) {
+      const userRedemptions = await this.countActiveUserRedemptions(
+        this.prisma,
+        promo.id,
+        userId,
+      );
+
+      if (userRedemptions > 0) {
+        throw new BadRequestException('Промокод уже использован');
+      }
     }
 
     return {
@@ -374,6 +411,16 @@ export class PromoCodesService {
         lockedPromo.usedCount + reservedCount >= lockedPromo.maxUses
       ) {
         throw new BadRequestException('Промокод исчерпан');
+      }
+
+      const userRedemptions = await this.countActiveUserRedemptions(
+        tx,
+        promo.id,
+        userId,
+      );
+
+      if (userRedemptions > 0) {
+        throw new BadRequestException('Промокод уже использован');
       }
 
       const rewardPolicy = this.buildReservationRewardPolicy(lockedPromo);

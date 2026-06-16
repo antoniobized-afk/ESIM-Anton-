@@ -143,6 +143,29 @@ response includes only `valid`, `promoId`, `code`, `discountPercent`.
 Partner promo checkout decisions use internal `validateForReservation()` through
 `POST /orders/quote` and `POST /orders`, where user/order context is available.
 
+### Per-User Redemption Limit
+
+Промокод применяется к пользователю **один раз** — одинаково для ручного ввода
+(`MANUAL`) и авто-промокода по реферальной ссылке (`REFERRAL_LINK_AUTO`).
+«Использованием» считается действующее погашение в статусе `RESERVED` (заказ в
+процессе) или `CONSUMED` (завершённый заказ); `RELEASED` от отменённых заказов
+не блокирует.
+
+Три слоя защиты:
+
+1. **`validateForReservation(code, userId)`** — единый источник правды
+   eligibility. При повторе бросает `Промокод уже использован`. Manual-ввод
+   получает 400; авто-промокод деградирует до `promoStatus='unavailable'` (заказ
+   проходит без скидки).
+2. **`reserveForOrder`** — повторная проверка под `FOR UPDATE`-локом promo row,
+   закрывает гонку параллельных заказов одного пользователя.
+3. **DB partial unique index** `promo_code_redemptions_consumed_once_per_user`
+   на `(promoCodeId, userId) WHERE status='CONSUMED'` — финальная гарантия.
+
+Глобальный `maxUses`/`usedCount` и per-user лимит независимы: первый ограничивает
+суммарное число использований промокода, второй — повторное использование одним
+пользователем.
+
 ## Runtime Map
 
 ### Quote
