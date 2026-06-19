@@ -462,14 +462,21 @@ export class EsimAccessProvider {
   }
 
   /**
-   * Получить пакеты для пополнения конкретного eSIM
+   * Получить пакеты для пополнения конкретного eSIM.
+   *
+   * eSIM Access НЕ имеет выделенного эндпоинта под top-up пакеты
+   * (старый `/esim/topup/package` отдаёт 404). Доступные для пополнения пакеты
+   * запрашиваются через обычный Package List с `type: "TOPUP"` и `iccid` —
+   * провайдер вернёт только пакеты, применимые к этой eSIM.
    */
   async getTopupPackages(iccid: string): Promise<EsimAccessPackage[]> {
     try {
       this.logger.log(`📦 Запрос пакетов для пополнения eSIM ${this.maskValue(iccid, 2, 4)}...`);
 
-      const response = await this.client.post('/esim/topup/package', {
+      const response = await this.client.post('/package/list', {
+        type: 'TOPUP',
         iccid,
+        pager: { pageNum: 1, pageSize: 500 },
       }, {
         headers: this.getAuthHeaders(),
       });
