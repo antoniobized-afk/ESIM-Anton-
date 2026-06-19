@@ -195,7 +195,10 @@ export class EsimAccessProvider {
         validity: pkg.validity || pkg.duration, // Срок действия (для Day Pass обычно 180)
         speed: pkg.speed || '',                  // Ограничение скорости
         fupPolicy: pkg.fupPolicy || '',
-        supportTopup: pkg.supportTopup,
+        // eSIM Access помечает пополняемые пакеты полем `supportTopUpType` (1 = reloadable),
+        // а НЕ boolean `supportTopup`. Раньше читали несуществующее поле → у всех продуктов
+        // кэшировался false и кнопка «Пополнить» не показывалась. Нормализуем к boolean.
+        supportTopup: pkg.supportTopUpType === 1 || pkg.supportTopUp === true,
         dataType: dataType || (pkg.type || 1),   // Сохраняем тип
         coverageCountries: Array.isArray(pkg.locationNetworkList)
           ? pkg.locationNetworkList
@@ -477,7 +480,12 @@ export class EsimAccessProvider {
         durationUnit: pkg.durationUnit,
         speed: pkg.speed,
         fupPolicy: pkg.fupPolicy || '',
-        supportTopup: pkg.supportTopup,
+        // Это уже список top-up пакетов: если провайдер прислал `supportTopUpType`,
+        // уважаем его, иначе считаем пакет пополняемым (не прячем по умолчанию).
+        supportTopup:
+          pkg.supportTopUpType !== undefined
+            ? pkg.supportTopUpType === 1
+            : pkg.supportTopup !== false,
         coverageCountries: Array.isArray(pkg.locationNetworkList)
           ? pkg.locationNetworkList
             .map((item: any) => item?.locationName)
