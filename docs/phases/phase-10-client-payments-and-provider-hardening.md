@@ -154,4 +154,4 @@
 - [Аудит `client` / payments / provider flows](../audits/audit.md)
 - [Phase 4: Loyalty & Referral Wiring](./phase-4-loyalty-and-referral-wiring.md)
 - [Phase 5: eSIM Usage, Status & Activation](./phase-5-esim-usage-status-and-activation.md)
-- [Phase 9: API Security Infrastructure](./phase-8-api-security-infrastructure.md)
+- [Phase 8: API Security Infrastructure](./phase-8-api-security-infrastructure.md)

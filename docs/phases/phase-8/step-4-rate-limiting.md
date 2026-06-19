@@ -1,6 +1,6 @@
 # Шаг 4. Rate limiting
 
-> [⬅️ Назад к фазе](../phase-9-api-security-infrastructure.md)
+> [⬅️ Назад к фазе](../phase-8-api-security-infrastructure.md)
 
 ## Цель
 

@@ -1,4 +1,4 @@
-# Phase 9: API Security Infrastructure (Helmet, CORS, DTO, Rate Limiting)
+# Phase 8: API Security Infrastructure (Helmet, CORS, DTO, Rate Limiting)
 
 > [Корневой документ wiki](../README.md)
 
@@ -38,7 +38,7 @@
 
 ## Архитектурные решения
 
-- Phase 9 нельзя выкатывать как один большой "security cleanup". Её нужно внедрять волнами: `helmet/CORS` -> `Swagger/test-notify verification` -> `DTO` -> `throttle`.
+- Phase 8 нельзя выкатывать как один большой "security cleanup". Её нужно внедрять волнами: `helmet/CORS` -> `Swagger/test-notify verification` -> `DTO` -> `throttle`.
 - `helmet` используется как baseline security headers control. CSP нельзя включать вслепую: `payments/success` и `payments/fail` содержат inline styles/scripts и внешние Telegram/CloudPayments scripts, поэтому CSP нужно либо настроить явно, либо временно отключить до отдельного CSP hardening.
 - CORS: `process.env.CORS_ORIGIN` должен содержать comma-separated список доменов. Fallback на localhost-only, а не на `*`.
 - Swagger: полностью скрыт в production. Если нужен доступ — рассмотреть Basic Auth в следующей итерации.
@@ -83,10 +83,10 @@
 
 ## Шаги (журналы)
 
-- [Шаг 1. Security headers и CORS](./phase-9/step-1-helmet-cors.md)
-- [Шаг 2. Swagger и test-notify](./phase-9/step-2-swagger-test-notify.md)
-- [Шаг 3. DTO с class-validator для external write endpoints](./phase-9/step-3-dto-validation.md)
-- [Шаг 4. Rate limiting](./phase-9/step-4-rate-limiting.md)
+- [Шаг 1. Security headers и CORS](./phase-8/step-1-helmet-cors.md)
+- [Шаг 2. Swagger и test-notify](./phase-8/step-2-swagger-test-notify.md)
+- [Шаг 3. DTO с class-validator для external write endpoints](./phase-8/step-3-dto-validation.md)
+- [Шаг 4. Rate limiting](./phase-8/step-4-rate-limiting.md)
 
 ## Верификация
 
@@ -118,4 +118,4 @@
 
 - [Корневой документ wiki](../README.md)
 - [Phase 3: Admin Auth & API Security](./phase-3-admin-auth-and-api-security.md)
-- [Security Audit Report](../../.agent/agents/security-auditor.md)
+- Security Audit Report 2026-05-08 — исторический источник фазы; отдельный файл аудита в текущем дереве отсутствует.
