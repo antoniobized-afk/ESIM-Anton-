@@ -118,7 +118,7 @@
   - Добавить web landing `/ref/[code]`, one-shot `AuthProvider` integration, admin CRUD/stats UI и обновить `referrals-runtime.md`.
   - Документ: [phase-16-partner-referral-links.md](./phase-16-partner-referral-links.md)
 
-- [ ] **Phase 17: Partner Promo Codes**
+- [x] **Phase 17: Partner Promo Codes**
   - Добавить партнёрские промокоды: обычный `PromoCode` может опционально иметь владельца, bonus percent и payout mode.
   - Не объединять `PromoCode` и `ReferralLink`: ссылки остаются acquisition attribution, промокоды — checkout attribution.
   - Зафиксировать financial guardrails: один primary order = максимум один partner reward, manual partner promo wins over referral link, no self-reward, top-up некомиссионный.
@@ -126,7 +126,7 @@
   - Доработать shared reward ledger, order completion, admin PromoCodes UI, analytics и runtime wiki.
   - Документ: [phase-17-partner-promo-codes.md](./phase-17-partner-promo-codes.md)
 
-- [ ] **Phase 18: Account Identity Linking & Merge**
+- [x] **Phase 18: Account Identity Linking & Merge**
   - Вынести способы входа из legacy `User.authProvider/providerId` в durable `UserIdentity`.
   - Оставить `User` canonical business account для денег, заказов, eSIM, referrals, partner rewards, saved cards и уведомлений.
   - Запретить silent OAuth/email merge: новый provider привязывается только явно из авторизованной сессии или через admin/support flow.
@@ -135,3 +135,10 @@
   - Локальная реализация и automated verification закрыты; production deploy
     ожидает additive migration, identity backfill dry-run/apply и manual smoke.
   - Документ: [phase-18-account-identity-linking-and-merge.md](./phase-18-account-identity-linking-and-merge.md)
+
+- [ ] **Phase 19: Telegram Broadcast Campaigns**
+  - Добавить admin-controlled Telegram broadcast campaigns для пользователей, которые уже взаимодействовали с ботом.
+  - Разделить login identity и канал доставки через `TelegramContact`, не используя `UserIdentity(TELEGRAM)` как recipient source.
+  - Реализовать campaign/audience snapshot, BullMQ delivery queue, conservative Telegram rate limit, retry/error taxonomy, blocked/opt-out handling и operator audit.
+  - Paid broadcast (`allow_paid_broadcast`) оставить выключенным до отдельной budget/operator policy.
+  - Документ: [phase-19-telegram-broadcasts.md](./phase-19-telegram-broadcasts.md)

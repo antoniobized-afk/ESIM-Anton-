@@ -21,6 +21,7 @@
 - [promo-codes-runtime.md](./promo-codes-runtime.md) — текущий runtime-контракт промокодов и policy lock для Phase 17 Partner Promo Codes.
 - [referrals-runtime.md](./referrals-runtime.md) — актуальный runtime-контракт referral flow после referral follow-up.
 - [auth-identity-runtime.md](./auth-identity-runtime.md) — текущий auth/account contract и целевая граница `User` vs `UserIdentity` для Phase 18.
+- [telegram-broadcast-runtime.md](./telegram-broadcast-runtime.md) — planned runtime-контракт Telegram broadcast campaigns для Phase 19: contact boundary, queue semantics, rate limits и error taxonomy.
 
 ## Правило source of truth
 
