@@ -310,6 +310,7 @@ export class OrdersController {
       body.packageCode,
       user.id,
       method,
+      body.periodNum,
     );
 
     // Для card-flow клиент должен сам вызвать POST /payments/create с order.id

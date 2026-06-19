@@ -313,12 +313,13 @@ export class EsimProviderService {
 
   /**
    * Пополнить eSIM выбранным пакетом.
+   * `periodNum` актуален только для Day Pass пакетов (supportTopUpType = 3).
    */
-  async topupEsim(iccid: string, packageCode: string, transactionId?: string): Promise<any> {
+  async topupEsim(iccid: string, packageCode: string, transactionId?: string, periodNum?: number): Promise<any> {
     if (!this.esimAccessProvider) {
       throw new BadRequestException('Провайдер eSIM не настроен');
     }
-    return this.esimAccessProvider.topupEsim(iccid, packageCode, transactionId);
+    return this.esimAccessProvider.topupEsim(iccid, packageCode, transactionId, periodNum);
   }
 
   async purchaseEsim(

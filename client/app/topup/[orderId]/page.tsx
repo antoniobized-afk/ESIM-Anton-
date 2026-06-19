@@ -36,6 +36,18 @@ export default function TopupPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [balance, setBalance] = useState<number | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<'balance' | 'card'>('card')
+  // Выбранное число дней для Day Pass пакетов (supportTopUpType = 3), по packageCode.
+  const [daysByPkg, setDaysByPkg] = useState<Record<string, number>>({})
+
+  // Day Pass пополнение: цена пакета указана за день, нужно выбрать число дней.
+  const isDayPass = (pkg: TopupPackagePriced) => pkg.supportTopUpType === 3
+  const getDays = (pkg: TopupPackagePriced) =>
+    isDayPass(pkg) ? daysByPkg[pkg.packageCode] ?? 1 : 1
+  const setDays = (code: string, value: number) =>
+    setDaysByPkg((prev) => ({
+      ...prev,
+      [code]: Math.min(365, Math.max(1, Math.floor(value) || 1)),
+    }))
 
   // Подгружаем актуальный баланс пользователя — нужен для подсветки кнопки
   // «С баланса» и проверки достаточности средств перед сабмитом.
@@ -91,15 +103,17 @@ export default function TopupPage() {
   }, [orderId, loadData])
 
   const handleTopup = async (pkg: TopupPackagePriced) => {
-    const priceRub = Number(pkg.priceRub || 0)
+    const days = getDays(pkg)
+    const priceRub = Number(pkg.priceRub || 0) * days
     if (paymentMethod === 'balance' && balance !== null && priceRub > balance) {
       setError(`Недостаточно средств: нужно ${priceRub}₽, на балансе ${balance}₽. Пополните баланс.`)
       return
     }
+    const daysSuffix = isDayPass(pkg) ? ` на ${days} дн.` : ''
     const confirmText =
       paymentMethod === 'balance'
-        ? `Списать ${priceRub}₽ с баланса и пополнить «${pkg.name}»?`
-        : `Перейти к оплате «${pkg.name}» картой (${priceRub}₽)?`
+        ? `Списать ${priceRub}₽ с баланса и пополнить «${pkg.name}»${daysSuffix}?`
+        : `Перейти к оплате «${pkg.name}»${daysSuffix} картой (${priceRub}₽)?`
     if (!confirm(confirmText)) return
 
     setSubmitting(pkg.packageCode)
@@ -109,6 +123,9 @@ export default function TopupPage() {
       const data = await ordersApi.topup(orderId, {
         packageCode: pkg.packageCode,
         paymentMethod,
+        // periodNum нужен только для Day Pass и только когда дней больше одного
+        // (для одного дня бэкенд полагается на дефолт провайдера).
+        ...(isDayPass(pkg) && days > 1 ? { periodNum: days } : {}),
       })
       if (data?.paymentMethod === 'card' && data?.order?.id) {
         const publicId = process.env.NEXT_PUBLIC_CLOUDPAYMENTS_PUBLIC_ID
@@ -242,7 +259,10 @@ export default function TopupPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {packages.map((pkg) => {
-              const priceRub = Number(pkg.priceRub || 0)
+              const dayPass = isDayPass(pkg)
+              const days = getDays(pkg)
+              const unitPrice = Number(pkg.priceRub || 0)
+              const priceRub = unitPrice * days
               const insufficient =
                 paymentMethod === 'balance' &&
                 balance !== null &&
@@ -258,7 +278,8 @@ export default function TopupPage() {
                         {pkg.name}
                       </h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {formatVolume(pkg.volume)} · {pkg.duration} {pkg.durationUnit || 'дн'}
+                        {formatVolume(pkg.volume)}
+                        {dayPass ? ' / день' : ` · ${pkg.duration} ${pkg.durationUnit || 'дн'}`}
                         {pkg.speed ? ` · ${pkg.speed}` : ''}
                       </p>
                     </div>
@@ -266,8 +287,41 @@ export default function TopupPage() {
                       <p className="font-bold text-lg text-gray-900 dark:text-white">
                         {priceRub} ₽
                       </p>
+                      {dayPass && (
+                        <p className="text-xs text-gray-400">{unitPrice} ₽ × {days} дн.</p>
+                      )}
                     </div>
                   </div>
+
+                  {dayPass && (
+                    <div className="mt-3 flex items-center gap-3">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">Дней:</span>
+                      <button
+                        type="button"
+                        onClick={() => setDays(pkg.packageCode, days - 1)}
+                        disabled={days <= 1}
+                        className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-center text-lg font-bold text-gray-600 dark:text-gray-300 disabled:opacity-40"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={days}
+                        onChange={(e) => setDays(pkg.packageCode, parseInt(e.target.value))}
+                        className="w-16 text-center py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 font-semibold text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#f77430]/25"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setDays(pkg.packageCode, days + 1)}
+                        disabled={days >= 365}
+                        className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center justify-center text-lg font-bold text-gray-600 dark:text-gray-300 disabled:opacity-40"
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
                   <button
                     onClick={() => handleTopup(pkg)}
                     disabled={submitting !== null || insufficient}

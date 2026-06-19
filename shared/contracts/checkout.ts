@@ -89,6 +89,9 @@ export interface CreateOrderResponse {
 export interface CreateTopupOrderRequest {
   packageCode: string;
   paymentMethod?: CheckoutPaymentMethod;
+  // Число периодов/дней для Day Pass пакетов (supportTopUpType = 3).
+  // Для обычных пакетов игнорируется.
+  periodNum?: number;
 }
 
 export interface CreateTopupOrderResponse {

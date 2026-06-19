@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import type {
   CheckoutPaymentMethod,
   CreateTopupOrderRequest,
@@ -14,4 +14,11 @@ export class CreateTopupOrderDto implements CreateTopupOrderRequest {
   @IsOptional()
   @IsIn(CHECKOUT_PAYMENT_METHODS)
   paymentMethod?: CheckoutPaymentMethod;
+
+  // Число дней для Day Pass пополнения (supportTopUpType = 3); 1..365.
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  periodNum?: number;
 }

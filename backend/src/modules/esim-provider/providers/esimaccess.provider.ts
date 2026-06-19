@@ -24,6 +24,9 @@ export interface EsimAccessPackage {
   speed: string;         // Ограничение скорости после лимита
   fupPolicy?: string;
   supportTopup: boolean;
+  // Сырой код поддержки пополнения от eSIM Access: 1 = нет, 2 = да,
+  // 3 = да с periodNum (Day Pass). `supportTopup` — это производный boolean.
+  supportTopUpType?: number;
   dataType?: number;     // 1 = standard, 2 = unlimited/day pass
   coverageCountries?: string[];
 }
@@ -200,6 +203,7 @@ export class EsimAccessProvider {
         // 3 = да (c periodNum). Раньше читали несуществующее поле → у всех продуктов
         // кэшировался false и кнопка «Пополнить» не показывалась. Нормализуем к boolean.
         supportTopup: pkg.supportTopUpType === 2 || pkg.supportTopUpType === 3,
+        supportTopUpType: pkg.supportTopUpType,
         dataType: dataType || (pkg.type || 1),   // Сохраняем тип
         coverageCountries: Array.isArray(pkg.locationNetworkList)
           ? pkg.locationNetworkList
@@ -363,17 +367,29 @@ export class EsimAccessProvider {
 
   /**
    * Пополнить/продлить eSIM (Top-up)
-   * Работает только для пакетов где supportTopup = true
+   * Работает только для пакетов где supportTopup = true.
+   *
+   * `periodNum` передаётся только для пакетов с `supportTopUpType = 3`
+   * (Day Pass): это число периодов/дней, на которое продлевается тариф.
+   * Для обычных пакетов (`supportTopUpType = 2`) он не нужен и не отправляется —
+   * ровно та же семантика, что у `purchaseEsim`.
    */
-  async topupEsim(iccid: string, packageCode: string, transactionId?: string): Promise<any> {
+  async topupEsim(iccid: string, packageCode: string, transactionId?: string, periodNum?: number): Promise<any> {
     try {
-      this.logger.log(`🔄 Пополнение eSIM (iccid=${this.maskValue(iccid, 2, 4)}, package=${packageCode})...`);
+      this.logger.log(
+        `🔄 Пополнение eSIM (iccid=${this.maskValue(iccid, 2, 4)}, package=${packageCode}, periodNum=${periodNum || 'N/A'})...`,
+      );
 
-      const response = await this.client.post('/esim/topup', {
+      const payload: Record<string, any> = {
         iccid,
         packageCode,
         transactionId: transactionId || `topup_${Date.now()}`,
-      }, {
+      };
+      if (periodNum && periodNum > 0) {
+        payload.periodNum = periodNum;
+      }
+
+      const response = await this.client.post('/esim/topup', payload, {
         headers: this.getAuthHeaders(),
       });
 
@@ -488,6 +504,7 @@ export class EsimAccessProvider {
           pkg.supportTopUpType !== undefined
             ? pkg.supportTopUpType === 2 || pkg.supportTopUpType === 3
             : pkg.supportTopup !== false,
+        supportTopUpType: pkg.supportTopUpType,
         coverageCountries: Array.isArray(pkg.locationNetworkList)
           ? pkg.locationNetworkList
             .map((item: any) => item?.locationName)

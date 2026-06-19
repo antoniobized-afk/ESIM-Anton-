@@ -2095,7 +2095,13 @@ export class OrdersService {
    * Возвращает: { order, paymentMethod, fulfillment? } — для balance уже выполненный
    * заказ; для card нужно создать платёж следующим шагом.
    */
-  async createTopupOrder(parentOrderId: string, packageCode: string, requesterId: string, paymentMethod: 'balance' | 'card' = 'card') {
+  async createTopupOrder(
+    parentOrderId: string,
+    packageCode: string,
+    requesterId: string,
+    paymentMethod: 'balance' | 'card' = 'card',
+    periodNum?: number,
+  ) {
     if (!packageCode) {
       throw new BadRequestException('packageCode обязателен');
     }
@@ -2123,16 +2129,30 @@ export class OrdersService {
       throw new BadRequestException('Этот пакет не поддерживает пополнение');
     }
 
-    // Считаем цену в RUB по тем же правилам, что и для основных тарифов
+    // Day Pass пакеты (supportTopUpType = 3) пополняются на N периодов/дней —
+    // как при покупке безлимита. Для обычных пакетов (тип 2) период не применяется,
+    // даже если клиент его прислал.
+    const requiresPeriod = pkg.supportTopUpType === 3;
+    const effectivePeriod = requiresPeriod
+      ? Math.min(365, Math.max(1, Math.floor(periodNum ?? 1)))
+      : 1;
+
+    // Считаем цену в RUB по тем же правилам, что и для основных тарифов.
+    // Цена пакета — за один период, поэтому умножаем на число периодов (ourPrice * days).
     const pricing = await this.systemSettingsService.getPricingSettings();
     const priceUsd = Number(pkg.price) / 10000;
-    const priceRub = Math.round(
+    const unitPriceRub = Math.round(
       priceUsd * (1 + pricing.defaultMarkupPercent / 100) * pricing.exchangeRate,
     );
+    const priceRub = unitPriceRub * effectivePeriod;
 
     if (priceRub <= 0) {
       throw new BadRequestException('Не удалось рассчитать стоимость пополнения');
     }
+
+    // periodNum сохраняем только когда он реально применяется и > 1 (зеркально покупке:
+    // для одного периода полагаемся на дефолт провайдера и не шлём periodNum).
+    const orderPeriodNum = requiresPeriod && effectivePeriod > 1 ? effectivePeriod : null;
 
     // === Balance flow: атомарно списываем и оплачиваем ===
     if (paymentMethod === 'balance') {
@@ -2169,6 +2189,7 @@ export class OrdersService {
             status: OrderStatus.PAID,
             parentOrderId: parent.id,
             topupPackageCode: packageCode,
+            periodNum: orderPeriodNum,
           },
           include: { product: true, user: true },
         });
@@ -2237,6 +2258,7 @@ export class OrdersService {
         status: OrderStatus.PENDING,
         parentOrderId: parent.id,
         topupPackageCode: packageCode,
+        periodNum: orderPeriodNum,
       },
       include: { product: true, user: true },
     });
@@ -2459,6 +2481,7 @@ export class OrdersService {
         parent.iccid,
         order.topupPackageCode,
         `topup_${order.id}_${Date.now()}`,
+        order.periodNum ?? undefined,
       );
       const topupSnapshot: Prisma.OrderUpdateInput = {
         providerOrderId: result.orderNo,

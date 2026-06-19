@@ -134,6 +134,9 @@ export interface TopupPackage {
   durationUnit: string;
   speed?: string;
   supportTopup: boolean;
+  // Код поддержки пополнения от провайдера: 2 = обычный пакет,
+  // 3 = Day Pass (цена за день, требует выбора числа дней — periodNum).
+  supportTopUpType?: number;
 }
 
 export interface Order {
