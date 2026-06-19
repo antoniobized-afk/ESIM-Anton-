@@ -195,10 +195,11 @@ export class EsimAccessProvider {
         validity: pkg.validity || pkg.duration, // Срок действия (для Day Pass обычно 180)
         speed: pkg.speed || '',                  // Ограничение скорости
         fupPolicy: pkg.fupPolicy || '',
-        // eSIM Access помечает пополняемые пакеты полем `supportTopUpType` (1 = reloadable),
-        // а НЕ boolean `supportTopup`. Раньше читали несуществующее поле → у всех продуктов
+        // eSIM Access помечает пополняемость полем `supportTopUpType` (число!),
+        // а НЕ boolean `supportTopup`. Семантика по доке: 1 = нет, 2 = да,
+        // 3 = да (c periodNum). Раньше читали несуществующее поле → у всех продуктов
         // кэшировался false и кнопка «Пополнить» не показывалась. Нормализуем к boolean.
-        supportTopup: pkg.supportTopUpType === 1 || pkg.supportTopUp === true,
+        supportTopup: pkg.supportTopUpType === 2 || pkg.supportTopUpType === 3,
         dataType: dataType || (pkg.type || 1),   // Сохраняем тип
         coverageCountries: Array.isArray(pkg.locationNetworkList)
           ? pkg.locationNetworkList
@@ -480,11 +481,12 @@ export class EsimAccessProvider {
         durationUnit: pkg.durationUnit,
         speed: pkg.speed,
         fupPolicy: pkg.fupPolicy || '',
-        // Это уже список top-up пакетов: если провайдер прислал `supportTopUpType`,
-        // уважаем его, иначе считаем пакет пополняемым (не прячем по умолчанию).
+        // Это уже список top-up пакетов: если провайдер прислал `supportTopUpType`
+        // (1 = нет, 2 = да, 3 = да с periodNum) — уважаем его, иначе считаем пакет
+        // пополняемым (не прячем по умолчанию).
         supportTopup:
           pkg.supportTopUpType !== undefined
-            ? pkg.supportTopUpType === 1
+            ? pkg.supportTopUpType === 2 || pkg.supportTopUpType === 3
             : pkg.supportTopup !== false,
         coverageCountries: Array.isArray(pkg.locationNetworkList)
           ? pkg.locationNetworkList
