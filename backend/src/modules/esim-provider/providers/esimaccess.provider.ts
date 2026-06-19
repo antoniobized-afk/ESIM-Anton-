@@ -504,13 +504,14 @@ export class EsimAccessProvider {
         durationUnit: pkg.durationUnit,
         speed: pkg.speed,
         fupPolicy: pkg.fupPolicy || '',
-        // Это уже список top-up пакетов: если провайдер прислал `supportTopUpType`
-        // (1 = нет, 2 = да, 3 = да с periodNum) — уважаем его, иначе считаем пакет
-        // пополняемым (не прячем по умолчанию).
-        supportTopup:
-          pkg.supportTopUpType !== undefined
-            ? pkg.supportTopUpType === 2 || pkg.supportTopUpType === 3
-            : pkg.supportTopup !== false,
+        // ВАЖНО: это ответ Package List с type=TOPUP — провайдер уже вернул только
+        // пакеты, применимые для пополнения этой eSIM, поэтому все они доступны.
+        // `supportTopUpType` здесь описывает САМ топ-ап пакет (1 = его нельзя
+        // топапить дальше) и НЕ должен скрывать опцию — фильтровать по нему тут нельзя.
+        // (Гейт «можно ли пополнять eSIM вообще» живёт на базовом пакете в каталоге.)
+        supportTopup: true,
+        // Пробрасываем сырой тип: фронт/сервис используют `=== 3` для Day Pass
+        // (пополнение на N дней, periodNum). Для обычных пакетов это 1.
         supportTopUpType: pkg.supportTopUpType,
         coverageCountries: Array.isArray(pkg.locationNetworkList)
           ? pkg.locationNetworkList

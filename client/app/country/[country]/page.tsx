@@ -281,6 +281,14 @@ function CountryPageInner() {
                     ))}
                   </div>
                 )}
+                {/* Метка о возможности пополнения (top-up) */}
+                {product.supportTopup && (
+                  <div className="mt-1">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/50">
+                      ↻ Можно пополнить
+                    </span>
+                  </div>
+                )}
                 {/* Скорость после лимита для Daily Unlimited */}
                 {product.isUnlimited && product.speed && (
                   <p className="text-xs text-gray-400 mt-0.5">

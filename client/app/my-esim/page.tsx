@@ -529,9 +529,17 @@ export default function MyEsimPage() {
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       {esim.dataAmount}
                     </p>
-                    <div className={`inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.color} ${statusConfig.bg}`}>
-                      <StatusIcon size={14} />
-                      {statusConfig.label}
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${statusConfig.color} ${statusConfig.bg}`}>
+                        <StatusIcon size={14} />
+                        {statusConfig.label}
+                      </div>
+                      {esim.canTopup && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30">
+                          <RefreshCw size={12} />
+                          Можно пополнить
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
