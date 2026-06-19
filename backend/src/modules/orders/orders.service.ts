@@ -1620,6 +1620,9 @@ export class OrdersService {
     const newOrders = await this.prisma.order.findMany({
       where: {
         userId,
+        // Заказы-пополнения не являются новой eSIM (у них своё уведомление),
+        // поэтому не триггерим для них алерт «eSIM готова».
+        parentOrderId: null,
         status: {
           in: [OrderStatus.PAID, OrderStatus.PROCESSING, OrderStatus.COMPLETED],
         },

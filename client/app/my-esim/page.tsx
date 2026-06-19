@@ -383,7 +383,10 @@ export default function MyEsimPage() {
       const orders = await ordersApi.getMy(userId);
 
       const activeOrders = orders.filter(o =>
-        o.status === 'PAID' || o.status === 'PROCESSING' || o.status === 'COMPLETED'
+        // Дочерние заказы-пополнения (parentOrderId) не имеют своей eSIM —
+        // это докупка трафика к родительской, отдельной карточкой быть не должны.
+        !o.parentOrderId &&
+        (o.status === 'PAID' || o.status === 'PROCESSING' || o.status === 'COMPLETED')
       );
 
       const mappedEsims: MyEsim[] = activeOrders.map(order => ({

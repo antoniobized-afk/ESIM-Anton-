@@ -161,6 +161,11 @@ export interface Order {
   smdpAddress?: string | null;
   activatedAt?: string | null;
   expiresAt?: string | null;
+  // Для заказов-пополнений: ссылка на родительский заказ и код top-up пакета.
+  // Дочерние topup-заказы не имеют собственной eSIM/iccid — это лишь докупка
+  // трафика к родительской eSIM, поэтому в списке «Мои eSIM» они скрываются.
+  parentOrderId?: string | null;
+  topupPackageCode?: string | null;
 }
 
 export type OrderQuote = OrderQuoteResponse;
