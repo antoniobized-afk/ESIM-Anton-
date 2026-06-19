@@ -36,7 +36,6 @@ export class TrafficMonitorService {
   private readonly logger = new Logger(TrafficMonitorService.name);
 
   private readonly LOW_REMAINING_PERCENT: number;
-  private readonly NOTIFY_COOLDOWN_HOURS: number;
   private readonly BATCH_SIZE: number;
   private readonly THROTTLE_MS: number;
   private readonly ENABLED: boolean;
@@ -50,16 +49,13 @@ export class TrafficMonitorService {
     this.LOW_REMAINING_PERCENT = Number(
       this.config.get('TRAFFIC_LOW_PERCENT') ?? 10,
     );
-    this.NOTIFY_COOLDOWN_HOURS = Number(
-      this.config.get('TRAFFIC_NOTIFY_COOLDOWN_HOURS') ?? 24,
-    );
     this.BATCH_SIZE = Number(this.config.get('TRAFFIC_BATCH_SIZE') ?? 50);
     this.THROTTLE_MS = Number(this.config.get('TRAFFIC_THROTTLE_MS') ?? 250);
     this.ENABLED = this.config.get('TRAFFIC_MONITOR_ENABLED') !== 'false';
 
     this.logger.log(
       `📊 TrafficMonitor: ENABLED=${this.ENABLED}, low=${this.LOW_REMAINING_PERCENT}%, ` +
-      `cooldown=${this.NOTIFY_COOLDOWN_HOURS}h, batch=${this.BATCH_SIZE}, throttle=${this.THROTTLE_MS}ms`,
+      `batch=${this.BATCH_SIZE}, throttle=${this.THROTTLE_MS}ms`,
     );
   }
 
@@ -95,7 +91,6 @@ export class TrafficMonitorService {
     let checked = 0;
     let lowDetected = 0;
     const now = new Date();
-    const cooldownMs = this.NOTIFY_COOLDOWN_HOURS * 60 * 60 * 1000;
 
     type LowItem = {
       orderId: string;
@@ -150,17 +145,15 @@ export class TrafficMonitorService {
 
         if (!isLow) continue;
 
+        // Уведомляем ОДИН раз. Если флаг уже стоит — молчим, чтобы не спамить.
+        // Флаг сбрасывается в null при пополнении eSIM (см. OrdersService),
+        // поэтому после пополнения и нового падения остатка уведомление придёт
+        // снова. Никакого периодического re-send (cooldown) здесь нет — раньше
+        // 24ч-cooldown «плавал» на граничном сравнении с часовым кроном и слал
+        // повторные уведомления со сдвигом +1ч каждый день.
         if (order.lowTrafficNotifiedAt) {
-          const notifiedAt = new Date(order.lowTrafficNotifiedAt).getTime();
-          const cooldownActive = Number.isFinite(notifiedAt) &&
-            now.getTime() - notifiedAt < cooldownMs;
-          if (cooldownActive) {
-            // this.logger.log(
-            //   `⏸️ ${order.id.slice(-6)}: low=${remainingPercent.toFixed(1)}%, cooldown ещё активен`,
-            // );
-            lowDetected++;
-            continue;
-          }
+          lowDetected++;
+          continue;
         }
 
         if (!order.user?.telegramId) {

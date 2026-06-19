@@ -41,7 +41,6 @@ function makeService(enabledOverride?: string) {
     get: jest.fn((key: string) => {
       if (key === 'TRAFFIC_MONITOR_ENABLED') return enabledOverride ?? 'true';
       if (key === 'TRAFFIC_LOW_PERCENT') return '10';
-      if (key === 'TRAFFIC_NOTIFY_COOLDOWN_HOURS') return '24';
       if (key === 'TRAFFIC_BATCH_SIZE') return '50';
       if (key === 'TRAFFIC_THROTTLE_MS') return '0'; // no delay in tests
       return undefined;
@@ -159,7 +158,7 @@ describe('TrafficMonitorService.monitorTrafficLevels', () => {
     expect(telegramNotification.sendTextNotification).not.toHaveBeenCalled();
   });
 
-  it('соблюдает cooldown — не шлёт повторно раньше 24ч', async () => {
+  it('не шлёт повторно, если уже уведомляли (флаг недавно проставлен)', async () => {
     const { service, prisma, ordersService, telegramNotification } =
       makeService();
     const order = makeOrder({
@@ -178,7 +177,7 @@ describe('TrafficMonitorService.monitorTrafficLevels', () => {
     expect(telegramNotification.sendTextNotification).not.toHaveBeenCalled();
   });
 
-  it('уведомляет повторно после истечения cooldown', async () => {
+  it('не шлёт повторно даже спустя сутки — уведомляем один раз, без cooldown re-send', async () => {
     const { service, prisma, ordersService, telegramNotification } =
       makeService();
     const order = makeOrder({
@@ -194,7 +193,9 @@ describe('TrafficMonitorService.monitorTrafficLevels', () => {
 
     await service.monitorTrafficLevels();
 
-    expect(telegramNotification.sendTextNotification).toHaveBeenCalledTimes(1);
+    // Раньше тут был повторный re-send после 24ч cooldown. Теперь — молчим,
+    // повтор только после пополнения (флаг сбрасывается в OrdersService).
+    expect(telegramNotification.sendTextNotification).not.toHaveBeenCalled();
   });
 
   it('пропускает заказы без telegramId у юзера', async () => {
