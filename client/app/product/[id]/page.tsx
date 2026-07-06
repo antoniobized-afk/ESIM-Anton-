@@ -53,6 +53,23 @@ function getSavedCardFollowUpState(
   return null
 }
 
+function getApiErrorMessage(error: unknown, fallback: string) {
+  const responseMessage = (error as any)?.response?.data?.message
+  if (Array.isArray(responseMessage)) {
+    const message = responseMessage.filter(Boolean).join(', ')
+    return message || fallback
+  }
+  if (typeof responseMessage === 'string' && responseMessage.trim()) {
+    return responseMessage
+  }
+  return fallback
+}
+
+function getQuotePromoDiscountPercent(quote: OrderQuote) {
+  if (!quote.baseAmount || quote.promoDiscount <= 0) return 0
+  return Math.round((quote.promoDiscount / quote.baseAmount) * 100)
+}
+
 export default function ProductPage() {
   return (
     <Suspense fallback={<div className="min-h-screen" />}>
@@ -235,10 +252,19 @@ function ProductPageInner() {
           setPricingQuote(quote)
           setPricingError('')
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
+          const message = getApiErrorMessage(
+            error,
+            'Не удалось подтвердить итоговую стоимость. Обновите страницу или попробуйте ещё раз.',
+          )
           setPricingQuote(null)
-          setPricingError('Не удалось подтвердить итоговую стоимость. Обновите страницу или попробуйте ещё раз.')
+          setPricingError(message)
+          if (promoApplied && promoCode.trim()) {
+            setPromoApplied(false)
+            setPromoDiscount(0)
+            setPromoError(message)
+          }
         }
       } finally {
         if (!cancelled) {
@@ -777,13 +803,30 @@ function ProductPageInner() {
               setPromoLoading(true)
               setPromoError('')
               try {
-                const res = await promoApi.validate(promoCode)
+                const normalizedPromoCode = promoCode.trim()
+                if (product && (authUser?.id || authToken)) {
+                  const quote = await ordersApi.quote({
+                    productId: product.id,
+                    quantity: 1,
+                    ...(isDaily && selectedDays > 1 ? { periodNum: selectedDays } : {}),
+                    promoCode: normalizedPromoCode,
+                  })
+                  setPricingQuote(quote)
+                  setPricingError('')
+                  setPromoApplied(true)
+                  setPromoDiscount(getQuotePromoDiscountPercent(quote))
+                  return
+                }
+
+                const res = await promoApi.validate(normalizedPromoCode)
                 setPromoApplied(true)
                 setPromoDiscount(res.discountPercent)
-              } catch (e: any) {
+              } catch (e) {
+                const message = getApiErrorMessage(e, 'Промокод не найден')
                 setPromoApplied(false)
                 setPromoDiscount(0)
-                setPromoError(e?.response?.data?.message || 'Промокод не найден')
+                setPricingError('')
+                setPromoError(message)
               } finally {
                 setPromoLoading(false)
               }
