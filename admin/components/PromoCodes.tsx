@@ -117,10 +117,10 @@ export default function PromoCodes() {
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string, code: string) => {
     const confirmed = await confirmDialog({
       title: 'Удаление промокода',
-      description: 'Удалить промокод? Исторические заказы и начисления не будут пересчитаны, но сам код исчезнет из админского списка.',
+      description: `Удалить промокод ${code}? Физическое удаление доступно только для промокодов без заказов, начислений и партнёрских ссылок. Если код уже использовали, отключите его вместо удаления.`,
       confirmLabel: 'Удалить',
       variant: 'destructive',
     })
@@ -132,7 +132,7 @@ export default function PromoCodes() {
       toast.success('Промокод удален')
     } catch (e) {
       console.error(e)
-      toast.error('Не удалось удалить промокод')
+      toast.error(getErrorMessage(e, 'Не удалось удалить промокод'))
     }
   }
 
@@ -327,7 +327,7 @@ export default function PromoCodes() {
                               )}
                             </Button>
                             <Button
-                              onClick={() => handleDelete(c.id)}
+                              onClick={() => handleDelete(c.id, c.code)}
                               variant="ghost"
                               size="sm"
                               iconOnly
