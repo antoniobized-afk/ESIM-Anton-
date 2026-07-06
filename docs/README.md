@@ -1,49 +1,54 @@
 # LLM Wiki Entry Point
 
-> [Корневой документ wiki](./README.md)
+Цель: выбрать один следующий документ и не раздувать контекст.
 
-> Главный вход в проектную wiki после аудита унаследованного репозитория.
+## Стартовый маршрут
 
-## С чего начинать
+1. Выбрать один профиль:
+   - фаза / roadmap / текущий статус работ -> [phases/README.md](./phases/README.md);
+   - runtime / ownership / API / интеграции -> [architecture/README.md](./architecture/README.md);
+   - запуск / деплой / сопровождение -> [operations/README.md](./operations/README.md).
+2. Открыть один профильный doc и живой code reference.
+3. Если появился риск из таблицы ниже, открыть только найденный `INV-*`.
+4. Остановить чтение docs и перейти к задаче.
 
-1. [phases/README.md](./phases/README.md)
-   Здесь текущий статус работ по приведению проекта в управляемое состояние.
-2. [architecture/README.md](./architecture/README.md)
-   Здесь подтвержденная карта системы и аудит старой документации.
+## Risk Lookup
 
-## Что изменилось относительно шаблона
+Не открывать `invariants.md` целиком на старте. Если риск появился, найти нужный ID точечно:
 
-- `docs/architecture/` теперь описывает реальный код, а не абстрактный шаблон.
-- Пользовательская документация перенесена из корня в системные разделы `docs/operations/`, `docs/integrations/`, `docs/archive/`.
+| Риск | Lookup |
+| --- | --- |
+| new local pattern | `rg -n "INV-OBS" docs/architecture/invariants.md` |
+| architecture / app boundary | `rg -n "INV-ARCH\|INV-BND" docs/architecture/invariants.md` |
+| NestJS DI / module cycle | `rg -n "INV-DI" docs/architecture/invariants.md` |
+| endpoint / DTO / types | `rg -n "INV-DTO\|INV-TYPE" docs/architecture/invariants.md` |
+| auth / guards / redirects | `rg -n "INV-AUTH\|INV-SEC" docs/architecture/invariants.md` |
+| Prisma schema / транзакции | `rg -n "INV-PRISMA\|INV-TX" docs/architecture/invariants.md` |
+| client pages / layout | `rg -n "INV-CLIENT" docs/architecture/invariants.md` |
+| env / config | `rg -n "INV-ENV" docs/architecture/invariants.md` |
+| new util / duplicate helper | `rg -n "INV-REUSE\|INV-SRP\|INV-SIZE" docs/architecture/invariants.md` |
+| verification / closure | `rg -n "INV-VER\|Definition of Done" docs/architecture/invariants.md` |
 
-## Быстрая навигация
+## Ownership
 
-### Нужно быстро понять, что за система
+| Документ | Владеет |
+| --- | --- |
+| [architecture/invariants.md](./architecture/invariants.md) | registry `INV-*` и Definition of Done; открывать точечно по ID |
+| [architecture/README.md](./architecture/README.md) | карта runtime/API/ownership contracts и профильных runtime docs |
+| [architecture/module-map.md](./architecture/module-map.md) | раскладка приложений и backend-модулей по папкам |
+| [architecture/gotchas/README.md](./architecture/gotchas/README.md) | подтвержденные риски и неочевидные моменты |
+| [architecture/agent-operating-model.md](./architecture/agent-operating-model.md) | контракт делегирования subagents |
+| [phases/README.md](./phases/README.md) | roadmap и текущий статус фаз |
+| [phases/PHASE_AUTHORING_GUIDE.md](./phases/PHASE_AUTHORING_GUIDE.md) | правила написания phase/step docs |
+| [operations/README.md](./operations/README.md) | setup, deployment, Railway runbooks |
+| [integrations/README.md](./integrations/README.md) | внешние интеграции (eSIM Access и др.) |
+| [archive/README.md](./archive/README.md) | архив legacy-документов; недостоверны без проверки кодом |
+| `docs/architecture/*` | durable technical contracts |
+| `docs/phases/*` | phase contracts, step journals, rollout context |
 
-- [architecture/system-overview.md](./architecture/system-overview.md)
-- [architecture/module-map.md](./architecture/module-map.md)
-- [info/proect.md](./info/proect.md)
-  Историческое продуктово-инфраструктурное описание, из которого видно, что `main` в GitHub запускает Railway autodeploy.
+## Supporting Layer
 
-
-### Нужно запускать или сопровождать проект
-
-- [operations/README.md](./operations/README.md)
-- [operations/setup.md](./operations/setup.md)
-- [operations/deployment.md](./operations/deployment.md)
-- [operations/railway-runbook.md](./operations/railway-runbook.md)
-- [architecture/runtime-and-operations.md](./architecture/runtime-and-operations.md)
-- [architecture/gotchas.md](./architecture/gotchas.md)
-- [architecture/railway-production-baseline.md](./architecture/railway-production-baseline.md)
-
-### Нужно понять внешние интеграции
-
-- [integrations/README.md](./integrations/README.md)
-- [integrations/esim-access.md](./integrations/esim-access.md)
-
-### Нужен архив старых документов
-
-- [archive/README.md](./archive/README.md)
+`docs/work`, `docs/plans`, `docs/audits`, `docs/info` — temporary/supporting context, игнорируются git (`.gitignore`). Если там найдено решение, перенести его в phase/wiki doc или оставить как черновик.
 
 ## Source of truth
 
@@ -53,3 +58,10 @@
 2. wiki в `docs/architecture/`;
 3. runbooks в `docs/operations/`;
 4. архивные документы в `docs/archive/`.
+
+## Rules
+
+- One fact -> one home.
+- README маршрутизирует; профильный doc владеет контрактом.
+- Не читать всю `docs/` подряд.
+- История, планы и audits не заменяют live code и durable wiki.

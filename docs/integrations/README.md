@@ -10,6 +10,5 @@
 
 ## Связанные разделы
 
-- [../architecture/runtime-and-operations.md](../architecture/runtime-and-operations.md)
-- [../architecture/gotchas.md](../architecture/gotchas.md)
-- [../archive/esim-provider-integration.md](../archive/esim-provider-integration.md)
+- [../architecture/system-overview.md](../architecture/system-overview.md)
+- [../architecture/gotchas/README.md](../architecture/gotchas/README.md)

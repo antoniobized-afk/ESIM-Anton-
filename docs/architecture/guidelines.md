@@ -16,8 +16,9 @@
 ## Как обновлять wiki дальше
 
 - При добавлении backend-модуля обновлять `module-map.md`.
-- При изменении платежного, auth или provider flow обновлять `system-overview.md` и `runtime-and-operations.md`.
-- При нахождении нового расхождения между legacy docs и кодом добавлять запись в `legacy-doc-audit.md` или `gotchas.md`.
+- При изменении платежного, auth или provider flow обновлять `system-overview.md` и профильный runtime doc (`payment-flow-audit.md`, `auth-identity-runtime.md` и т.п.).
+- При нахождении нового расхождения между legacy docs и кодом добавлять запись в профильный файл в `gotchas/`.
+- Нормативные code-level правила фиксировать как `INV-*` в `invariants.md`, а не дублировать текстом по docs.
 
 ## Client App Router
 

@@ -15,8 +15,14 @@
 
 ## Результат шага
 
-- Что считается завершением этого шага.
+- Acceptance criteria: конкретные условия, каждое из которых можно проверить как pass/fail.
 - Какие новые routes, pages, services, jobs или UI states должны появиться.
+
+## Не входит в scope (optional)
+
+Удалить блок, если scope очевиден.
+
+- Что явно исключено из этого шага, чтобы предотвратить scope creep.
 
 ## Зависимости
 
@@ -25,22 +31,33 @@
 
 ## Статус
 
-- `planned | in_progress | completed`
+- `planned | in_progress | partial | baseline | completed`
 
-## Журнал изменений
+## Evidence
 
-### YYYY-MM-DD
-
-- Что было добавлено или изменено в рамках шага.
-- Что было исключено из scope, если такое решение принималось.
+- 2-5 bullets: фактический результат, deviation from plan, verification evidence.
+- Не пересказывать phase doc или architecture wiki.
+- Если durable contract изменился, обновить профильный wiki doc и поставить ссылку.
 
 ## Файлы
 
-- Перечислить ключевые файлы или каталоги, которые, вероятно, будут затронуты.
-- Если шаг пока только планируется, можно оставить предварительный список.
+- Перечислить ключевые files/directories ownership, не полный diff.
+- Если шаг пока планируется, оставить предварительный список.
+
+## Agent handoff (optional)
+
+Удалить блок, если шаг выполняет main agent или нет безопасного disjoint write set.
+
+- Role: `recon | worker | validation | review`
+- Reads:
+- Write set:
+- Do not touch:
+- Gate:
 
 ## Тестирование / Верификация
 
 - Какие сценарии подтвердят завершение шага.
-- Какие type-check/tests/manual flows должны пройти.
-- Какие tenant/auth/runtime invariants нельзя нарушить.
+- Какие `INV-*` lookup IDs применимы к шагу.
+- Gate/evidence: command или manual flow + result.
+- Consumer audit, если меняется public/shared contract.
+- Длинные логи и копию external rules не вставлять.

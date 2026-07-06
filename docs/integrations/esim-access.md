@@ -9,8 +9,7 @@
 Актуальная архитектурная сводка:
 
 - [../architecture/system-overview.md](../architecture/system-overview.md)
-- [../architecture/runtime-and-operations.md](../architecture/runtime-and-operations.md)
-- [../architecture/legacy-doc-audit.md](../architecture/legacy-doc-audit.md)
+- [../architecture/module-map.md](../architecture/module-map.md)
 
 ## Что важно
 

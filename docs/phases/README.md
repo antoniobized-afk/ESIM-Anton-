@@ -21,5 +21,5 @@
 - Завершенная фаза переносится в [COMPLETED_PHASES.md](./COMPLETED_PHASES.md) с коротким итогом и ссылкой на phase-файл.
 - Новый phase-файл и его step journals создаются по [PHASE_AUTHORING_GUIDE.md](./PHASE_AUTHORING_GUIDE.md).
 - Для новых документов использовать шаблоны из [templates/README.md](./templates/README.md).
-- Если фаза меняет ownership boundary, runtime contract или deployment strategy, сначала обновить wiki / ADR, потом писать план реализации.
+- Если фаза меняет ownership boundary, runtime contract или deployment strategy, сначала обновить профильную wiki (Architecture Gate, `INV-ARCH-1`), потом писать план реализации.
 

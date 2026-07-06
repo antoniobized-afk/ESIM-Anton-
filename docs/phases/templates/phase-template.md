@@ -20,37 +20,59 @@
 
 ## Зависит от
 
-- Предыдущие фазы или ADR/wiki решения, без которых эта фаза не может стартовать.
+- Предыдущие фазы или wiki-решения, без которых эта фаза не может стартовать.
 
 ## Пререквизиты
 
-- Какие таблицы, модули, маршруты, middleware, jobs или внешние интеграции уже должны существовать.
+- Какие таблицы, модули, маршруты, guards, jobs или внешние интеграции уже должны существовать.
 - Какие продуктовые решения должны быть зафиксированы до начала работ.
 
 ## Архитектурные решения
 
-- Зафиксировать ownership boundary.
-- Указать, какие части системы являются source of truth.
-- Отдельно отметить ограничения по multi-tenancy, auth, jobs, OAuth, alerts или deployment, если они затрагиваются.
+- Phase-specific decisions.
+- Ссылки на профильные wiki docs, если меняется durable contract.
+- Использованные `INV-*` lookup IDs, если риск найден.
 
-## Шаги (журналы)
+## Шаги
 
 1. [Step 01 — Name](./phase-N/step-01-name.md)
 2. [Step 02 — Name](./phase-N/step-02-name.md)
 3. [Step 03 — Name](./phase-N/step-03-name.md)
 
-Если шагов больше, продолжить список, но без раздувания до микрозадач.
+Для фазы в roadmap создать planned step files сразу. Черновик без step files не считать готовым phase contract.
+
+## Execution topology (optional)
+
+Удалить блок, если фаза линейная или маленькая.
+Не использовать как план запуска воркеров: по умолчанию одна сессия берёт один step.
+
+Рабочее правило:
+
+- Одна сессия выполняет один step, обновляет step evidence и phase status snapshot.
+
+Порядок:
+
+- Step 01 -> Step 02 -> Step 03.
+
+Независимые шаги, если есть:
+
+- Step 02 и Step 03 можно выполнять в отдельных сессиях после Step 01.
 
 ## Верификация
 
-- Какие user/admin flows должны отработать после завершения фазы.
-- Какие routes/pages/jobs/callbacks должны работать.
-- Какие инварианты tenant isolation, auth, queue semantics или alerts должны сохраниться.
-- Какие тесты, type-check или ручные сценарии подтверждают завершение.
+- Phase-level scenario, который доказывает completion.
+- Gate/evidence plan (`INV-VER-1`), без копии external rules или test matrix.
+- Consumer audit plan, если меняется public/shared contract (`INV-VER-4`).
 
-## Журнал
+## Связанные документы
 
-### YYYY-MM-DD
+- Architecture wiki / previous phases, которые нужно читать перед реализацией.
+- Supporting materials, если они актуальны после сверки с live code.
+- Только ссылки и назначение документа. Не копировать содержимое связанных документов.
 
-- Коротко зафиксировать, что изменилось в формулировке фазы, scope или зависимостях.
-- Если был архитектурный поворот, добавить ссылку на wiki / ADR.
+## Статус / Evidence
+
+- Status: `planned | in_progress | partial | baseline | completed`
+- Current step:
+- Last evidence:
+- Links: step evidence / wiki, без пересказа деталей.

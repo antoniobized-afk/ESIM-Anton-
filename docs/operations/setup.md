@@ -2,7 +2,7 @@
 
 > [Корневой документ wiki](../README.md)
 
-Актуальный baseline по архитектуре и ограничениям см. в [../architecture/runtime-and-operations.md](../architecture/runtime-and-operations.md).
+Актуальный baseline по архитектуре и ограничениям см. в [../architecture/system-overview.md](../architecture/system-overview.md).
 
 ## Требования
 

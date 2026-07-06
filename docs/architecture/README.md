@@ -14,6 +14,8 @@
 
 ## Поддерживающие документы
 
+- [invariants.md](./invariants.md) — registry код-инвариантов `INV-*` и Definition of Done; открывать точечно по ID через Risk Lookup в [docs/README.md](../README.md).
+- [agent-operating-model.md](./agent-operating-model.md) — координационный контракт делегирования subagents.
 - [gotchas/README.md](./gotchas/README.md) — подтвержденные риски и неочевидные моменты проекта.
 - [guidelines.md](./guidelines.md) — локальные правила, которые уже диктует кодовая база.
 - [loyalty-runtime.md](./loyalty-runtime.md) — актуальный runtime-контракт системы лояльности.

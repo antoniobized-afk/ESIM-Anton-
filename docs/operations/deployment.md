@@ -2,13 +2,10 @@
 
 > [Корневой документ wiki](../README.md)
 
-Этот файл описывает только подтвержденный operational baseline. Полная production readiness у проекта ещё не подтверждена; см. [../architecture/runtime-and-operations.md](../architecture/runtime-and-operations.md) и [../architecture/gotchas.md](../architecture/gotchas.md).
+Этот файл описывает только подтвержденный operational baseline. Полная production readiness у проекта ещё не подтверждена; см. [../architecture/system-overview.md](../architecture/system-overview.md) и [../architecture/gotchas/README.md](../architecture/gotchas/README.md).
 
-Для уже существующего Railway production с непустой БД используйте отдельный чеклист:
-[../architecture/railway-production-baseline.md](../architecture/railway-production-baseline.md)
-
-Практический порядок действий перед merge/push в `main`:
-[railway-runbook.md](./railway-runbook.md)
+Для уже существующего Railway production с непустой БД действуют migrations-first правила:
+[../architecture/gotchas/data-and-migrations.md](../architecture/gotchas/data-and-migrations.md)
 
 Важно: `main` в GitHub привязан к Railway autodeploy. Это означает, что merge/push в production-ветку почти сразу запускает новый деплой. Для backend-изменений, затрагивающих Prisma startup flow, нужен отдельный rollout plan, а не обычный push.
 
