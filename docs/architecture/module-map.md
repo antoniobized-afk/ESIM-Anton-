@@ -66,6 +66,7 @@ Telegram bot runtime (Grammy).
 
 - `types.ts` — общие интерфейсы.
 - `contracts/` — (напр. `checkout.ts`) общие контракты, расшаренные между приложениями.
+- `country-display.ts` — единый owner человекочитаемых названий ISO-стран и provider region codes для `client` и `admin`; фильтрующее значение остаётся исходным `country`.
 
 ## Data Layer
 

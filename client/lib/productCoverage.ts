@@ -1,14 +1,9 @@
 import type { Product } from '@/lib/api'
 import { getCountryName } from '@/lib/utils'
+import { isProviderRegionCode } from '@shared/country-display'
 
 const MULTI_KEYWORDS = ['europe', 'asia', 'africa', 'america', 'regional', 'multi', 'евро', 'ази', 'афри', 'регион']
 const GLOBAL_KEYWORDS = ['global', 'world', 'глобал', 'мир', 'worldwide']
-// Matches: AS-12, EU-30, GL-120, BI-2, SGMY-2, CNJPKR-3, O-OC-3, SAAEQAKWOMBH-6, etc.
-const PROVIDER_REGION_CODE_RE = /^[A-Z][A-Z-]*-\d+$/i
-
-function isProviderRegionCode(value?: string): boolean {
-  return Boolean(value && PROVIDER_REGION_CODE_RE.test(value.trim()))
-}
 
 export function splitCoverageList(value?: string): string[] {
   if (!value) return []

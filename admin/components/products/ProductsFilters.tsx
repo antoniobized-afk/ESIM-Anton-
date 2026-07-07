@@ -2,6 +2,12 @@ import type { AdminProduct } from '@/lib/types'
 import Button from '@/components/ui/Button'
 import { ChevronDown, Eye, EyeOff, Filter, Search } from 'lucide-react'
 import type { TariffFilter } from './useProducts'
+import { getCountryFilterLabel, isMultiCountryValue } from '@shared/country-display'
+
+type CountryFilterOption = {
+  value: string
+  label: string
+}
 
 interface ProductsFiltersProps {
   countries: string[]
@@ -39,6 +45,22 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
     onClear,
     onToggleByType,
   } = props
+  const countryOptions = countries
+    .map((country) => ({
+      value: country,
+      label: getCountryFilterLabel(country),
+      isMultiCountry: isMultiCountryValue(country),
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label, 'ru'))
+  const singleCountryOptions = countryOptions.filter((option) => !option.isMultiCountry)
+  const multiCountryOptions = countryOptions.filter((option) => option.isMultiCountry)
+
+  const renderCountryOptions = (options: CountryFilterOption[]) =>
+    options.map((option) => (
+      <option key={option.value} value={option.value}>
+        {option.label}
+      </option>
+    ))
 
   return (
     <div className="glass-card p-6">
@@ -64,12 +86,17 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
             onChange={(event) => onCountryChange(event.target.value)}
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all appearance-none bg-white"
           >
-            <option value="">Все страны ({countries.length})</option>
-            {countries.map((country) => (
-              <option key={country} value={country}>
-                {country}
-              </option>
-            ))}
+            <option value="">Все направления ({countries.length})</option>
+            {singleCountryOptions.length > 0 && (
+              <optgroup label={`Страны (${singleCountryOptions.length})`}>
+                {renderCountryOptions(singleCountryOptions)}
+              </optgroup>
+            )}
+            {multiCountryOptions.length > 0 && (
+              <optgroup label={`Мультистраны (${multiCountryOptions.length})`}>
+                {renderCountryOptions(multiCountryOptions)}
+              </optgroup>
+            )}
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>

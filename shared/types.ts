@@ -1,6 +1,7 @@
 // Общие типы для всех модулей проекта
 
 export * from './contracts/checkout';
+export * from './country-display';
 
 export interface User {
   id: string;
