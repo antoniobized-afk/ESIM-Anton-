@@ -192,6 +192,8 @@ export default function ProductsPage() {
         filteredProducts={products.products}
         selectedIds={products.selectedIds}
         exchangeRate={products.exchangeRate}
+        sortBy={products.sortBy}
+        sortOrder={products.sortOrder}
         error={products.error}
         onRetry={products.loadProducts}
         onSelectAll={products.handleSelectAll}
@@ -199,6 +201,7 @@ export default function ProductsPage() {
         onView={products.setViewingProduct}
         onEdit={products.handleEdit}
         onToggleActive={products.handleToggleActive}
+        onSort={products.setSort}
         getProviderPriceUSD={products.getProviderPriceUSD}
         getMarkupPercent={products.getMarkupPercent}
       />

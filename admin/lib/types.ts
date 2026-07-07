@@ -3,6 +3,9 @@ import type {
   ProductDataTypeSelector,
   ProductDataTypeValue,
 } from '@shared/product-data-type'
+import type { ProductSortField, ProductSortOrder } from '@shared/product-sorting'
+
+export type { ProductSortField, ProductSortOrder } from '@shared/product-sorting'
 
 export type NumericLike = number | string
 
@@ -292,6 +295,8 @@ export interface ProductFilters {
   dataAmount?: string
   dataUnit?: 'MB' | 'GB'
   durationDays?: number
+  sortBy?: ProductSortField
+  sortOrder?: ProductSortOrder
   page?: number
   limit?: number
 }

@@ -1,6 +1,6 @@
-import type { AdminProduct } from '@/lib/types'
+import type { AdminProduct, ProductSortField, ProductSortOrder } from '@/lib/types'
 import Button from '@/components/ui/Button'
-import { Table, TableBody, TableHead, TableHeaderCell, TableRow } from '@/components/ui/Table'
+import { SortableHeader, Table, TableBody, TableHead, TableHeaderCell, TableRow } from '@/components/ui/Table'
 import { Package } from 'lucide-react'
 import ProductsTableRow from './ProductsTableRow'
 
@@ -8,6 +8,8 @@ interface ProductsTableProps {
   filteredProducts: AdminProduct[]
   selectedIds: Set<string>
   exchangeRate: number
+  sortBy: ProductSortField
+  sortOrder: ProductSortOrder
   error: string | null
   onRetry: () => void
   onSelectAll: () => void
@@ -15,12 +17,13 @@ interface ProductsTableProps {
   onView: (product: AdminProduct) => void
   onEdit: (product: AdminProduct) => void
   onToggleActive: (product: AdminProduct) => void
+  onSort: (field: ProductSortField) => void
   getProviderPriceUSD: (providerPrice: number | string) => number
   getMarkupPercent: (providerPrice: number | string, ourPrice: number | string) => number
 }
 
 export default function ProductsTable(props: ProductsTableProps) {
-  const { filteredProducts, selectedIds, exchangeRate, error, onRetry, onSelectAll, onSelectOne, onView, onEdit, onToggleActive, getProviderPriceUSD, getMarkupPercent } = props
+  const { filteredProducts, selectedIds, exchangeRate, sortBy, sortOrder, error, onRetry, onSelectAll, onSelectOne, onView, onEdit, onToggleActive, onSort, getProviderPriceUSD, getMarkupPercent } = props
 
   return (
     <div className="glass-card glass-card--static p-6">
@@ -50,18 +53,40 @@ export default function ProductsTable(props: ProductsTableProps) {
                     className="w-4 h-4 rounded"
                   />
                 </TableHeaderCell>
-                <TableHeaderCell className="px-2">Name</TableHeaderCell>
-                <TableHeaderCell className="px-2">Цена поставщика</TableHeaderCell>
-                <TableHeaderCell className="px-2">Data ⇅</TableHeaderCell>
-                <TableHeaderCell className="px-2">Duration ⇅</TableHeaderCell>
-                <TableHeaderCell className="px-2">Себестоимость / GB</TableHeaderCell>
-                <TableHeaderCell className="px-2">Наша цена</TableHeaderCell>
-                <TableHeaderCell className="px-2">Наценка</TableHeaderCell>
+                <SortableHeader active={sortBy === 'name'} direction={sortOrder} onClick={() => onSort('name')} className="px-2">
+                  Name
+                </SortableHeader>
+                <SortableHeader active={sortBy === 'providerPrice'} direction={sortOrder} onClick={() => onSort('providerPrice')} className="px-2">
+                  Цена поставщика
+                </SortableHeader>
+                <SortableHeader active={sortBy === 'dataAmountMb'} direction={sortOrder} onClick={() => onSort('dataAmountMb')} className="px-2">
+                  Data
+                </SortableHeader>
+                <SortableHeader active={sortBy === 'validityDays'} direction={sortOrder} onClick={() => onSort('validityDays')} className="px-2">
+                  Duration
+                </SortableHeader>
+                <SortableHeader active={sortBy === 'providerCostPerGb'} direction={sortOrder} onClick={() => onSort('providerCostPerGb')} className="px-2">
+                  Себестоимость / GB
+                </SortableHeader>
+                <SortableHeader active={sortBy === 'ourPrice'} direction={sortOrder} onClick={() => onSort('ourPrice')} className="px-2">
+                  Наша цена
+                </SortableHeader>
+                <SortableHeader active={sortBy === 'markupRatio'} direction={sortOrder} onClick={() => onSort('markupRatio')} className="px-2">
+                  Наценка
+                </SortableHeader>
                 <TableHeaderCell className="px-2">Speed</TableHeaderCell>
-                <TableHeaderCell className="px-2">Region</TableHeaderCell>
-                <TableHeaderCell className="px-2">Тип</TableHeaderCell>
-                <TableHeaderCell className="px-2">Бейдж</TableHeaderCell>
-                <TableHeaderCell className="px-2">Статус</TableHeaderCell>
+                <SortableHeader active={sortBy === 'country'} direction={sortOrder} onClick={() => onSort('country')} className="px-2">
+                  Region
+                </SortableHeader>
+                <SortableHeader active={sortBy === 'dataType'} direction={sortOrder} onClick={() => onSort('dataType')} className="px-2">
+                  Тип
+                </SortableHeader>
+                <SortableHeader active={sortBy === 'badge'} direction={sortOrder} onClick={() => onSort('badge')} className="px-2">
+                  Бейдж
+                </SortableHeader>
+                <SortableHeader active={sortBy === 'isActive'} direction={sortOrder} onClick={() => onSort('isActive')} className="px-2">
+                  Статус
+                </SortableHeader>
                 <TableHeaderCell className="px-2" />
               </TableRow>
             </TableHead>

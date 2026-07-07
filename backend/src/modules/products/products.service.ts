@@ -13,9 +13,15 @@ import {
   type ProductDataTypeSelector,
 } from '@shared/product-data-type';
 import { buildProductsWhere, type ProductListFilters } from './products.filters';
+import { buildProductSortKeyData } from './products.sort-keys';
+import { buildProductsOrderBy } from './products.sorting';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
-import { normalizeCreateProductData, normalizeUpdateProductData } from './products.write-normalizer';
+import {
+  normalizeCreateProductData,
+  normalizeProductBadgeData,
+  normalizeUpdateProductData,
+} from './products.write-normalizer';
 import { buildSyncedProductPlan } from './products.sync-model';
 import {
   collectProductSyncProviderResults,
@@ -188,7 +194,7 @@ export class ProductsService implements OnModuleInit {
 
     return this.prisma.esimProduct.findMany({
       where,
-      orderBy: [{ country: 'asc' }, { ourPrice: 'asc' }],
+      orderBy: buildProductsOrderBy(filters),
     });
   }
 
@@ -203,7 +209,7 @@ export class ProductsService implements OnModuleInit {
         where,
         skip,
         take: limit,
-        orderBy: [{ country: 'asc' }, { ourPrice: 'asc' }],
+        orderBy: buildProductsOrderBy(filters),
       }),
       this.prisma.esimProduct.count({ where }),
     ]);
@@ -288,11 +294,13 @@ export class ProductsService implements OnModuleInit {
    * Массовая установка бейджа
    */
   async bulkSetBadge(ids: string[], badge: string | null, badgeColor: string | null) {
-    this.logger.log(`🏷️ Массовая установка бейджа "${badge}" для ${ids.length} продуктов...`);
+    const badgeData = normalizeProductBadgeData({ badge, badgeColor });
+    const badgeLogValue = badgeData.badge ?? 'удаление бейджа';
+    this.logger.log(`🏷️ Массовая установка бейджа "${badgeLogValue}" для ${ids.length} продуктов...`);
     
     const result = await this.prisma.esimProduct.updateMany({
       where: { id: { in: ids } },
-      data: { badge, badgeColor },
+      data: badgeData,
     });
 
     this.logger.log(`✅ Обновлено ${result.count} продуктов`);
@@ -300,8 +308,8 @@ export class ProductsService implements OnModuleInit {
     return {
       success: true,
       updated: result.count,
-      message: badge 
-        ? `Бейдж "${badge}" установлен для ${result.count} продуктов`
+      message: badgeData.badge
+        ? `Бейдж "${badgeData.badge}" установлен для ${result.count} продуктов`
         : `Бейдж удален у ${result.count} продуктов`,
     };
   }
@@ -330,7 +338,14 @@ export class ProductsService implements OnModuleInit {
 
       await this.prisma.esimProduct.update({
         where: { id: product.id },
-        data: { ourPrice: newPrice },
+        data: {
+          ourPrice: newPrice,
+          ...buildProductSortKeyData({
+            dataAmount: product.dataAmount,
+            providerPrice: product.providerPrice,
+            ourPrice: newPrice,
+          }),
+        },
       });
       updated++;
     }
@@ -357,6 +372,7 @@ export class ProductsService implements OnModuleInit {
     const products = await this.prisma.esimProduct.findMany({
       select: {
         id: true,
+        dataAmount: true,
         providerPrice: true,
       },
     });
@@ -368,7 +384,14 @@ export class ProductsService implements OnModuleInit {
 
       await this.prisma.esimProduct.update({
         where: { id: product.id },
-        data: { ourPrice: newPrice },
+        data: {
+          ourPrice: newPrice,
+          ...buildProductSortKeyData({
+            dataAmount: product.dataAmount,
+            providerPrice: product.providerPrice,
+            ourPrice: newPrice,
+          }),
+        },
       });
 
       updated++;
@@ -418,7 +441,7 @@ export class ProductsService implements OnModuleInit {
 
     return this.prisma.esimProduct.update({
       where: { id: product.id },
-      data: normalizeUpdateProductData(data),
+      data: normalizeUpdateProductData(data, product),
     });
   }
 
@@ -678,6 +701,7 @@ export class ProductsService implements OnModuleInit {
 
           if (existing) {
             const repairOurPrice = this.shouldRepairSyncedProductPrice(existing, productData);
+            const nextOurPrice = repairOurPrice ? productData.ourPrice : existing.ourPrice;
 
             if (repairOurPrice) {
               this.logger.warn(
@@ -702,6 +726,11 @@ export class ProductsService implements OnModuleInit {
                 speed: productData.speed,
                 providerPrice: productData.providerPrice,
                 ...(repairOurPrice ? { ourPrice: productData.ourPrice } : {}),
+                ...buildProductSortKeyData({
+                  dataAmount: productData.dataAmount,
+                  providerPrice: productData.providerPrice,
+                  ourPrice: nextOurPrice,
+                }),
                 isUnlimited: productData.isUnlimited,
                 ...(existing.tags.length === 0 && autoTags.length > 0 ? { tags: autoTags } : {}),
                 supportTopup: productData.supportTopup,
@@ -724,7 +753,10 @@ export class ProductsService implements OnModuleInit {
             });
           } else {
             await this.prisma.esimProduct.create({
-              data: productData,
+              data: {
+                ...productData,
+                ...buildProductSortKeyData(productData),
+              },
             });
           }
           

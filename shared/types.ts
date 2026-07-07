@@ -5,6 +5,7 @@ import type { ProductDataTypeValue } from './product-data-type';
 export * from './contracts/checkout';
 export * from './country-display';
 export * from './product-data-type';
+export * from './product-sorting';
 
 export interface User {
   id: string;

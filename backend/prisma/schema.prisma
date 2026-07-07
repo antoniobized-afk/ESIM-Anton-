@@ -176,6 +176,9 @@ model EsimProduct {
   speed         String? // Ограничение скорости после лимита (384 Kbps, 1 Mbps и т.д.)
   providerPrice Decimal  @db.Decimal(10, 2)
   ourPrice      Decimal  @db.Decimal(10, 2)
+  dataAmountMb  Decimal? @db.Decimal(14, 4)
+  providerCostPerGb Decimal? @db.Decimal(18, 6)
+  markupRatio   Decimal? @db.Decimal(18, 6)
   providerId    String
   providerName  String   @default("main")
   isActive      Boolean  @default(true)
@@ -198,6 +201,9 @@ model EsimProduct {
   @@index([country])
   @@index([isActive])
   @@index([dataType])
+  @@index([dataAmountMb])
+  @@index([providerCostPerGb])
+  @@index([markupRatio])
   @@map("esim_products")
 }
 

@@ -65,6 +65,8 @@ export function useProducts() {
         dataAmount: filters.appliedDataAmountQuery.trim() || undefined,
         dataUnit: filters.dataUnit === 'all' ? undefined : filters.dataUnit,
         durationDays: Number.isInteger(durationDays) && durationDays > 0 ? durationDays : undefined,
+        sortBy: filters.sortBy,
+        sortOrder: filters.sortOrder,
         page: filters.page,
         limit: 50,
       })
@@ -88,6 +90,8 @@ export function useProducts() {
     filters.selectedCountry,
     filters.showActiveOnly,
     filters.dataType,
+    filters.sortBy,
+    filters.sortOrder,
   ])
   const loadCountries = async () => {
     try {
@@ -191,6 +195,8 @@ export function useProducts() {
     filters.selectedCountry,
     filters.showActiveOnly,
     filters.dataType,
+    filters.sortBy,
+    filters.sortOrder,
   ])
 
   const handleSelectAll = () => {
@@ -225,6 +231,8 @@ export function useProducts() {
     dataAmountQuery: filters.dataAmountQuery,
     dataUnit: filters.dataUnit,
     durationDaysQuery: filters.durationDaysQuery,
+    sortBy: filters.sortBy,
+    sortOrder: filters.sortOrder,
     searchQuery: filters.searchQuery,
     selectedIds,
     showBulkBadgeModal,
@@ -246,6 +254,7 @@ export function useProducts() {
     setDataAmountQuery: filters.setDataAmountQuery,
     setDataUnit: filters.setDataUnit,
     setDurationDaysQuery: filters.setDurationDaysQuery,
+    setSort: filters.setSort,
     setPage: filters.setPage,
     setSearchQuery: filters.setSearchQuery,
     setShowBulkBadgeModal,

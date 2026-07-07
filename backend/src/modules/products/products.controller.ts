@@ -23,6 +23,8 @@ export class ProductsController {
     @Query('dataAmount') dataAmount?: string,
     @Query('dataUnit') dataUnit?: ProductDataUnit,
     @Query('durationDays') durationDays?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: string,
     @Query('paginated') paginated?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 50,
@@ -38,6 +40,8 @@ export class ProductsController {
       dataAmount,
       dataUnit,
       durationDays,
+      sortBy,
+      sortOrder,
     };
 
     if (paginated === 'true') {

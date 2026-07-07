@@ -2,8 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import type { AdminProduct } from '@/lib/types'
+import type { AdminProduct, ProductSortField } from '@/lib/types'
 import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, normalizeProductDataTypeSelector } from '@shared/product-data-type'
+import {
+  DEFAULT_PRODUCT_SORT_FIELD,
+  getDefaultProductSortOrder,
+  normalizeProductSortField,
+  normalizeProductSortOrder,
+} from '@shared/product-sorting'
 import type { DataUnitFilter, ProductDataTypeFilter } from './useProducts'
 
 function getDataUnitFilter(value: string | null): DataUnitFilter {
@@ -65,6 +71,8 @@ export function useProductFilters(products: AdminProduct[]) {
   const urlDataAmount = normalizeDataAmountQuery(searchParams.get('data') || '')
   const dataUnit = getDataUnitFilter(searchParams.get('unit'))
   const urlDurationDays = normalizeDurationDaysQuery(searchParams.get('duration') || '')
+  const sortBy = normalizeProductSortField(searchParams.get('sortBy'))
+  const sortOrder = normalizeProductSortOrder(searchParams.get('sortOrder'), sortBy)
   const rawPage = Number(searchParams.get('page') || '1')
   const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1
   const [searchQuery, setSearchQuery] = useState(urlSearch)
@@ -97,6 +105,8 @@ export function useProductFilters(products: AdminProduct[]) {
     if (normalizedDataAmount) normalized.set('data', normalizedDataAmount)
     if (dataUnit !== 'all') normalized.set('unit', dataUnit)
     if (normalizedDurationDays) normalized.set('duration', normalizedDurationDays)
+    if (sortBy !== DEFAULT_PRODUCT_SORT_FIELD) normalized.set('sortBy', sortBy)
+    if (sortOrder !== getDefaultProductSortOrder(sortBy)) normalized.set('sortOrder', sortOrder)
     if (
       page > 1 &&
       searchQuery.trim() === urlSearch &&
@@ -126,6 +136,8 @@ export function useProductFilters(products: AdminProduct[]) {
     selectedCountry,
     showActiveOnly,
     dataType,
+    sortBy,
+    sortOrder,
     urlDataAmount,
     urlDurationDays,
     urlSearch,
@@ -156,6 +168,8 @@ export function useProductFilters(products: AdminProduct[]) {
     dataAmountQuery,
     dataUnit,
     durationDaysQuery,
+    sortBy,
+    sortOrder,
     searchQuery,
     appliedDataAmountQuery: urlDataAmount,
     appliedDurationDaysQuery: urlDurationDays,
@@ -193,6 +207,19 @@ export function useProductFilters(products: AdminProduct[]) {
     setDurationDaysQuery: (value: string) => {
       if (value === '' || durationDaysPattern.test(value)) setDurationDaysQuery(value)
     },
+    setSort: (field: ProductSortField) => replaceParams((params) => {
+      const nextOrder = sortBy === field
+        ? sortOrder === 'asc' ? 'desc' : 'asc'
+        : getDefaultProductSortOrder(field)
+
+      if (field === DEFAULT_PRODUCT_SORT_FIELD) params.delete('sortBy')
+      else params.set('sortBy', field)
+
+      if (nextOrder === getDefaultProductSortOrder(field)) params.delete('sortOrder')
+      else params.set('sortOrder', nextOrder)
+
+      params.delete('page')
+    }),
     clearFilters,
   }
 }

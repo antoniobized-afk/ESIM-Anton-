@@ -16,6 +16,8 @@ export interface ProductListFilters {
   dataAmount?: string;
   dataUnit?: string;
   durationDays?: string | number;
+  sortBy?: string;
+  sortOrder?: string;
 }
 
 function normalizeDataUnit(value?: string): ProductDataUnit | undefined {

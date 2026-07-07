@@ -7,12 +7,15 @@
  */
 import { ProductsService } from './products.service';
 import { buildProductsWhere } from './products.filters';
+import { buildProductSortKeyData, parseProductDataAmountMb } from './products.sort-keys';
+import { buildProductsOrderBy, resolveProductSort } from './products.sorting';
 import type { PrismaService } from '@/common/prisma/prisma.service';
 import type { EsimProviderService } from '../esim-provider/esim-provider.service';
 import type { SystemSettingsService } from '../system-settings/system-settings.service';
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
 import { PRODUCT_DATA_TYPE_LABELS, type ProductDataType } from '@shared/product-data-type';
+import { Prisma } from '@prisma/client';
 
 function makeService(): ProductsService {
   // ProductsService хранит только инжекты; для проверки чистой функции
@@ -271,6 +274,76 @@ describe('ProductsService product write normalization', () => {
     });
   });
 
+  it('на create нормализует badge и не сохраняет пустой бейдж/цвет', async () => {
+    const createProduct = jest.fn().mockResolvedValue({ id: 'created-product' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          create: createProduct,
+        },
+      },
+    });
+
+    await service.create({
+      ...baseCreatePayload,
+      badge: '  ',
+      badgeColor: 'red',
+    });
+
+    expect(createProduct).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        badge: null,
+        badgeColor: null,
+      }),
+    });
+  });
+
+  it('на create триммит реальный badge и его цвет', async () => {
+    const createProduct = jest.fn().mockResolvedValue({ id: 'created-product' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          create: createProduct,
+        },
+      },
+    });
+
+    await service.create({
+      ...baseCreatePayload,
+      badge: '  HIT  ',
+      badgeColor: '  blue  ',
+    });
+
+    expect(createProduct).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        badge: 'HIT',
+        badgeColor: 'blue',
+      }),
+    });
+  });
+
+  it('на create не сохраняет orphan badgeColor без badge', async () => {
+    const createProduct = jest.fn().mockResolvedValue({ id: 'created-product' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          create: createProduct,
+        },
+      },
+    });
+
+    await service.create({
+      ...baseCreatePayload,
+      badgeColor: 'red',
+    });
+
+    expect(createProduct).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        badgeColor: null,
+      }),
+    });
+  });
+
   it('на update при смене dataType пересчитывает isUnlimited и не доверяет входному boolean', async () => {
     const updateProduct = jest.fn().mockResolvedValue({ id: 'product-id' });
     const service = makeServiceWithDeps({
@@ -318,6 +391,30 @@ describe('ProductsService product write normalization', () => {
     });
   });
 
+  it('на partial update цены пересчитывает sort keys из текущего продукта', async () => {
+    const updateProduct = jest.fn().mockResolvedValue({ id: 'product-id' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'product-id',
+            dataAmount: '1 GB',
+            providerPrice: new Prisma.Decimal(10000),
+            ourPrice: new Prisma.Decimal(150),
+          }),
+          update: updateProduct,
+        },
+      },
+    });
+
+    await service.update('product-id', { ourPrice: 200 });
+
+    const data = updateProduct.mock.calls[0][0].data;
+    expect(data.dataAmountMb.toNumber()).toBe(1024);
+    expect(data.providerCostPerGb.toNumber()).toBe(10000);
+    expect(data.markupRatio.toNumber()).toBeCloseTo(0.02);
+  });
+
   it('на update с dataType=null сохраняет legacy unknown и не сбрасывает его в standard', async () => {
     const updateProduct = jest.fn().mockResolvedValue({ id: 'product-id' });
     const service = makeServiceWithDeps({
@@ -336,6 +433,102 @@ describe('ProductsService product write normalization', () => {
     expect(updateProduct).toHaveBeenCalledWith({
       where: { id: 'product-id' },
       data: {},
+    });
+  });
+
+  it('на update превращает blank badge в null и чистит цвет', async () => {
+    const updateProduct = jest.fn().mockResolvedValue({ id: 'product-id' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'product-id' }),
+          update: updateProduct,
+        },
+      },
+    });
+
+    await service.update('product-id', { badge: '   ', badgeColor: 'red' });
+
+    expect(updateProduct).toHaveBeenCalledWith({
+      where: { id: 'product-id' },
+      data: {
+        badge: null,
+        badgeColor: null,
+      },
+    });
+  });
+});
+
+describe('Products sorting contract', () => {
+  it('нормализует sort whitelist и default direction', () => {
+    expect(resolveProductSort({ sortBy: 'dataAmountMb', sortOrder: 'desc' })).toEqual({
+      field: 'dataAmountMb',
+      order: 'desc',
+    });
+    expect(resolveProductSort({ sortBy: 'dataAmount', sortOrder: 'sideways' })).toEqual({
+      field: 'country',
+      order: 'asc',
+    });
+    expect(resolveProductSort({ sortBy: 'isActive' })).toEqual({
+      field: 'isActive',
+      order: 'desc',
+    });
+  });
+
+  it('строит stable orderBy с nulls last для вычисляемых ключей', () => {
+    expect(buildProductsOrderBy({ sortBy: 'dataAmountMb', sortOrder: 'asc' })).toEqual([
+      { dataAmountMb: { sort: 'asc', nulls: 'last' } },
+      { country: 'asc' },
+      { ourPrice: 'asc' },
+      { id: 'asc' },
+    ]);
+  });
+
+  it('сохраняет текущий default order country -> ourPrice -> id', () => {
+    expect(buildProductsOrderBy()).toEqual([
+      { country: 'asc' },
+      { ourPrice: 'asc' },
+      { id: 'asc' },
+    ]);
+  });
+});
+
+describe('Product sort key calculation', () => {
+  it('нормализует GB/MB в MB для числовой сортировки Data', () => {
+    expect(parseProductDataAmountMb('1 GB')?.toNumber()).toBe(1024);
+    expect(parseProductDataAmountMb('500 MB')?.toNumber()).toBe(500);
+    expect(parseProductDataAmountMb('1,5 GB')?.toNumber()).toBe(1536);
+    expect(parseProductDataAmountMb('Безлимит')).toBeNull();
+  });
+
+  it('считает provider cost per GB и markup ratio без зависимости от UI курса', () => {
+    const sortKeys = buildProductSortKeyData({
+      dataAmount: '500 MB',
+      providerPrice: 10000,
+      ourPrice: 150,
+    });
+
+    expect(sortKeys.dataAmountMb?.toNumber()).toBe(500);
+    expect(sortKeys.providerCostPerGb?.toNumber()).toBeCloseTo(20480);
+    expect(sortKeys.markupRatio?.toNumber()).toBeCloseTo(0.015);
+  });
+
+  it('оставляет вычисляемые ключи null для неделимого объёма или нулевой provider price', () => {
+    expect(buildProductSortKeyData({
+      dataAmount: 'Безлимит',
+      providerPrice: 10000,
+      ourPrice: 150,
+    })).toMatchObject({
+      dataAmountMb: null,
+      providerCostPerGb: null,
+    });
+    expect(buildProductSortKeyData({
+      dataAmount: '1 GB',
+      providerPrice: 0,
+      ourPrice: 150,
+    })).toMatchObject({
+      providerCostPerGb: null,
+      markupRatio: null,
     });
   });
 });
@@ -407,6 +600,51 @@ describe('ProductsService.bulkToggleByDataType', () => {
     expect(updateMany).toHaveBeenCalledWith({
       where: { dataType: 1 },
       data: { isActive: true },
+    });
+  });
+});
+
+describe('ProductsService.bulkSetBadge', () => {
+  it('нормализует blank badge в null перед updateMany', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 3 });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          updateMany,
+        },
+      },
+    });
+
+    const result = await service.bulkSetBadge(['p1', 'p2', 'p3'], '   ', 'red');
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['p1', 'p2', 'p3'] } },
+      data: {
+        badge: null,
+        badgeColor: null,
+      },
+    });
+    expect(result.message).toBe('Бейдж удален у 3 продуктов');
+  });
+
+  it('триммит реальный badge перед updateMany', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          updateMany,
+        },
+      },
+    });
+
+    await service.bulkSetBadge(['p1'], '  HIT  ', '  blue  ');
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['p1'] } },
+      data: {
+        badge: 'HIT',
+        badgeColor: 'blue',
+      },
     });
   });
 });

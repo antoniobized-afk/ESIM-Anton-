@@ -1,6 +1,6 @@
 # План: сортировка продуктов в админке
 
-Status: planned
+Status: implemented
 Дата: 2026-07-07
 
 ## Проверка текущего состояния
@@ -124,3 +124,13 @@ Status: planned
 - Prisma migration потребует production-safe deploy через `prisma migrate deploy`; нельзя полагаться на `db push`.
 - `dataAmount` legacy strings и unlimited packages должны иметь явную null policy, иначе сортировка будет нестабильной.
 - Если в ходе реализации выяснится, что `Region` должен означать `region`, а не `country`, сначала нужно поменять UI/contract wording, а не молча сортировать по другому полю.
+
+## Implementation snapshot
+
+- Добавлен shared sort contract: `shared/product-sorting.ts`; backend `products.sorting.ts` строит Prisma `orderBy`, `GET /products` принимает `sortBy`/`sortOrder`, whitelist и stable tie-breakers.
+- Добавлены persisted sort keys: Prisma поля `dataAmountMb`, `providerCostPerGb`, `markupRatio`, migration `20260707143000_add_product_sort_keys`.
+- Все product write-paths, которые меняют цену или provider data, пересчитывают sort keys: create/update, sync, bulk markup, reprice.
+- Review fix: пустой/whitespace `badge` нормализуется в `NULL` на create/update/bulk badge write-boundary; migration чистит уже существующие пустые `badge`/orphan `badgeColor`, поэтому `badge NULLS LAST` остаётся корректной order policy без raw sorting shim.
+- Admin products page хранит sort state в URL, отправляет его в `/products` и использует `SortableHeader` для всех sortable columns.
+- Durable wiki sync: `docs/architecture/module-map.md`.
+- Проверено: `pnpm --filter backend test -- products.service.spec.ts`; `pnpm --filter backend exec prisma validate`; `pnpm --filter backend exec nest build`. Полный `pnpm --filter backend build` локально блокируется на Windows `EPERM` при rename Prisma `query_engine-windows.dll.node`.
