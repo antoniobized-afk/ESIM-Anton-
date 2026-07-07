@@ -44,6 +44,45 @@ ESIM_FALLBACK_API_KEY=
 - top-up пакетов и пополнение eSIM;
 - health check.
 
+## Package `dataType` taxonomy
+
+Каноническая taxonomy берётся из eSIM Access `Package List` API. Локальный owner — `shared/product-data-type.ts`; backend sync, admin filters/table/modal и docs должны брать подписи только оттуда.
+
+| `dataType` | Provider label | Русская подпись |
+|---:|---|---|
+| `1` | `Data in Total` | `Пакет данных на весь срок` |
+| `2` | `Daily Limit (Speed Reduced)` | `Дневной лимит (снижение скорости)` |
+| `3` | `Daily Limit (Service Cut-off)` | `Дневной лимит (отключение услуги)` |
+| `4` | `Daily Unlimited` | `Дневной безлимит` |
+
+Важно: `dataType=2` не равен `Daily Unlimited`; это дневной лимит, после которого скорость снижается. `Daily Unlimited` — отдельный provider type `4`.
+
+Sync contract:
+
+- catalog sync запускает независимые `Package List` запросы для `dataType=1..4` параллельно через `Promise.allSettled`, а не последовательно. У каждого provider type сохраняется отдельный success/warn log; ошибка одного type не блокирует обработку пакетов, полученных по другим types. Такой sync возвращается как partial result: `errors` включает provider batch failures, `providerErrors/providerFailures` раскрывают незагруженные `dataType`, а admin показывает не зелёный success, а предупреждение об ошибках.
+- `dataType=2` хранится как дневной лимит со снижением скорости: `speed` заполняется только из provider/name (`speed`, `fupPolicy`, `FUP...`), без выдуманного fallback.
+- `dataType=3` хранится как дневной лимит с отключением услуги: `speed` остаётся пустым, описание говорит об отключении до следующего дневного периода.
+- `dataType=4` хранится как дневной безлимит: `dataAmount = "Безлимит"`, `speed` пустой, описание не содержит текста про дневной лимит или снижение скорости.
+- Для existing products sync сохраняет ручную `ourPrice`, пока не меняется pricing-семантика `daily` ↔ `standard`. Если provider-ответ меняет `dataType/isUnlimited` так, что цена больше не означает тот же период, backend repair-ит `ourPrice` через текущие pricing settings (`providerPrice`, курс, markup) и пишет warning в sync log. Это закрывает legacy daily `dataType=null` -> `dataType=1` без продажи многодневного standard-пакета по старой дневной цене.
+
+Admin write contract:
+
+- create/edit form показывает явный выбор `dataType` из shared taxonomy `1..4`; write DTO принимает только эти numeric codes или их строковые form/query значения, без boolean/object coercion;
+- ручное создание продукта стартует с `dataType=1`, но админ может выбрать любой точный provider type до сохранения;
+- legacy daily с `dataType=null` показывается как неопределённый подтип и при сохранении без выбора не отправляет `dataType`, чтобы не сбросить unknown в standard;
+- admin не отправляет `isUnlimited` как write-owner: backend пересчитывает legacy boolean из выбранного `dataType`.
+- product list filters используют `dataType` как read-owner: точные фильтры отправляют `1..4`, aggregate "все дневные типы" отправляет `dataType=daily`, backend маппит его в `dataType in (2,3,4)`. Legacy query `tariffType=standard|unlimited` остаётся только input adapter и тоже маппится на `dataType=1` / `dataType in (2,3,4)`, а не на persisted `isUnlimited`.
+- bulk toggle по типу использует тот же `dataType` selector как destructive write boundary: body принимает только `dataType=1|2|3|4|daily` и `isActive`, aggregate `daily` маппится в `dataType in (2,3,4)`, точные daily subtypes обновляются отдельно, а legacy `tariffType`/boolean/object inputs не являются допустимыми body-полями.
+
+Client display contract:
+
+- user-facing `client` получает `Product.dataType` как provider taxonomy `1..4`; `null` допустим только для legacy daily-строк, где старый `isUnlimited=true` не позволяет доказать точный provider subtype;
+- `/country/[country]` группирует тарифы как `dataType=1` vs дневные `dataType=2..4`; legacy URL `tab=unlimited` принимается только как alias для дневной вкладки, но UI не называет все дневные тарифы безлимитными;
+- `/product/[id]` строит подписи тарифа, строку трафика и поведение после лимита по `dataType`: `2` — снижение скорости, `3` — отключение доступа до следующего дня, `4` — дневной безлимит без текста про дневной лимит/speed fallback;
+- `isUnlimited` остаётся производным legacy boolean для pricing/orders period flow и не является owner-ом пользовательской taxonomy.
+- legacy daily с `dataType=null` должен оставаться дневным тарифом по `isUnlimited=true`, но UI не должен выдавать его за provider type `2`, `3` или `4`; точный subtype исправляется через verified provider sync или ручную admin-классификацию.
+- rolling deploy skew: если новый `client` временно получает ответ старого backend без `dataType` или с невалидным `dataType`, он использует `isUnlimited=true` только как read-fallback "legacy daily unknown", сохраняет выбор дней/`periodNum` и не выводит provider subtype `2/3/4`.
+
 ## Usage/status contract
 
 - для usage/status по ICCID код теперь сначала использует `POST /api/v1/open/esim/list` (`Query All Allocated Profiles`) с `iccid + pager`, потому что именно этот endpoint у eSIM Access возвращает `esimList[]` c `totalVolume`, usage/status и сроком;

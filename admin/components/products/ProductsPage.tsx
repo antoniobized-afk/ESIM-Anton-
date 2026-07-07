@@ -5,6 +5,11 @@ import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 import Pagination from '@/components/ui/Pagination'
 import Spinner from '@/components/ui/Spinner'
 import { useToast } from '@/components/ui/ToastProvider'
+import {
+  DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE,
+  PRODUCT_DATA_TYPE_LABELS,
+  type ProductDataTypeSelector,
+} from '@shared/product-data-type'
 import BulkBadgeModal from './BulkBadgeModal'
 import BulkMarkupModal from './BulkMarkupModal'
 import ProductEditModal from './ProductEditModal'
@@ -44,19 +49,21 @@ export default function ProductsPage() {
     }
   }
 
-  const handleBulkToggleByType = async (tariffType: 'standard' | 'unlimited', isActive: boolean) => {
-    const typeName = tariffType === 'unlimited' ? 'безлимитные' : 'стандартные'
+  const handleBulkToggleByDataType = async (dataType: ProductDataTypeSelector, isActive: boolean) => {
+    const targetName = dataType === DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE
+      ? 'дневные тарифы всех provider-типов'
+      : `тарифы "${PRODUCT_DATA_TYPE_LABELS[dataType]}"`
     const action = isActive ? 'включить' : 'выключить'
     const confirmed = await confirmDialog({
       title: 'Массовое изменение тарифов',
-      description: `Вы уверены, что хотите ${action} все ${typeName} тарифы?`,
+      description: `Вы уверены, что хотите ${action} ${targetName}?`,
       confirmLabel: isActive ? 'Включить все' : 'Выключить все',
       variant: isActive ? 'default' : 'destructive',
     })
     if (!confirmed) return
 
     try {
-      const response = await productsApi.bulkToggleByType(tariffType, isActive)
+      const response = await productsApi.bulkToggleByDataType(dataType, isActive)
       toast.success(response.data.message || 'Массовое изменение выполнено')
       await products.loadProducts()
     } catch {
@@ -158,20 +165,20 @@ export default function ProductsPage() {
         page={products.page}
         selectedCountry={products.selectedCountry}
         showActiveOnly={products.showActiveOnly}
-        tariffType={products.tariffType}
+        dataType={products.dataType}
         dataAmountQuery={products.dataAmountQuery}
         dataUnit={products.dataUnit}
         durationDaysQuery={products.durationDaysQuery}
         searchQuery={products.searchQuery}
         onCountryChange={products.setSelectedCountry}
         onStatusChange={products.setShowActiveOnly}
-        onTariffTypeChange={products.setTariffType}
+        onDataTypeChange={products.setDataType}
         onDataAmountChange={products.setDataAmountQuery}
         onDataUnitChange={products.setDataUnit}
         onDurationDaysChange={products.setDurationDaysQuery}
         onSearchChange={products.setSearchQuery}
         onClear={products.clearFilters}
-        onToggleByType={handleBulkToggleByType}
+        onToggleByDataType={handleBulkToggleByDataType}
       />
       <ProductsBulkActions
         selectedCount={products.selectedIds.size}

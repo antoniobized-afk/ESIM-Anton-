@@ -159,8 +159,9 @@ export default function OrderDetailPage() {
                 alt={countryName}
                 className="h-7 w-10 rounded-sm object-cover"
                 onError={(e) => {
-                  ; (e.target as HTMLImageElement).src = '/logo-mark.png'
-                    ; (e.target as HTMLImageElement).className = 'w-9 h-9 rounded-lg object-contain'
+                  const target = e.target as HTMLImageElement
+                  target.src = '/logo-mark.png'
+                  target.className = 'w-9 h-9 rounded-lg object-contain'
                 }}
               />
             ) : (

@@ -1,4 +1,9 @@
 import type { Prisma } from '@prisma/client';
+import {
+  DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE,
+  DAILY_PRODUCT_DATA_TYPES,
+  normalizeProductDataTypeSelector,
+} from '@shared/product-data-type';
 
 export type ProductDataUnit = 'MB' | 'GB';
 
@@ -7,6 +12,7 @@ export interface ProductListFilters {
   isActive?: boolean;
   search?: string;
   tariffType?: 'standard' | 'unlimited';
+  dataType?: string | number;
   dataAmount?: string;
   dataUnit?: string;
   durationDays?: string | number;
@@ -77,12 +83,20 @@ function buildDataAmountWhere(filters: ProductListFilters): Prisma.EsimProductWh
 export function buildProductsWhere(filters?: ProductListFilters): Prisma.EsimProductWhereInput {
   const search = filters?.search?.trim();
   const durationDays = normalizePositiveInteger(filters?.durationDays);
+  const dataType = normalizeProductDataTypeSelector(filters?.dataType);
   const conditions: Prisma.EsimProductWhereInput[] = [];
 
   if (filters?.isActive !== undefined) conditions.push({ isActive: filters.isActive });
   if (filters?.country) conditions.push({ country: filters.country });
-  if (filters?.tariffType === 'standard') conditions.push({ isUnlimited: false });
-  if (filters?.tariffType === 'unlimited') conditions.push({ isUnlimited: true });
+  if (dataType === DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE) {
+    conditions.push({ dataType: { in: [...DAILY_PRODUCT_DATA_TYPES] } });
+  } else if (dataType) {
+    conditions.push({ dataType });
+  } else if (filters?.tariffType === 'unlimited') {
+    conditions.push({ dataType: { in: [...DAILY_PRODUCT_DATA_TYPES] } });
+  } else if (filters?.tariffType === 'standard') {
+    conditions.push({ dataType: 1 });
+  }
   if (durationDays) conditions.push({ validityDays: durationDays });
 
   const dataAmountWhere = filters ? buildDataAmountWhere(filters) : undefined;

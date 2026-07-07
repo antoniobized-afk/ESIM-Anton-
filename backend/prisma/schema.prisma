@@ -170,8 +170,9 @@ model EsimProduct {
   name          String
   description   String?
   dataAmount    String
-  validityDays  Int // Для Daily Unlimited = срок действия (180 дней), для обычных = duration
-  duration      Int? // Для Daily Unlimited = 1 (в день), для обычных = validityDays
+  validityDays  Int // Для дневного безлимита = срок действия (180 дней), для обычных = duration
+  duration      Int? // Для дневного безлимита = 1 (в день), для обычных = validityDays
+  dataType      Int?     @default(1) // eSIM Access: 1 Data in Total, 2 Daily Limit (Speed Reduced), 3 Daily Limit (Service Cut-off), 4 Daily Unlimited; null = legacy daily subtype unknown
   speed         String? // Ограничение скорости после лимита (384 Kbps, 1 Mbps и т.д.)
   providerPrice Decimal  @db.Decimal(10, 2)
   ourPrice      Decimal  @db.Decimal(10, 2)
@@ -196,6 +197,7 @@ model EsimProduct {
 
   @@index([country])
   @@index([isActive])
+  @@index([dataType])
   @@map("esim_products")
 }
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios, { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
+import { normalizeProductDataType, type ProductDataType } from '@shared/product-data-type';
 
 /**
  * Интерфейсы для eSIM Access API
@@ -18,16 +19,17 @@ export interface EsimAccessPackage {
   currencyCode: string;
   volume: number;
   smsVolume: number;
-  duration: number;      // Для Daily Unlimited = 1 (в день)
+  duration: number;      // Для дневного безлимита = 1 (в день)
   durationUnit: string;
-  validity: number;      // Срок действия (180 дней для Daily Unlimited)
+  validity: number;      // Нормализованный unusedValidTime провайдера: срок до активации
+  unusedValidTime?: number;
   speed: string;         // Ограничение скорости после лимита
   fupPolicy?: string;
   supportTopup: boolean;
   // Сырой код поддержки пополнения от eSIM Access: 1 = нет, 2 = да,
   // 3 = да с periodNum (Day Pass). `supportTopup` — это производный boolean.
   supportTopUpType?: number;
-  dataType?: number;     // 1 = standard, 2 = unlimited/day pass
+  dataType?: ProductDataType;
   coverageCountries?: string[];
 }
 
@@ -152,9 +154,9 @@ export class EsimAccessProvider {
   /**
    * Получить список доступных пакетов
    * @param locationCode - фильтр по стране
-   * @param dataType - 1 = стандартные, 2 = unlimited/day pass
+   * @param dataType - eSIM Access data type: 1..4
    */
-  async getPackages(locationCode?: string, dataType?: number): Promise<EsimAccessPackage[]> {
+  async getPackages(locationCode?: string, dataType?: ProductDataType): Promise<EsimAccessPackage[]> {
     try {
       this.logger.log(`📦 Запрос пакетов (dataType=${dataType || 'all'})...`);
 
@@ -167,7 +169,7 @@ export class EsimAccessProvider {
       }
 
       if (dataType) {
-        payload.dataType = dataType; // 1 = standard, 2 = unlimited/day pass (из документации)
+        payload.dataType = dataType;
       }
 
       const response = await this.client.post('/package/list', payload, {
@@ -182,35 +184,42 @@ export class EsimAccessProvider {
 
       this.logger.log(`✅ Получено ${packages.length} пакетов`);
 
-      return packages.map((pkg: any) => ({
-        packageCode: pkg.packageCode,
-        name: pkg.name,
-        slug: pkg.slug,
-        location: pkg.location,
-        locationCode: pkg.locationCode,
-        description: pkg.description,
-        price: pkg.price,
-        currencyCode: pkg.currencyCode,
-        volume: pkg.volume,
-        smsVolume: pkg.smsVolume || 0,
-        duration: pkg.duration,
-        durationUnit: pkg.durationUnit,
-        validity: pkg.validity || pkg.duration, // Срок действия (для Day Pass обычно 180)
-        speed: pkg.speed || '',                  // Ограничение скорости
-        fupPolicy: pkg.fupPolicy || '',
-        // eSIM Access помечает пополняемость полем `supportTopUpType` (число!),
-        // а НЕ boolean `supportTopup`. Семантика по доке: 1 = нет, 2 = да,
-        // 3 = да (c periodNum). Раньше читали несуществующее поле → у всех продуктов
-        // кэшировался false и кнопка «Пополнить» не показывалась. Нормализуем к boolean.
-        supportTopup: pkg.supportTopUpType === 2 || pkg.supportTopUpType === 3,
-        supportTopUpType: pkg.supportTopUpType,
-        dataType: dataType || (pkg.type || 1),   // Сохраняем тип
-        coverageCountries: Array.isArray(pkg.locationNetworkList)
-          ? pkg.locationNetworkList
-            .map((item: any) => item?.locationName)
-            .filter((name: any) => typeof name === 'string' && name.trim().length > 0)
-          : [],
-      }));
+      return packages.map((pkg: any) => {
+        const normalizedDataType = normalizeProductDataType(dataType ?? pkg.dataType ?? pkg.type) ?? 1;
+        const unusedValidTime = pickPositiveNumber(pkg.unusedValidTime, pkg.validity);
+        const duration = pickPositiveNumber(pkg.duration) ?? 0;
+
+        return {
+          packageCode: pkg.packageCode,
+          name: pkg.name,
+          slug: pkg.slug,
+          location: pkg.location,
+          locationCode: pkg.locationCode,
+          description: pkg.description,
+          price: pkg.price,
+          currencyCode: pkg.currencyCode,
+          volume: pkg.volume,
+          smsVolume: pkg.smsVolume || 0,
+          duration: pkg.duration,
+          durationUnit: pkg.durationUnit,
+          validity: unusedValidTime ?? (normalizedDataType === 1 ? duration : 180),
+          unusedValidTime: unusedValidTime ?? undefined,
+          speed: pkg.speed || '',                  // Ограничение скорости
+          fupPolicy: pkg.fupPolicy || '',
+          // eSIM Access помечает пополняемость полем `supportTopUpType` (число!),
+          // а НЕ boolean `supportTopup`. Семантика по доке: 1 = нет, 2 = да,
+          // 3 = да (c periodNum). Раньше читали несуществующее поле → у всех продуктов
+          // кэшировался false и кнопка «Пополнить» не показывалась. Нормализуем к boolean.
+          supportTopup: pkg.supportTopUpType === 2 || pkg.supportTopUpType === 3,
+          supportTopUpType: pkg.supportTopUpType,
+          dataType: normalizedDataType,
+          coverageCountries: Array.isArray(pkg.locationNetworkList)
+            ? pkg.locationNetworkList
+              .map((item: any) => item?.locationName)
+              .filter((name: any) => typeof name === 'string' && name.trim().length > 0)
+            : [],
+        };
+      });
     } catch (error: any) {
       this.logger.error('❌ Ошибка получения пакетов:', error.message);
       throw error;
@@ -537,4 +546,14 @@ export class EsimAccessProvider {
       return false;
     }
   }
+}
+
+function pickPositiveNumber(...values: unknown[]): number | undefined {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const numericValue = Number(value);
+    if (Number.isFinite(numericValue) && numericValue > 0) return numericValue;
+  }
+
+  return undefined;
 }

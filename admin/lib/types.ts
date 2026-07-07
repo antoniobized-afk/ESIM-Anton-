@@ -1,3 +1,9 @@
+import type {
+  ProductDataType,
+  ProductDataTypeSelector,
+  ProductDataTypeValue,
+} from '@shared/product-data-type'
+
 export type NumericLike = number | string
 
 export type OrderStatus =
@@ -98,6 +104,7 @@ export interface AdminProduct {
   dataAmount: string
   validityDays: number
   duration?: number | null
+  dataType: ProductDataTypeValue
   speed?: string | null
   providerPrice: NumericLike
   ourPrice: NumericLike
@@ -281,6 +288,7 @@ export interface ProductFilters {
   isActive?: boolean
   search?: string
   tariffType?: 'standard' | 'unlimited'
+  dataType?: ProductDataTypeSelector
   dataAmount?: string
   dataUnit?: 'MB' | 'GB'
   durationDays?: number
@@ -296,6 +304,7 @@ export interface CreateProductDto {
   dataAmount: string
   validityDays: number
   duration?: number | null
+  dataType?: ProductDataType
   speed?: string | null
   providerPrice: NumericLike
   ourPrice: NumericLike
@@ -303,7 +312,6 @@ export interface CreateProductDto {
   providerName?: string
   isActive: boolean
   stock?: number
-  isUnlimited?: boolean
   badge?: string | null
   badgeColor?: string | null
   tags?: string[]
@@ -313,15 +321,21 @@ export interface CreateProductDto {
 
 export type UpdateProductDto = Partial<CreateProductDto>
 
-export type EditableProduct = CreateProductDto & { id?: string }
+export type EditableProduct = Omit<CreateProductDto, 'dataType'> & {
+  id?: string
+  dataType?: ProductDataTypeValue
+  isUnlimited?: boolean
+  createdAt?: string
+  updatedAt?: string
+}
 
 export interface BulkToggleActiveDto {
   ids: string[]
   isActive: boolean
 }
 
-export interface BulkToggleByTypeDto {
-  tariffType: 'standard' | 'unlimited'
+export interface BulkToggleByDataTypeDto {
+  dataType: ProductDataTypeSelector
   isActive: boolean
 }
 
@@ -339,6 +353,13 @@ export interface BulkSetMarkupDto {
 export interface ProductSyncResponse extends ApiMutationResponse {
   synced: number
   errors: number
+  providerErrors?: number
+  packageErrors?: number
+  providerFailures?: Array<{
+    dataType: ProductDataType
+    label: string
+    message: string
+  }>
   version?: string
   settings?: {
     exchangeRate: number
@@ -347,6 +368,7 @@ export interface ProductSyncResponse extends ApiMutationResponse {
   breakdown?: {
     standard: number
     unlimited: number
+    dataTypes?: Partial<Record<ProductDataType, number>>
   }
 }
 

@@ -2,11 +2,15 @@
 
 import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
 import { ArrowLeft } from '@/components/icons'
 import { useSmartBack } from '@/lib/useSmartBack'
 import { productsApi, Product } from '@/lib/api'
+import {
+  getProductListCaption,
+  getProductListPeriodText,
+  isClientDailyProduct,
+} from '@/lib/productDataType'
 import { formatPrice, formatDataAmount, getFlagUrl, getCountryName } from '@/lib/utils'
 import {
   getCoverageCount,
@@ -53,15 +57,17 @@ function CountryPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const country = decodeURIComponent(params.country as string)
-  const initialTab = searchParams.get('tab') === 'unlimited' ? 'unlimited' : 'standard'
+  const tabParam = searchParams.get('tab')
+  const initialTab: 'standard' | 'daily' =
+    tabParam === 'daily' || tabParam === 'unlimited' ? 'daily' : 'standard'
   const handleBack = useSmartBack('/')
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'standard' | 'unlimited'>(initialTab)
+  const [activeTab, setActiveTab] = useState<'standard' | 'daily'>(initialTab)
 
-  // Фильтрация по типу тарифа (используем поле isUnlimited из API)
+  // URL still accepts legacy tab=unlimited, but user-facing grouping is daily dataType 2..4.
   const products = allProducts.filter(p =>
-    activeTab === 'unlimited' ? p.isUnlimited : !p.isUnlimited
+    activeTab === 'daily' ? isClientDailyProduct(p) : !isClientDailyProduct(p)
   )
 
 
@@ -78,8 +84,11 @@ function CountryPageInner() {
   useEffect(() => {
     const tabFromQuery = searchParams.get('tab')
 
-    if (tabFromQuery === 'standard' || tabFromQuery === 'unlimited') {
-      setActiveTab(tabFromQuery)
+    if (tabFromQuery === 'standard') {
+      setActiveTab('standard')
+    }
+    if (tabFromQuery === 'daily' || tabFromQuery === 'unlimited') {
+      setActiveTab('daily')
     }
   }, [searchParams])
 
@@ -194,13 +203,13 @@ function CountryPageInner() {
           Стандартные
         </button>
         <button
-          onClick={() => setActiveTab('unlimited')}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'unlimited'
+          onClick={() => setActiveTab('daily')}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === 'daily'
               ? 'bg-[#f77430] text-white shadow-md shadow-orange-200 dark:shadow-orange-900/30'
               : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
             }`}
         >
-          Безлимитные
+          Дневные
         </button>
       </div>
 
@@ -240,10 +249,7 @@ function CountryPageInner() {
                     {formatDataAmount(product.dataAmount)}
                   </span>
                   <span className="text-gray-500 text-sm">
-                    {product.isUnlimited
-                      ? `в день`
-                      : `на ${product.validityDays} дн.`
-                    }
+                    {getProductListPeriodText(product)}
                   </span>
                   {/* Бейдж */}
                   {product.badge && (
@@ -258,9 +264,7 @@ function CountryPageInner() {
                   )}
                 </div>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {product.isUnlimited
-                    ? 'Ежедневный пакет интернета'
-                    : 'Весь объём интернета на срок тарифа'}
+                  {getProductListCaption(product)}
                 </p>
                 {/* Покрытие для мульти/глобальных пакетов */}
                 {(isMultiProduct(product) || isGlobalProduct(product)) && (
@@ -288,12 +292,6 @@ function CountryPageInner() {
                       ↻ Можно пополнить
                     </span>
                   </div>
-                )}
-                {/* Скорость после лимита для Daily Unlimited */}
-                {product.isUnlimited && product.speed && (
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    После лимита: {product.speed}
-                  </p>
                 )}
                 {/* Примечание из админки */}
                 {product.notes && (

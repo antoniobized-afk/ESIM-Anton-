@@ -3,11 +3,25 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { AdminProduct } from '@/lib/types'
-import type { DataUnitFilter, TariffFilter } from './useProducts'
+import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, normalizeProductDataTypeSelector } from '@shared/product-data-type'
+import type { DataUnitFilter, ProductDataTypeFilter } from './useProducts'
 
 function getDataUnitFilter(value: string | null): DataUnitFilter {
   const normalized = value?.toUpperCase()
   return normalized === 'MB' || normalized === 'GB' ? normalized : 'all'
+}
+
+function getProductDataTypeFilter(value: string | null): ProductDataTypeFilter {
+  const normalized = normalizeProductDataTypeSelector(value)
+  if (normalized === DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE) return DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE
+
+  return normalized ? `${normalized}` : 'all'
+}
+
+function getLegacyProductDataTypeFilter(typeParam: string | null, unlimitedParam: string | null): ProductDataTypeFilter {
+  if (typeParam === 'standard' || unlimitedParam === 'false') return '1'
+  if (typeParam === 'unlimited' || unlimitedParam === 'true') return DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE
+  return 'all'
 }
 
 const editableDataAmountPattern = /^\d*(?:[.,]\d*)?$/
@@ -40,16 +54,13 @@ export function useProductFilters(products: AdminProduct[]) {
   const selectedCountry = searchParams.get('country') || ''
   const activeParam = searchParams.get('active')
   const showActiveOnly = activeParam === 'active' ? true : activeParam === 'inactive' ? false : null
+  const dataTypeParam = searchParams.get('dataType')
   const typeParam = searchParams.get('type')
   const unlimitedParam = searchParams.get('unlimited')
-  const tariffType: TariffFilter =
-    typeParam === 'standard' || typeParam === 'unlimited'
-      ? typeParam
-      : unlimitedParam === 'true'
-        ? 'unlimited'
-        : unlimitedParam === 'false'
-          ? 'standard'
-          : 'all'
+  const dataType =
+    getProductDataTypeFilter(dataTypeParam) !== 'all'
+      ? getProductDataTypeFilter(dataTypeParam)
+      : getLegacyProductDataTypeFilter(typeParam, unlimitedParam)
   const urlSearch = searchParams.get('search') || ''
   const urlDataAmount = normalizeDataAmountQuery(searchParams.get('data') || '')
   const dataUnit = getDataUnitFilter(searchParams.get('unit'))
@@ -81,7 +92,7 @@ export function useProductFilters(products: AdminProduct[]) {
     if (selectedCountry) normalized.set('country', selectedCountry)
     if (showActiveOnly === true) normalized.set('active', 'active')
     if (showActiveOnly === false) normalized.set('active', 'inactive')
-    if (tariffType !== 'all') normalized.set('type', tariffType)
+    if (dataType !== 'all') normalized.set('dataType', dataType)
     if (searchQuery.trim()) normalized.set('search', searchQuery.trim())
     if (normalizedDataAmount) normalized.set('data', normalizedDataAmount)
     if (dataUnit !== 'all') normalized.set('unit', dataUnit)
@@ -114,7 +125,7 @@ export function useProductFilters(products: AdminProduct[]) {
     searchQuery,
     selectedCountry,
     showActiveOnly,
-    tariffType,
+    dataType,
     urlDataAmount,
     urlDurationDays,
     urlSearch,
@@ -123,6 +134,7 @@ export function useProductFilters(products: AdminProduct[]) {
   const replaceParams = (mutate: (params: URLSearchParams) => void) => {
     const nextParams = new URLSearchParams(searchParams.toString())
     mutate(nextParams)
+    nextParams.delete('type')
     nextParams.delete('unlimited')
     const nextQuery = nextParams.toString()
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname)
@@ -140,7 +152,7 @@ export function useProductFilters(products: AdminProduct[]) {
     appliedSearchQuery: urlSearch,
     selectedCountry,
     showActiveOnly,
-    tariffType,
+    dataType,
     dataAmountQuery,
     dataUnit,
     durationDaysQuery,
@@ -159,9 +171,10 @@ export function useProductFilters(products: AdminProduct[]) {
       else params.delete('active')
       params.delete('page')
     }),
-    setTariffType: (value: TariffFilter) => replaceParams((params) => {
-      if (value === 'all') params.delete('type')
-      else params.set('type', value)
+    setDataType: (value: ProductDataTypeFilter) => replaceParams((params) => {
+      if (value === 'all') params.delete('dataType')
+      else params.set('dataType', value)
+      params.delete('type')
       params.delete('page')
     }),
     setDataUnit: (value: DataUnitFilter) => replaceParams((params) => {

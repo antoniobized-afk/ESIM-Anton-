@@ -1,6 +1,7 @@
 import type { AdminProduct } from '@/lib/types'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
+import { getProductDataTypeLabel } from '@shared/product-data-type'
 
 interface ProductViewModalProps {
   product: AdminProduct
@@ -21,7 +22,7 @@ export default function ProductViewModal(props: ProductViewModalProps) {
             <div className="space-y-4">
               <div className="flex"><span className="w-32 text-slate-500 text-sm">Name:</span><span className="font-medium text-slate-800">{product.name}</span></div>
               <div className="flex"><span className="w-32 text-slate-500 text-sm">Slug:</span><span className="text-slate-700">{product.country}_{product.dataAmount?.replace(/\s/g, '')}_{product.validityDays}</span></div>
-              <div className="flex"><span className="w-32 text-slate-500 text-sm">Data type:</span><span className="text-blue-600 font-medium">{product.isUnlimited ? 'Daily Unlimited' : 'Data in Total'}</span></div>
+              <div className="flex"><span className="w-32 text-slate-500 text-sm">Тип данных:</span><span className="text-blue-600 font-medium">{getProductDataTypeLabel(product.dataType, product.isUnlimited)}</span></div>
               <div className="flex"><span className="w-32 text-slate-500 text-sm">Cost:</span><div><div className="font-bold text-slate-800">₽{Math.round(getProviderPriceUSD(product.providerPrice) * exchangeRate).toLocaleString()}</div><div className="text-xs text-slate-500">${getProviderPriceUSD(product.providerPrice).toFixed(2)} по курсу {exchangeRate}₽/$</div></div></div>
               <div className="flex"><span className="w-32 text-slate-500 text-sm">Region type:</span><span className="text-slate-700">Single</span></div>
               <div className="flex"><span className="w-32 text-slate-500 text-sm">Top up type:</span><span className="text-slate-700 text-sm">Data Reloadable for same area within validity</span></div>

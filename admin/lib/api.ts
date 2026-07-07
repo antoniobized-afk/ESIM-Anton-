@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { ProductDataTypeSelector } from '@shared/product-data-type'
 import { clearToken, dispatchAuthLogoutEvent, getToken } from './auth'
 import type {
   AdminProduct,
@@ -119,8 +120,8 @@ export const productsApi = {
   // Массовые операции
   bulkToggleActive: (ids: string[], isActive: boolean) =>
     api.post<ProductBulkMutationResponse>('/products/bulk/toggle-active', { ids, isActive }),
-  bulkToggleByType: (tariffType: 'standard' | 'unlimited', isActive: boolean) =>
-    api.post<ProductBulkMutationResponse>('/products/bulk/toggle-by-type', { tariffType, isActive }),
+  bulkToggleByDataType: (dataType: ProductDataTypeSelector, isActive: boolean) =>
+    api.post<ProductBulkMutationResponse>('/products/bulk/toggle-by-type', { dataType, isActive }),
   bulkSetBadge: (ids: string[], badge: string | null, badgeColor: string | null) =>
     api.post<ProductBulkMutationResponse>('/products/bulk/set-badge', { ids, badge, badgeColor }),
   bulkSetMarkup: (ids: string[], markupPercent: number) =>

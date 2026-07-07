@@ -3,13 +3,26 @@
 import { useCallback, useEffect, useState } from 'react'
 import { productsApi, systemSettingsApi } from '@/lib/api'
 import { isUnauthorizedError } from '@/lib/auth'
-import type { AdminProduct, EditableProduct } from '@/lib/types'
+import type { AdminProduct, CreateProductDto, EditableProduct } from '@/lib/types'
 import { getErrorMessage } from '@/lib/errors'
 import { useToast } from '@/components/ui/ToastProvider'
+import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, type ProductDataType } from '@shared/product-data-type'
 import { createEmptyProduct, getMarkupPercent, getProviderPriceUSD } from './products.helpers'
 import { useProductFilters } from './useProductFilters'
-export type TariffFilter = 'all' | 'standard' | 'unlimited'
+export type ProductDataTypeFilter = 'all' | typeof DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE | `${ProductDataType}`
 export type DataUnitFilter = 'all' | 'MB' | 'GB'
+
+const toProductMutationPayload = (product: EditableProduct): CreateProductDto => {
+  const payload = { ...product }
+  delete payload.id
+  delete payload.createdAt
+  delete payload.updatedAt
+  delete payload.isUnlimited
+  if (payload.dataType == null) delete payload.dataType
+
+  return payload as CreateProductDto
+}
+
 export function useProducts() {
   const toast = useToast()
   const [products, setProducts] = useState<AdminProduct[]>([])
@@ -38,11 +51,17 @@ export function useProducts() {
       setLoading(true)
       setError(null)
       const durationDays = Number(filters.appliedDurationDaysQuery)
+      const selectedDataType =
+        filters.dataType === 'all'
+          ? undefined
+          : filters.dataType === DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE
+            ? DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE
+            : Number(filters.dataType) as ProductDataType
       const response = await productsApi.getAll({
         country: filters.selectedCountry || undefined,
         isActive: filters.showActiveOnly ?? undefined,
         search: filters.appliedSearchQuery.trim() || undefined,
-        tariffType: filters.tariffType === 'all' ? undefined : filters.tariffType,
+        dataType: selectedDataType,
         dataAmount: filters.appliedDataAmountQuery.trim() || undefined,
         dataUnit: filters.dataUnit === 'all' ? undefined : filters.dataUnit,
         durationDays: Number.isInteger(durationDays) && durationDays > 0 ? durationDays : undefined,
@@ -68,7 +87,7 @@ export function useProducts() {
     filters.page,
     filters.selectedCountry,
     filters.showActiveOnly,
-    filters.tariffType,
+    filters.dataType,
   ])
   const loadCountries = async () => {
     try {
@@ -117,7 +136,12 @@ export function useProducts() {
     try {
       setSyncing(true)
       const response = await productsApi.sync()
-      toast.success(response.data.message || 'Синхронизация завершена')
+      const message = response.data.message || 'Синхронизация завершена'
+      if (!response.data.success || response.data.errors > 0 || (response.data.providerErrors ?? 0) > 0) {
+        toast.error(message)
+      } else {
+        toast.success(message)
+      }
       await Promise.all([loadProducts(), loadCountries()])
     } catch (error) {
       toast.error(`Ошибка синхронизации: ${getErrorMessage(error, 'Неизвестная ошибка')}`)
@@ -129,12 +153,13 @@ export function useProducts() {
   const handleSave = async () => {
     if (!editingProduct) return
     try {
+      const payload = toProductMutationPayload(editingProduct)
       if (isCreating) {
-        await productsApi.create(editingProduct)
+        await productsApi.create(payload)
         toast.success('Продукт создан')
       } else {
         if (!editingProduct.id) throw new Error('Не найден идентификатор продукта')
-        await productsApi.update(editingProduct.id, editingProduct)
+        await productsApi.update(editingProduct.id, payload)
         toast.success('Продукт обновлен')
       }
       closeEditor()
@@ -165,7 +190,7 @@ export function useProducts() {
     filters.page,
     filters.selectedCountry,
     filters.showActiveOnly,
-    filters.tariffType,
+    filters.dataType,
   ])
 
   const handleSelectAll = () => {
@@ -196,7 +221,7 @@ export function useProducts() {
     isCreating,
     selectedCountry: filters.selectedCountry,
     showActiveOnly: filters.showActiveOnly,
-    tariffType: filters.tariffType,
+    dataType: filters.dataType,
     dataAmountQuery: filters.dataAmountQuery,
     dataUnit: filters.dataUnit,
     durationDaysQuery: filters.durationDaysQuery,
@@ -217,7 +242,7 @@ export function useProducts() {
       getMarkupPercent(providerPrice, ourPrice, exchangeRate),
     setSelectedCountry: filters.setSelectedCountry,
     setShowActiveOnly: filters.setShowActiveOnly,
-    setTariffType: filters.setTariffType,
+    setDataType: filters.setDataType,
     setDataAmountQuery: filters.setDataAmountQuery,
     setDataUnit: filters.setDataUnit,
     setDurationDaysQuery: filters.setDurationDaysQuery,

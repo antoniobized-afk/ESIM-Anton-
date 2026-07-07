@@ -27,7 +27,7 @@
 - `notifications` — email, web push. (Включает подмодуль `traffic-monitor` для мониторинга трафика/валидности)
 - `orders` — заказ, free fulfill, usage, top-up flow, balance purchase flow
 - `payments` — Robokassa flow + CloudPayments (сохранение карт, рекуррентные списания)
-- `products` — каталог, sync, dedupe, bulk operations; `products.filters.ts` владеет query-фильтрами списка тарифов (`country`, статус, тип, объём MB/GB, срок в днях).
+- `products` — каталог, sync, dedupe, bulk operations; `products.filters.ts` владеет query-фильтрами списка тарифов (`country`, статус, provider `dataType`, объём MB/GB, срок в днях). На write-boundary продукта `dataType` — единственный владелец типа данных; persisted `isUnlimited` хранится как производный legacy boolean для старых фильтров/заказов и пересчитывается сервисом из `dataType`.
 - `promo-codes` — CRUD и валидация промокодов
 - `referrals` — регистрация рефералов, партнёрские ссылки
 - `system-settings` — настройки, pricing, exchange rate, auto update
@@ -67,6 +67,7 @@ Telegram bot runtime (Grammy).
 - `types.ts` — общие интерфейсы.
 - `contracts/` — (напр. `checkout.ts`) общие контракты, расшаренные между приложениями.
 - `country-display.ts` — единый owner человекочитаемых названий ISO-стран и provider region codes для `client` и `admin`; фильтрующее значение остаётся исходным `country`.
+- `product-data-type.ts` — единый owner provider data type codes `1..4`, точной eSIM Access taxonomy (`Data in Total`, `Daily Limit (Speed Reduced)`, `Daily Limit (Service Cut-off)`, `Daily Unlimited`) и русских подписей для UI/logs.
 
 ## Data Layer
 

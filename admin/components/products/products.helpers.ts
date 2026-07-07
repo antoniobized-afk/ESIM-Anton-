@@ -20,6 +20,7 @@ export const createEmptyProduct = (): EditableProduct => ({
   description: '',
   dataAmount: '',
   validityDays: 7,
+  dataType: 1,
   providerPrice: 0,
   ourPrice: 0,
   providerId: '',

@@ -141,7 +141,12 @@ export default function Settings() {
     try {
       setSyncing(true)
       const response = await productsApi.sync()
-      toast.success(response.data.message || 'Синхронизация завершена')
+      const message = response.data.message || 'Синхронизация завершена'
+      if (!response.data.success || response.data.errors > 0 || (response.data.providerErrors ?? 0) > 0) {
+        toast.error(message)
+      } else {
+        toast.success(message)
+      }
     } catch (error: unknown) {
       console.error('Ошибка синхронизации:', error)
       toast.error(getErrorMessage(error, 'Ошибка синхронизации'))

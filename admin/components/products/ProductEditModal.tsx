@@ -2,6 +2,11 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { EditableProduct } from '@/lib/types'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
+import {
+  getProductDataTypeLabel,
+  normalizeProductDataType,
+  PRODUCT_DATA_TYPE_OPTIONS,
+} from '@shared/product-data-type'
 
 interface ProductEditModalProps {
   editingProduct: EditableProduct
@@ -22,6 +27,8 @@ interface ProductEditModalProps {
 
 export default function ProductEditModal(props: ProductEditModalProps) {
   const { editingProduct, isCreating, exchangeRate, editingProviderPriceUsd, editingMarkupPercent, setEditingProduct, onProviderPriceChange, onOurPriceChange, onMarkupPercentChange, onApplyMarkup, onSave, onClose, getProviderPriceUSD, getMarkupPercent } = props
+  const hasUnknownDataType = editingProduct.dataType == null
+  const dataTypeSelectValue = hasUnknownDataType ? '' : String(editingProduct.dataType)
 
   return (
     <Modal
@@ -34,6 +41,33 @@ export default function ProductEditModal(props: ProductEditModalProps) {
           <div><label className="block text-sm font-medium text-slate-700 mb-2">Регион</label><input type="text" value={editingProduct.region || ''} onChange={(event) => setEditingProduct({ ...editingProduct, region: event.target.value })} placeholder="Например: 🇪🇺 30 стран" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" /></div>
           <div className="col-span-2"><label className="block text-sm font-medium text-slate-700 mb-2">Название *</label><input type="text" value={editingProduct.name} onChange={(event) => setEditingProduct({ ...editingProduct, name: event.target.value })} placeholder="5GB / 30 дней" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" /></div>
           <div className="col-span-2"><label className="block text-sm font-medium text-slate-700 mb-2">Описание</label><textarea value={editingProduct.description || ''} onChange={(event) => setEditingProduct({ ...editingProduct, description: event.target.value })} placeholder="Подробное описание тарифа..." rows={3} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" /></div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-slate-700 mb-2">Тип данных провайдера *</label>
+            <select
+              value={dataTypeSelectValue}
+              onChange={(event) => setEditingProduct({
+                ...editingProduct,
+                dataType: normalizeProductDataType(event.target.value) ?? null,
+              })}
+              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all bg-white"
+            >
+              {hasUnknownDataType && (
+                <option value="">
+                  {getProductDataTypeLabel(editingProduct.dataType, editingProduct.isUnlimited)}
+                </option>
+              )}
+              {PRODUCT_DATA_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={String(option.value)}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {hasUnknownDataType && (
+              <p className="text-xs text-amber-600 mt-1">
+                Старый дневной тариф без точного типа: сохранение не изменит его, пока не выбран тип провайдера.
+              </p>
+            )}
+          </div>
           <div><label className="block text-sm font-medium text-slate-700 mb-2">Объем данных *</label><input type="text" value={editingProduct.dataAmount} onChange={(event) => setEditingProduct({ ...editingProduct, dataAmount: event.target.value })} placeholder="5GB" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-2">Срок действия (дней) *</label><input type="number" value={editingProduct.validityDays} onChange={(event) => setEditingProduct({ ...editingProduct, validityDays: +event.target.value })} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all" /></div>
           <div>

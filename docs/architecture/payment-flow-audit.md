@@ -162,6 +162,24 @@
 
 Quote (`POST /orders/quote`) и реальные purchase mutations (`create`, `createWithBalance`) обязаны использовать одну и ту же формулу.
 
+### Daily purchase period
+
+Для primary purchase `periodNum` применяется только к daily-продуктам
+(`Product.isUnlimited=true` как legacy daily flag). Верхняя граница периода —
+`Product.validityDays`, тот же максимум, который показывает selector в
+`client/app/product/[id]/page.tsx`.
+
+Backend owner этого правила — `OrdersService.buildOrderPricingSnapshot()`:
+
+- `POST /orders/quote`, card purchase и balance purchase используют один
+  resolver периода;
+- если `periodNum` не передан, период равен `1`;
+- если daily `periodNum` меньше `1`, не integer или больше `validityDays`,
+  backend возвращает `400` до создания order, резерва промокода, списания
+  баланса и provider call;
+- top-up не использует этот максимум: у него отдельный Day Pass контракт по
+  `supportTopUpType=3` и отдельная граница `1..365`.
+
 ### Quote degradation rule for referral auto-promo
 
 - manual promo остаётся strict input: невалидный код должен возвращать `400`;

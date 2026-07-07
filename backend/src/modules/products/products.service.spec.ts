@@ -7,11 +7,29 @@
  */
 import { ProductsService } from './products.service';
 import { buildProductsWhere } from './products.filters';
+import type { PrismaService } from '@/common/prisma/prisma.service';
+import type { EsimProviderService } from '../esim-provider/esim-provider.service';
+import type { SystemSettingsService } from '../system-settings/system-settings.service';
+import type { CreateProductDto } from './dto/create-product.dto';
+import type { UpdateProductDto } from './dto/update-product.dto';
+import { PRODUCT_DATA_TYPE_LABELS, type ProductDataType } from '@shared/product-data-type';
 
 function makeService(): ProductsService {
   // ProductsService хранит только инжекты; для проверки чистой функции
   // достаточно прокинуть «пустые» зависимости через приведение типа.
   return new (ProductsService as any)({}, {}, {}) as ProductsService;
+}
+
+function makeServiceWithDeps(deps: {
+  prisma?: unknown;
+  esimProviderService?: unknown;
+  systemSettingsService?: unknown;
+}): ProductsService {
+  return new ProductsService(
+    deps.prisma as PrismaService,
+    deps.esimProviderService as EsimProviderService,
+    deps.systemSettingsService as SystemSettingsService,
+  );
 }
 
 describe('ProductsService.inferTagsFromPackage', () => {
@@ -196,6 +214,449 @@ describe('ProductsService.inferTagsFromPackage', () => {
   });
 });
 
+describe('ProductsService product write normalization', () => {
+  const baseCreatePayload: CreateProductDto = {
+    country: 'TH',
+    name: 'Thailand 1GB',
+    dataAmount: '1 GB',
+    validityDays: 7,
+    providerPrice: 10000,
+    ourPrice: 150,
+    providerId: 'TH_1GB_7D',
+    isActive: true,
+  };
+
+  it('на create пересчитывает isUnlimited из dataType и не доверяет входному boolean', async () => {
+    const createProduct = jest.fn().mockResolvedValue({ id: 'created-product' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          create: createProduct,
+        },
+      },
+    });
+    const payload: CreateProductDto & { isUnlimited?: boolean } = {
+      ...baseCreatePayload,
+      dataType: 3,
+      isUnlimited: false,
+    };
+    await service.create(payload);
+    expect(createProduct).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        dataType: 3,
+        isUnlimited: true,
+      }),
+    });
+  });
+
+  it('на create без dataType пишет стандартный тип и сбрасывает legacy isUnlimited', async () => {
+    const createProduct = jest.fn().mockResolvedValue({ id: 'created-product' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          create: createProduct,
+        },
+      },
+    });
+    const payload: CreateProductDto & { isUnlimited?: boolean } = {
+      ...baseCreatePayload,
+      isUnlimited: true,
+    };
+    await service.create(payload);
+    expect(createProduct).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        dataType: 1,
+        isUnlimited: false,
+      }),
+    });
+  });
+
+  it('на update при смене dataType пересчитывает isUnlimited и не доверяет входному boolean', async () => {
+    const updateProduct = jest.fn().mockResolvedValue({ id: 'product-id' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'product-id' }),
+          update: updateProduct,
+        },
+      },
+    });
+    const payload: UpdateProductDto & { isUnlimited?: boolean } = {
+      dataType: 1,
+      isUnlimited: true,
+    };
+    await service.update('product-id', payload);
+    expect(updateProduct).toHaveBeenCalledWith({
+      where: { id: 'product-id' },
+      data: {
+        dataType: 1,
+        isUnlimited: false,
+      },
+    });
+  });
+
+  it('на partial update без dataType не даёт isUnlimited отдельного write-path', async () => {
+    const updateProduct = jest.fn().mockResolvedValue({ id: 'product-id' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'product-id' }),
+          update: updateProduct,
+        },
+      },
+    });
+    const payload: UpdateProductDto & { isUnlimited?: boolean } = {
+      isActive: false,
+      isUnlimited: true,
+    };
+    await service.update('product-id', payload);
+    expect(updateProduct).toHaveBeenCalledWith({
+      where: { id: 'product-id' },
+      data: {
+        isActive: false,
+      },
+    });
+  });
+
+  it('на update с dataType=null сохраняет legacy unknown и не сбрасывает его в standard', async () => {
+    const updateProduct = jest.fn().mockResolvedValue({ id: 'product-id' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          findUnique: jest.fn().mockResolvedValue({ id: 'product-id' }),
+          update: updateProduct,
+        },
+      },
+    });
+    const payload: UpdateProductDto & { dataType: null; isUnlimited?: boolean } = {
+      dataType: null,
+      isUnlimited: true,
+    };
+    await service.update('product-id', payload);
+    expect(updateProduct).toHaveBeenCalledWith({
+      where: { id: 'product-id' },
+      data: {},
+    });
+  });
+});
+
+describe('ProductsService.bulkToggleByDataType', () => {
+  it('массово переключает aggregate daily через provider dataType in [2,3,4]', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 7 });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          updateMany,
+        },
+      },
+    });
+
+    const result = await service.bulkToggleByDataType('daily', false);
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { dataType: { in: [2, 3, 4] } },
+      data: { isActive: false },
+    });
+    expect(updateMany).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ isUnlimited: expect.any(Boolean) }) }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      updated: 7,
+      dataType: 'daily',
+      isActive: false,
+    });
+  });
+
+  it('массово переключает точный daily subtype без затрагивания соседних subtypes', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 2 });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          updateMany,
+        },
+      },
+    });
+
+    const result = await service.bulkToggleByDataType(3, true);
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { dataType: 3 },
+      data: { isActive: true },
+    });
+    expect(result).toMatchObject({
+      success: true,
+      updated: 2,
+      dataType: 3,
+      isActive: true,
+    });
+  });
+
+  it('массово переключает standard по dataType=1, а не legacy isUnlimited=false', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 5 });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          updateMany,
+        },
+      },
+    });
+
+    await service.bulkToggleByDataType(1, true);
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { dataType: 1 },
+      data: { isActive: true },
+    });
+  });
+});
+
+describe('ProductsService.dedupeProducts', () => {
+  it('не считает дублями дневные тарифы с разным provider dataType', async () => {
+    const updateMany = jest.fn();
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'type-2',
+              country: 'TH',
+              dataAmount: '1 GB',
+              validityDays: 180,
+              dataType: 2,
+              providerPrice: 10000,
+              isUnlimited: true,
+              name: 'Thailand 1GB Daily Speed Reduced',
+              badge: null,
+              tags: [],
+              notes: null,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+            {
+              id: 'type-3',
+              country: 'TH',
+              dataAmount: '1 GB',
+              validityDays: 180,
+              dataType: 3,
+              providerPrice: 10000,
+              isUnlimited: true,
+              name: 'Thailand 1GB Daily Cutoff',
+              badge: null,
+              tags: [],
+              notes: null,
+              createdAt: new Date('2026-01-02T00:00:00.000Z'),
+            },
+          ]),
+          updateMany,
+        },
+        order: {
+          groupBy: jest.fn().mockResolvedValue([]),
+        },
+      },
+    });
+
+    const result = await service.dedupeProducts(true);
+
+    expect(result.groups).toBe(0);
+    expect(result.deactivated).toBe(0);
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('ProductsService.syncWithProvider', () => {
+  it('запускает все provider dataType list calls параллельно до ожидания первого ответа', async () => {
+    const resolvers: Array<() => void> = [];
+    const getPackages = jest.fn((_country?: string, _dataType?: ProductDataType) => new Promise<[]>((resolve) => {
+      resolvers.push(() => resolve([]));
+    }));
+    const service = makeServiceWithDeps({
+      esimProviderService: { getPackages },
+      systemSettingsService: {
+        getPricingSettings: jest.fn().mockResolvedValue({
+          exchangeRate: 100,
+          defaultMarkupPercent: 0,
+        }),
+      },
+    });
+
+    const syncPromise = service.syncWithProvider();
+    for (let attempt = 0; attempt < 10 && getPackages.mock.calls.length < 4; attempt += 1) {
+      await Promise.resolve();
+    }
+
+    expect(getPackages.mock.calls.map(([, dataType]) => dataType)).toEqual([1, 2, 3, 4]);
+
+    resolvers.forEach((resolve) => resolve());
+    await expect(syncPromise).resolves.toMatchObject({
+      success: false,
+      synced: 0,
+      errors: 1,
+      providerErrors: 0,
+      packageErrors: 0,
+    });
+  });
+
+  it('сохраняет partial sync, когда один provider dataType list call падает', async () => {
+    const createProduct = jest.fn().mockResolvedValue({ id: 'standard-ok' });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: createProduct,
+        },
+      },
+      esimProviderService: {
+        getPackages: jest.fn(async (_country, dataType) => {
+          if (dataType === 1) {
+            return [
+              {
+                packageCode: 'standard-ok',
+                name: 'Thailand 1GB 7Days',
+                locationCode: 'TH',
+                price: 10000,
+                currencyCode: 'USD',
+                volume: 1073741824,
+                smsVolume: 0,
+                duration: 7,
+                durationUnit: 'DAY',
+                validity: 7,
+                speed: '',
+                supportTopup: false,
+                dataType: 1,
+              },
+            ];
+          }
+
+          if (dataType === 2) throw new Error('provider dataType=2 timeout');
+
+          return [];
+        }),
+      },
+      systemSettingsService: {
+        getPricingSettings: jest.fn().mockResolvedValue({
+          exchangeRate: 100,
+          defaultMarkupPercent: 0,
+        }),
+      },
+    });
+
+    const result = await service.syncWithProvider();
+
+    expect(result).toMatchObject({
+      success: false,
+      synced: 1,
+      errors: 1,
+      providerErrors: 1,
+      packageErrors: 0,
+      providerFailures: [
+        {
+          dataType: 2,
+          label: PRODUCT_DATA_TYPE_LABELS[2],
+          message: 'provider dataType=2 timeout',
+        },
+      ],
+      breakdown: {
+        standard: 1,
+        unlimited: 0,
+        dataTypes: {
+          1: 1,
+          2: 0,
+          3: 0,
+          4: 0,
+        },
+      },
+    });
+    expect(result.message).toContain('Частично синхронизировано');
+    expect(result.message).toContain(PRODUCT_DATA_TYPE_LABELS[2]);
+    expect(createProduct).toHaveBeenCalledTimes(1);
+  });
+
+  it('считает breakdown по успешно синхронизированным пакетам, а не по полученным от провайдера', async () => {
+    const createProduct = jest.fn((args: { data: { providerId: string } }) => {
+      if (args.data.providerId === 'daily-bad') {
+        return Promise.reject(new Error('db rejected'));
+      }
+
+      return Promise.resolve({ id: args.data.providerId });
+    });
+    const service = makeServiceWithDeps({
+      prisma: {
+        esimProduct: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: createProduct,
+        },
+      },
+      esimProviderService: {
+        getPackages: jest.fn(async (_country, dataType) => {
+          if (dataType === 1) {
+            return [
+              {
+                packageCode: 'standard-ok',
+                name: 'Thailand 1GB 7Days',
+                locationCode: 'TH',
+                price: 10000,
+                currencyCode: 'USD',
+                volume: 1073741824,
+                smsVolume: 0,
+                duration: 7,
+                durationUnit: 'DAY',
+                validity: 7,
+                speed: '',
+                supportTopup: false,
+                dataType: 1,
+              },
+            ];
+          }
+
+          if (dataType === 2) {
+            return [
+              {
+                packageCode: 'daily-bad',
+                name: 'Thailand 1GB/Day FUP1Mbps',
+                locationCode: 'TH',
+                price: 20000,
+                currencyCode: 'USD',
+                volume: 1073741824,
+                smsVolume: 0,
+                duration: 1,
+                durationUnit: 'DAY',
+                validity: 180,
+                speed: '',
+                supportTopup: false,
+                dataType: 2,
+              },
+            ];
+          }
+
+          return [];
+        }),
+      },
+      systemSettingsService: {
+        getPricingSettings: jest.fn().mockResolvedValue({
+          exchangeRate: 100,
+          defaultMarkupPercent: 0,
+        }),
+      },
+    });
+
+    const result = await service.syncWithProvider();
+
+    expect(result.success).toBe(false);
+    expect(result.synced).toBe(1);
+    expect(result.errors).toBe(1);
+    expect(result.providerErrors).toBe(0);
+    expect(result.packageErrors).toBe(1);
+    expect(result.breakdown?.standard).toBe(1);
+    expect(result.breakdown?.unlimited).toBe(0);
+    expect(result.breakdown?.dataTypes).toEqual({
+      1: 1,
+      2: 0,
+      3: 0,
+      4: 0,
+    });
+  });
+});
+
 describe('buildProductsWhere', () => {
   it('строит точный фильтр по объёму и единице трафика', () => {
     expect(buildProductsWhere({ dataAmount: '5', dataUnit: 'GB' })).toEqual({
@@ -226,6 +687,31 @@ describe('buildProductsWhere', () => {
   it('маппит Duration(days) на срок тарифа validityDays', () => {
     expect(buildProductsWhere({ durationDays: '30' })).toEqual({
       AND: [{ validityDays: 30 }],
+    });
+  });
+
+  it('фильтрует по provider dataType и не сводит daily-типы к одному boolean', () => {
+    expect(buildProductsWhere({ dataType: '3', tariffType: 'unlimited' })).toEqual({
+      AND: [{ dataType: 3 }],
+    });
+  });
+
+  it('не коэрсит boolean dataType=true в standard-фильтр', () => {
+    expect(buildProductsWhere({ dataType: true as unknown as string })).toEqual({});
+  });
+
+  it('агрегирует все дневные provider-типы через dataType=daily, а не legacy isUnlimited', () => {
+    expect(buildProductsWhere({ dataType: 'daily' })).toEqual({
+      AND: [{ dataType: { in: [2, 3, 4] } }],
+    });
+  });
+
+  it('маппит legacy tariffType aliases на provider dataType taxonomy', () => {
+    expect(buildProductsWhere({ tariffType: 'standard' })).toEqual({
+      AND: [{ dataType: 1 }],
+    });
+    expect(buildProductsWhere({ tariffType: 'unlimited' })).toEqual({
+      AND: [{ dataType: { in: [2, 3, 4] } }],
     });
   });
 });

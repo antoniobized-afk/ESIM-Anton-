@@ -1,8 +1,9 @@
 import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
-import { EsimAccessProvider } from './providers/esimaccess.provider';
+import { EsimAccessProvider, type EsimAccessPackage } from './providers/esimaccess.provider';
 import { EsimStatus, mapEsimAccessSmdpStatus, mapEsimAccessStatus } from './esim-status';
+import type { ProductDataType } from '@shared/product-data-type';
 
 /**
  * Нормализованный snapshot eSIM, собранный из ответа провайдера.
@@ -136,9 +137,9 @@ export class EsimProviderService {
   /**
    * Получить список доступных пакетов/тарифов
    * @param country - фильтр по стране
-   * @param dataType - 1 = standard, 2 = unlimited/day pass
+   * @param dataType - eSIM Access data type: 1..4
    */
-  async getPackages(country?: string, dataType?: number): Promise<any[]> {
+  async getPackages(country?: string, dataType?: ProductDataType): Promise<EsimAccessPackage[]> {
     if (this.esimAccessProvider) {
       try {
         return await this.esimAccessProvider.getPackages(country, dataType);

@@ -1,7 +1,9 @@
 import type { AdminProduct } from '@/lib/types'
 import Button from '@/components/ui/Button'
 import { ChevronDown, Eye, EyeOff, Filter, Search } from 'lucide-react'
-import type { DataUnitFilter, TariffFilter } from './useProducts'
+import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, PRODUCT_DATA_TYPE_OPTIONS } from '@shared/product-data-type'
+import type { ProductDataTypeSelector } from '@shared/product-data-type'
+import type { DataUnitFilter, ProductDataTypeFilter } from './useProducts'
 import { getCountryFilterLabel, isMultiCountryValue } from '@shared/country-display'
 
 type CountryFilterOption = {
@@ -17,20 +19,20 @@ interface ProductsFiltersProps {
   page: number
   selectedCountry: string
   showActiveOnly: boolean | null
-  tariffType: TariffFilter
+  dataType: ProductDataTypeFilter
   dataAmountQuery: string
   dataUnit: DataUnitFilter
   durationDaysQuery: string
   searchQuery: string
   onCountryChange: (value: string) => void
   onStatusChange: (value: boolean | null) => void
-  onTariffTypeChange: (value: TariffFilter) => void
+  onDataTypeChange: (value: ProductDataTypeFilter) => void
   onDataAmountChange: (value: string) => void
   onDataUnitChange: (value: DataUnitFilter) => void
   onDurationDaysChange: (value: string) => void
   onSearchChange: (value: string) => void
   onClear: () => void
-  onToggleByType: (tariffType: 'standard' | 'unlimited', isActive: boolean) => void
+  onToggleByDataType: (dataType: ProductDataTypeSelector, isActive: boolean) => void
 }
 
 export default function ProductsFilters(props: ProductsFiltersProps) {
@@ -42,20 +44,20 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
     page,
     selectedCountry,
     showActiveOnly,
-    tariffType,
+    dataType,
     dataAmountQuery,
     dataUnit,
     durationDaysQuery,
     searchQuery,
     onCountryChange,
     onStatusChange,
-    onTariffTypeChange,
+    onDataTypeChange,
     onDataAmountChange,
     onDataUnitChange,
     onDurationDaysChange,
     onSearchChange,
     onClear,
-    onToggleByType,
+    onToggleByDataType,
   } = props
   const countryOptions = countries
     .map((country) => ({
@@ -73,6 +75,25 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
         {option.label}
       </option>
     ))
+  const bulkDataTypeOptions: Array<{ value: ProductDataTypeSelector; label: string; enableClassName: string }> = [
+    {
+      value: 1,
+      label: PRODUCT_DATA_TYPE_OPTIONS.find((option) => option.value === 1)?.label ?? 'Пакет данных на весь срок',
+      enableClassName: 'bg-green-500 hover:bg-green-600',
+    },
+    {
+      value: DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE,
+      label: 'Все дневные типы',
+      enableClassName: 'bg-purple-500 hover:bg-purple-600',
+    },
+    ...PRODUCT_DATA_TYPE_OPTIONS
+      .filter((option) => option.value !== 1)
+      .map((option) => ({
+        value: option.value,
+        label: option.label,
+        enableClassName: 'bg-blue-500 hover:bg-blue-600',
+      })),
+  ]
 
   return (
     <div className="glass-card p-6">
@@ -132,13 +153,17 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
 
         <div className="relative">
           <select
-            value={tariffType}
-            onChange={(event) => onTariffTypeChange(event.target.value as TariffFilter)}
+            value={dataType}
+            onChange={(event) => onDataTypeChange(event.target.value as ProductDataTypeFilter)}
             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all appearance-none bg-white"
           >
-            <option value="all">📦 Все типы тарифов</option>
-            <option value="standard">📊 Стандартные (с лимитом ГБ)</option>
-            <option value="unlimited">♾️ Безлимитные (Day Pass)</option>
+            <option value="all">Тип данных</option>
+            <option value={DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE}>Все дневные типы</option>
+            {PRODUCT_DATA_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={String(option.value)}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>
@@ -190,33 +215,23 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
       </div>
 
       <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
-        <h4 className="font-semibold text-slate-700 mb-3">⚡ Быстрые действия (одной кнопкой)</h4>
-        <div className="flex gap-3 flex-wrap">
-          <div className="flex gap-2 items-center">
-            <span className="text-sm text-slate-600 font-medium">📊 Стандартные:</span>
-            <Button onClick={() => onToggleByType('standard', true)} size="sm" className="bg-green-500 hover:bg-green-600">
-              <Eye className="w-3.5 h-3.5" />
-              Включить все
-            </Button>
-            <Button onClick={() => onToggleByType('standard', false)} size="sm" className="bg-slate-400 hover:bg-slate-500">
-              <EyeOff className="w-3.5 h-3.5" />
-              Выключить все
-            </Button>
-          </div>
-
-          <div className="w-px bg-slate-300 mx-2" />
-
-          <div className="flex gap-2 items-center">
-            <span className="text-sm text-slate-600 font-medium">♾️ Безлимитные:</span>
-            <Button onClick={() => onToggleByType('unlimited', true)} size="sm" className="bg-purple-500 hover:bg-purple-600">
-              <Eye className="w-3.5 h-3.5" />
-              Включить все
-            </Button>
-            <Button onClick={() => onToggleByType('unlimited', false)} size="sm" className="bg-slate-400 hover:bg-slate-500">
-              <EyeOff className="w-3.5 h-3.5" />
-              Выключить все
-            </Button>
-          </div>
+        <h4 className="font-semibold text-slate-700 mb-3">⚡ Быстрые действия по provider dataType</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {bulkDataTypeOptions.map((option) => (
+            <div key={option.value} className="flex gap-2 items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <span className="min-w-0 text-sm text-slate-600 font-medium break-words">{option.label}</span>
+              <div className="flex gap-2 shrink-0">
+                <Button onClick={() => onToggleByDataType(option.value, true)} size="sm" className={option.enableClassName}>
+                  <Eye className="w-3.5 h-3.5" />
+                  Включить
+                </Button>
+                <Button onClick={() => onToggleByDataType(option.value, false)} size="sm" className="bg-slate-400 hover:bg-slate-500">
+                  <EyeOff className="w-3.5 h-3.5" />
+                  Выключить
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

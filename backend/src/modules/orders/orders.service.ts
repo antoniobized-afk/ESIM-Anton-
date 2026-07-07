@@ -84,6 +84,7 @@ type OrderPricingSnapshot = {
     providerPrice: Prisma.Decimal | number;
     isActive: boolean;
     isUnlimited: boolean;
+    validityDays: number;
   };
   quantity: number;
   days: number;
@@ -100,6 +101,11 @@ type OrderPricingSnapshot = {
   totalAmount: number;
   currentLoyaltyLevel: ResolvedLoyaltyLevel;
   bonusSpend: BonusSpendBreakdown;
+};
+
+type PurchasePeriodProduct = {
+  isUnlimited: boolean;
+  validityDays?: number | null;
 };
 
 type ReconciliationCategory =
@@ -655,6 +661,35 @@ export class OrdersService {
     }
   }
 
+  private getPurchaseMaxDays(product: PurchasePeriodProduct) {
+    const validityDays = Number(product.validityDays);
+    if (!Number.isFinite(validityDays) || validityDays < 1) return 1;
+    return Math.max(1, Math.floor(validityDays));
+  }
+
+  private resolvePurchaseDays(
+    product: PurchasePeriodProduct,
+    periodNum?: number | null,
+  ) {
+    if (!product.isUnlimited) return 1;
+
+    const maxDays = this.getPurchaseMaxDays(product);
+    if (periodNum === undefined || periodNum === null) return 1;
+
+    const requestedDays = Number(periodNum);
+    if (
+      !Number.isInteger(requestedDays) ||
+      requestedDays < 1 ||
+      requestedDays > maxDays
+    ) {
+      throw new BadRequestException(
+        `Количество дней для этого тарифа должно быть от 1 до ${maxDays}`,
+      );
+    }
+
+    return requestedDays;
+  }
+
   private async buildOrderPricingSnapshot(
     userId: string,
     productId: string,
@@ -677,7 +712,7 @@ export class OrdersService {
       throw new BadRequestException('Продукт недоступен');
     }
 
-    const days = product.isUnlimited && opts?.periodNum ? opts.periodNum : 1;
+    const days = this.resolvePurchaseDays(product, opts?.periodNum);
     const baseAmount = Number(product.ourPrice) * quantity * days;
     let totalAmount = baseAmount;
     let promoDiscount = 0;

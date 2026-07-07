@@ -135,6 +135,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
       providerId: 'provider_plan_1',
       isActive: true,
       isUnlimited: false,
+      validityDays: 7,
       country: 'Япония',
       dataAmount: '10 GB',
     }),
@@ -249,8 +250,10 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
   return {
     service,
     prisma,
+    productsService,
     usersService,
     esimProviderService,
+    promoCodesService,
     telegramNotification,
     emailService,
     pushService,
@@ -686,6 +689,103 @@ describe('OrdersService', () => {
           isFree: false,
         }),
       );
+    });
+
+    it('previewPricing отклоняет daily periodNum выше срока выбора тарифа', async () => {
+      const { service, prisma, productsService } = makeService();
+      productsService.findById.mockResolvedValue({
+        id: 'product_daily',
+        ourPrice: 100,
+        providerPrice: 10,
+        providerId: 'provider_daily',
+        isActive: true,
+        isUnlimited: true,
+        validityDays: 7,
+        country: 'Япония',
+        dataAmount: '1 GB',
+      });
+
+      await expect(
+        service.previewPricing('user_1', 'product_daily', {
+          periodNum: 8,
+        }),
+      ).rejects.toThrow('Количество дней для этого тарифа должно быть от 1 до 7');
+
+      expect(prisma.order.create).not.toHaveBeenCalled();
+    });
+
+    it('create сохраняет daily periodNum на верхней границе и считает цену по той же границе', async () => {
+      const { service, prisma, productsService } = makeService();
+      productsService.findById.mockResolvedValue({
+        id: 'product_daily',
+        ourPrice: 100,
+        providerPrice: 10,
+        providerId: 'provider_daily',
+        isActive: true,
+        isUnlimited: true,
+        validityDays: 7,
+        country: 'Япония',
+        dataAmount: '1 GB',
+      });
+
+      const order = await service.create('user_1', 'product_daily', 1, 0, 7);
+
+      expect(Number(order.totalAmount)).toBe(700);
+      expect(prisma.order.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            periodNum: 7,
+            totalAmount: expect.anything(),
+          }),
+        }),
+      );
+    });
+
+    it('create отклоняет daily periodNum выше срока до создания order и резерва промокода', async () => {
+      const { service, prisma, productsService, promoCodesService } = makeService();
+      productsService.findById.mockResolvedValue({
+        id: 'product_daily',
+        ourPrice: 100,
+        providerPrice: 10,
+        providerId: 'provider_daily',
+        isActive: true,
+        isUnlimited: true,
+        validityDays: 7,
+        country: 'Япония',
+        dataAmount: '1 GB',
+      });
+
+      await expect(
+        service.create('user_1', 'product_daily', 1, 0, 8, 'sale10'),
+      ).rejects.toThrow('Количество дней для этого тарифа должно быть от 1 до 7');
+
+      expect(prisma.order.create).not.toHaveBeenCalled();
+      expect(promoCodesService.reserveForOrder).not.toHaveBeenCalled();
+    });
+
+    it('createWithBalance отклоняет daily periodNum выше срока до списания баланса и provider call', async () => {
+      const { service, prisma, productsService, esimProviderService } = makeService();
+      productsService.findById.mockResolvedValue({
+        id: 'product_daily',
+        ourPrice: 100,
+        providerPrice: 10,
+        providerId: 'provider_daily',
+        isActive: true,
+        isUnlimited: true,
+        validityDays: 7,
+        country: 'Япония',
+        dataAmount: '1 GB',
+      });
+
+      await expect(
+        service.createWithBalance('user_1', 'product_daily', {
+          periodNum: 8,
+        }),
+      ).rejects.toThrow('Количество дней для этого тарифа должно быть от 1 до 7');
+
+      expect(prisma.order.create).not.toHaveBeenCalled();
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(esimProviderService.purchaseEsim).not.toHaveBeenCalled();
     });
 
     it('previewPricing отклоняет собственный manual partner promo без мутаций', async () => {

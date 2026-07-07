@@ -2,6 +2,7 @@ import type { AdminProduct } from '@/lib/types'
 import Button from '@/components/ui/Button'
 import { TableCell, TableRow } from '@/components/ui/Table'
 import { Edit2, Eye, EyeOff } from 'lucide-react'
+import { getProductDataTypeLabel } from '@shared/product-data-type'
 
 interface ProductsTableRowProps {
   product: AdminProduct
@@ -62,7 +63,9 @@ export default function ProductsTableRow(props: ProductsTableRowProps) {
       <TableCell className="px-2 py-2"><span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">3G/4G/5G</span></TableCell>
       <TableCell className="px-2 py-2 text-slate-600 text-xs">{product.country}</TableCell>
       <TableCell className="px-2 py-2">
-        {product.isUnlimited ? <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">∞ Безлимит</span> : <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-medium">Стандарт</span>}
+        <span className="inline-flex max-w-[160px] px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px] font-medium leading-tight">
+          {getProductDataTypeLabel(product.dataType, product.isUnlimited)}
+        </span>
       </TableCell>
       <TableCell className="px-2 py-2">
         {product.badge ? (

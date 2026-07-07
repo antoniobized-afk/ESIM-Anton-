@@ -1,7 +1,10 @@
 // Общие типы для всех модулей проекта
 
+import type { ProductDataTypeValue } from './product-data-type';
+
 export * from './contracts/checkout';
 export * from './country-display';
+export * from './product-data-type';
 
 export interface User {
   id: string;
@@ -24,6 +27,7 @@ export interface EsimProduct {
   description?: string;
   dataAmount: string;
   validityDays: number;
+  dataType?: ProductDataTypeValue;
   providerPrice: number;
   ourPrice: number;
   isActive: boolean;

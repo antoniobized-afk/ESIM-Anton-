@@ -3,6 +3,9 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { JwtAdminGuard } from '@/common/auth/jwt-user.guard';
 import type { ProductDataUnit } from './products.filters';
+import { BulkToggleByDataTypeDto } from './dto/bulk-toggle-by-data-type.dto';
+import { CreateProductDto } from './dto/create-product.dto';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 @ApiTags('products')
 @Controller('products')
@@ -16,6 +19,7 @@ export class ProductsController {
     @Query('isActive') isActive?: string,
     @Query('search') search?: string,
     @Query('tariffType') tariffType?: 'standard' | 'unlimited',
+    @Query('dataType') dataType?: string,
     @Query('dataAmount') dataAmount?: string,
     @Query('dataUnit') dataUnit?: ProductDataUnit,
     @Query('durationDays') durationDays?: string,
@@ -30,6 +34,7 @@ export class ProductsController {
       isActive: isActiveFilter,
       search,
       tariffType,
+      dataType,
       dataAmount,
       dataUnit,
       durationDays,
@@ -83,9 +88,9 @@ export class ProductsController {
   @Post('bulk/toggle-by-type')
   @UseGuards(JwtAdminGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Включить/выключить все тарифы по типу (стандартные/безлимитные)' })
-  async bulkToggleByType(@Body() body: { tariffType: 'standard' | 'unlimited'; isActive: boolean }) {
-    return this.productsService.bulkToggleByType(body.tariffType, body.isActive);
+  @ApiOperation({ summary: 'Включить/выключить все тарифы по provider dataType' })
+  async bulkToggleByType(@Body() body: BulkToggleByDataTypeDto) {
+    return this.productsService.bulkToggleByDataType(body.dataType, body.isActive);
   }
 
   @Post('bulk/set-badge')
@@ -122,7 +127,7 @@ export class ProductsController {
   @UseGuards(JwtAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Создать продукт' })
-  async create(@Body() createDto: any) {
+  async create(@Body() createDto: CreateProductDto) {
     return this.productsService.create(createDto);
   }
 
@@ -130,7 +135,7 @@ export class ProductsController {
   @UseGuards(JwtAdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Обновить продукт' })
-  async update(@Param('id') id: string, @Body() updateDto: any) {
+  async update(@Param('id') id: string, @Body() updateDto: UpdateProductDto) {
     return this.productsService.update(id, updateDto);
   }
 

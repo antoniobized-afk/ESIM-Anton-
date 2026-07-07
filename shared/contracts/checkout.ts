@@ -53,6 +53,7 @@ export interface CreateOrderQuoteRequest {
   productId: string;
   quantity?: number;
   useBonuses?: number;
+  // Только для daily purchase. Backend валидирует верхнюю границу по product.validityDays.
   periodNum?: number;
   promoCode?: string;
 }
