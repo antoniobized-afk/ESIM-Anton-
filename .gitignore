@@ -9,6 +9,7 @@ info
 .playwright-cli
 scripts
 audits
+output
 
 # Testing
 coverage/
