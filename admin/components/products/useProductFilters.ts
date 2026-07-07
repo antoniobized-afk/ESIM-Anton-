@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { AdminProduct, ProductSortField } from '@/lib/types'
 import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, normalizeProductDataTypeSelector } from '@shared/product-data-type'
@@ -56,6 +56,9 @@ export function useProductFilters(products: AdminProduct[]) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const replaceWithoutScroll = useCallback((href: string) => {
+    router.replace(href, { scroll: false })
+  }, [router])
 
   const selectedCountry = searchParams.get('country') || ''
   const activeParam = searchParams.get('active')
@@ -120,7 +123,7 @@ export function useProductFilters(products: AdminProduct[]) {
 
     const timeoutId = window.setTimeout(() => {
       const nextQuery = normalized.toString()
-      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname)
+      replaceWithoutScroll(nextQuery ? `${pathname}?${nextQuery}` : pathname)
     }, 300)
 
     return () => window.clearTimeout(timeoutId)
@@ -130,7 +133,7 @@ export function useProductFilters(products: AdminProduct[]) {
     durationDaysQuery,
     page,
     pathname,
-    router,
+    replaceWithoutScroll,
     searchParams,
     searchQuery,
     selectedCountry,
@@ -149,14 +152,14 @@ export function useProductFilters(products: AdminProduct[]) {
     nextParams.delete('type')
     nextParams.delete('unlimited')
     const nextQuery = nextParams.toString()
-    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname)
+    replaceWithoutScroll(nextQuery ? `${pathname}?${nextQuery}` : pathname)
   }
 
   const clearFilters = () => {
     setSearchQuery('')
     setDataAmountQuery('')
     setDurationDaysQuery('')
-    router.replace(pathname)
+    replaceWithoutScroll(pathname)
   }
 
   return {

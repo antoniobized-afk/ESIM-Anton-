@@ -34,7 +34,6 @@
 
 .glass-card:hover {
   @apply bg-white/80 shadow-2xl shadow-black/10;
-  transform: translateY(-2px);
 }
 
 /* Scrollbar styling */
