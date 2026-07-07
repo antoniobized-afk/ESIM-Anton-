@@ -7,6 +7,7 @@ import {
   AlertCircle as LucideAlertCircle,
   ArrowLeft as LucideArrowLeft,
   ArrowRight as LucideArrowRight,
+  Ban as LucideBan,
   Bell as LucideBell,
   Check as LucideCheck,
   CheckCircle as LucideCheckCircle,
@@ -29,6 +30,7 @@ import {
   Loader2 as LucideLoader2,
   LogOut as LucideLogOut,
   Mail as LucideMail,
+  MapPin as LucideMapPin,
   MessageCircle as LucideMessageCircle,
   Monitor as LucideMonitor,
   Moon as LucideMoon,
@@ -93,6 +95,7 @@ export const Apple = ClientOnlyIcon(LucideApple)
 export const AlertCircle = ClientOnlyIcon(LucideAlertCircle)
 export const ArrowLeft = ClientOnlyIcon(LucideArrowLeft)
 export const ArrowRight = ClientOnlyIcon(LucideArrowRight)
+export const Ban = ClientOnlyIcon(LucideBan)
 export const Bell = ClientOnlyIcon(LucideBell)
 export const Check = ClientOnlyIcon(LucideCheck)
 export const CheckCircle = ClientOnlyIcon(LucideCheckCircle)
@@ -115,6 +118,7 @@ export const Laptop = ClientOnlyIcon(LucideLaptop)
 export const Loader2 = ClientOnlyIcon(LucideLoader2)
 export const LogOut = ClientOnlyIcon(LucideLogOut)
 export const Mail = ClientOnlyIcon(LucideMail)
+export const MapPin = ClientOnlyIcon(LucideMapPin)
 export const MessageCircle = ClientOnlyIcon(LucideMessageCircle)
 export const Monitor = ClientOnlyIcon(LucideMonitor)
 export const Moon = ClientOnlyIcon(LucideMoon)

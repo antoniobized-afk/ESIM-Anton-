@@ -9,6 +9,7 @@ import type {
   OrderQuoteResponse,
   SavedPaymentCardSummary,
 } from '@shared/contracts/checkout';
+import type { ProductDataTypeValue } from '@shared/product-data-type';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
@@ -78,6 +79,7 @@ export interface Product {
   region?: string;
   name: string;
   description?: string;
+  dataType?: ProductDataTypeValue | null;
   dataAmount: string;
   validityDays: number;  // Для Daily Unlimited = срок действия (180 дней)
   duration?: number;     // Для Daily Unlimited = 1 (в день)

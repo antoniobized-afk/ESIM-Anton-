@@ -5,8 +5,8 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import BottomNav from '@/components/BottomNav'
 import { ArrowLeft } from '@/components/icons'
 import { useSmartBack } from '@/lib/useSmartBack'
-import { productsApi, Product } from '@/lib/api'
-import { formatPrice, formatDataAmount, getFlagUrl, getCountryName } from '@/lib/utils'
+import { productsApi, type Product } from '@/lib/api'
+import { formatPrice, formatDataAmount, getFlagUrl, getCountryName, getAfterLimitNote } from '@/lib/utils'
 import {
   getCoverageCount,
   getCoverageItems,
@@ -288,12 +288,15 @@ function CountryPageInner() {
                     </span>
                   </div>
                 )}
-                {/* Скорость после лимита для Daily Unlimited */}
-                {product.isUnlimited && product.speed && (
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    После лимита: {product.speed}
-                  </p>
-                )}
+                {/* Поведение daily-тарифа после исчерпания дневного лимита */}
+                {(() => {
+                  const afterLimitNote = getAfterLimitNote(product)
+                  return afterLimitNote ? (
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {afterLimitNote}
+                    </p>
+                  ) : null
+                })()}
                 {/* Примечание из админки */}
                 {product.notes && (
                   <p className="text-xs text-gray-400 mt-0.5">

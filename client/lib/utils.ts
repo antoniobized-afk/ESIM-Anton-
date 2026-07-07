@@ -228,6 +228,35 @@ export const formatDataAmount = (amount: string): string => {
   return amount;
 };
 
+type ProductLimitDisplayInput = {
+  dataType?: 1 | 2 | 3 | 4 | null;
+  speed?: string | null;
+  isUnlimited?: boolean;
+};
+
+const DATA_TYPE_DAILY_SPEED_REDUCED = 2;
+const DATA_TYPE_DAILY_SERVICE_CUTOFF = 3;
+
+export function getAfterLimitNote(product: ProductLimitDisplayInput): string | null {
+  if (product.isUnlimited !== true) return null;
+
+  if (product.dataType === null || product.dataType === undefined) {
+    const speed = product.speed?.trim();
+    return speed ? `После лимита: ${speed}` : null;
+  }
+
+  if (product.dataType === DATA_TYPE_DAILY_SPEED_REDUCED) {
+    const speed = product.speed?.trim();
+    return speed ? `После лимита: ${speed}` : 'После лимита скорость снижается';
+  }
+
+  if (product.dataType === DATA_TYPE_DAILY_SERVICE_CUTOFF) {
+    return 'После лимита доступ отключается до следующего дня';
+  }
+
+  return null;
+}
+
 export function getCountryCode(country: string): string {
   if (!country) return 'XX';
 
