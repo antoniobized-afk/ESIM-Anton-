@@ -74,9 +74,9 @@ export default function ProductsTable(props: ProductsTableProps) {
                 <SortableHeader active={sortBy === 'markupRatio'} direction={sortOrder} onClick={() => onSort('markupRatio')} className="px-2">
                   Наценка
                 </SortableHeader>
-                <TableHeaderCell className="px-2">Speed</TableHeaderCell>
+                <TableHeaderCell className="px-2">Скорость</TableHeaderCell>
                 <SortableHeader active={sortBy === 'country'} direction={sortOrder} onClick={() => onSort('country')} className="px-2">
-                  Region
+                  Код
                 </SortableHeader>
                 <SortableHeader active={sortBy === 'dataType'} direction={sortOrder} onClick={() => onSort('dataType')} className="px-2">
                   Тип
