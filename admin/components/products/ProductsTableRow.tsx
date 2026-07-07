@@ -78,7 +78,7 @@ export default function ProductsTableRow(props: ProductsTableRowProps) {
         <Button
           onClick={() => onToggleActive(product)}
           size="sm"
-          className={`px-2 py-1 text-xs ${product.isActive ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}
+          className={`px-2 py-1 text-xs ${product.isActive ? 'bg-green-100 hover:bg-green-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'}`}
         >
           {product.isActive ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
           {product.isActive ? 'Вкл' : 'Выкл'}
