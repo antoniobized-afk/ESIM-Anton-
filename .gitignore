@@ -27,6 +27,7 @@ dist/
 .env.production
 
 # IDE
+archive
 work
 .roo
 .agents
