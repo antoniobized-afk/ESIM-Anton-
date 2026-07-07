@@ -111,6 +111,9 @@ export interface AdminProduct {
   speed?: string | null
   providerPrice: NumericLike
   ourPrice: NumericLike
+  dataAmountMb?: NumericLike | null
+  providerCostPerGb?: NumericLike | null
+  markupRatio?: NumericLike | null
   providerId: string
   providerName?: string
   isActive: boolean

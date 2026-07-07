@@ -13,14 +13,33 @@ export type ProductDataTypeFilter = 'all' | typeof DAILY_PRODUCT_DATA_TYPE_FILTE
 export type DataUnitFilter = 'all' | 'MB' | 'GB'
 
 const toProductMutationPayload = (product: EditableProduct): CreateProductDto => {
-  const payload = { ...product }
-  delete payload.id
-  delete payload.createdAt
-  delete payload.updatedAt
-  delete payload.isUnlimited
-  if (payload.dataType == null) delete payload.dataType
+  const payload: CreateProductDto = {
+    country: product.country,
+    region: product.region ?? null,
+    name: product.name,
+    description: product.description ?? null,
+    dataAmount: product.dataAmount,
+    validityDays: product.validityDays,
+    duration: product.duration ?? null,
+    speed: product.speed ?? null,
+    providerPrice: product.providerPrice,
+    ourPrice: product.ourPrice,
+    providerId: product.providerId,
+    providerName: product.providerName,
+    isActive: product.isActive,
+    stock: product.stock,
+    badge: product.badge ?? null,
+    badgeColor: product.badgeColor ?? null,
+    tags: product.tags,
+    notes: product.notes ?? null,
+    supportTopup: product.supportTopup,
+  }
 
-  return payload as CreateProductDto
+  if (product.dataType != null) {
+    payload.dataType = product.dataType
+  }
+
+  return payload
 }
 
 export function useProducts() {
