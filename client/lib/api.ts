@@ -9,7 +9,6 @@ import type {
   OrderQuoteResponse,
   SavedPaymentCardSummary,
 } from '@shared/contracts/checkout';
-import type { ProductDataTypeValue } from '@shared/product-data-type';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
@@ -80,11 +79,9 @@ export interface Product {
   name: string;
   description?: string;
   dataAmount: string;
-  validityDays: number;  // Для дневных тарифов = максимальный срок выбора
-  duration?: number;     // Для дневных тарифов = дневной период/лимит
-  // Optional during rolling deploys while an old backend can still omit dataType.
-  dataType?: ProductDataTypeValue;
-  speed?: string;        // Только для dataType=2: скорость после дневного лимита
+  validityDays: number;  // Для Daily Unlimited = срок действия (180 дней)
+  duration?: number;     // Для Daily Unlimited = 1 (в день)
+  speed?: string;        // Ограничение скорости после лимита (384 Kbps, 1 Mbps)
   providerPrice: number;
   ourPrice: number;
   providerId: string;
