@@ -31,6 +31,8 @@
 
 `client` собирается как отдельное приложение и развёртывается как независимый сервис в Railway (в том же проекте, что и `backend`/`admin`/`bot`).
 
+Текущий Railway client-service собирается из каталога `client` как `/app` через `npm install --legacy-peer-deps && npm run build`. В этом build context нет соседней папки `shared/`, поэтому runtime-код внутри `client` не должен импортировать `@shared/*`. Допустимы только `import type` контракты, которые стираются при сборке; runtime helpers для клиентского UI должны жить в `client/lib`.
+
 ## Обязательные env-переменные
 
 Минимальный production-набор:

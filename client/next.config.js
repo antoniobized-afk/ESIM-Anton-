@@ -35,7 +35,6 @@ const nextConfig = {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@': path.resolve(__dirname),
-      '@shared': path.resolve(__dirname, '../shared'),
     };
     return config;
   },

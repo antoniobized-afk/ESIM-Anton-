@@ -1,6 +1,5 @@
 import type { Product } from '@/lib/api'
-import { getCountryName } from '@/lib/utils'
-import { isProviderRegionCode } from '@shared/country-display'
+import { getCountryName, isProviderRegionCode } from '@/lib/utils'
 
 const MULTI_KEYWORDS = ['europe', 'asia', 'africa', 'america', 'regional', 'multi', 'евро', 'ази', 'афри', 'регион']
 const GLOBAL_KEYWORDS = ['global', 'world', 'глобал', 'мир', 'worldwide']
