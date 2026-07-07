@@ -281,6 +281,9 @@ export interface ProductFilters {
   isActive?: boolean
   search?: string
   tariffType?: 'standard' | 'unlimited'
+  dataAmount?: string
+  dataUnit?: 'MB' | 'GB'
+  durationDays?: number
   page?: number
   limit?: number
 }

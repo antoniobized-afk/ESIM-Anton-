@@ -27,7 +27,7 @@
 - `notifications` — email, web push. (Включает подмодуль `traffic-monitor` для мониторинга трафика/валидности)
 - `orders` — заказ, free fulfill, usage, top-up flow, balance purchase flow
 - `payments` — Robokassa flow + CloudPayments (сохранение карт, рекуррентные списания)
-- `products` — каталог, sync, dedupe, bulk operations
+- `products` — каталог, sync, dedupe, bulk operations; `products.filters.ts` владеет query-фильтрами списка тарифов (`country`, статус, тип, объём MB/GB, срок в днях).
 - `promo-codes` — CRUD и валидация промокодов
 - `referrals` — регистрация рефералов, партнёрские ссылки
 - `system-settings` — настройки, pricing, exchange rate, auto update

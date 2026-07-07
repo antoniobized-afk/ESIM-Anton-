@@ -3,6 +3,7 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { EsimProviderService } from '../esim-provider/esim-provider.service';
 import { SystemSettingsService } from '../system-settings/system-settings.service';
+import { buildProductsWhere, type ProductListFilters } from './products.filters';
 
 @Injectable()
 export class ProductsService implements OnModuleInit {
@@ -153,38 +154,8 @@ export class ProductsService implements OnModuleInit {
     this.logger.log(`📦 В базе ${count} продуктов. Автосинхронизация отключена.`);
   }
 
-  private buildProductsWhere(filters?: {
-    country?: string;
-    isActive?: boolean;
-    search?: string;
-    tariffType?: 'standard' | 'unlimited';
-  }): Prisma.EsimProductWhereInput {
-    const search = filters?.search?.trim();
-
-    return {
-      ...(filters?.isActive !== undefined && { isActive: filters.isActive }),
-      ...(filters?.country && { country: filters.country }),
-      ...(filters?.tariffType === 'standard' && { isUnlimited: false }),
-      ...(filters?.tariffType === 'unlimited' && { isUnlimited: true }),
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' } },
-              { country: { contains: search, mode: 'insensitive' } },
-              { dataAmount: { contains: search, mode: 'insensitive' } },
-            ],
-          }
-        : {}),
-    };
-  }
-
-  async findAll(filters?: {
-    country?: string;
-    isActive?: boolean;
-    search?: string;
-    tariffType?: 'standard' | 'unlimited';
-  }) {
-    const where = this.buildProductsWhere(filters);
+  async findAll(filters?: ProductListFilters) {
+    const where = buildProductsWhere(filters);
 
     return this.prisma.esimProduct.findMany({
       where,
@@ -192,18 +163,11 @@ export class ProductsService implements OnModuleInit {
     });
   }
 
-  async findAllPaginated(filters?: {
-    country?: string;
-    isActive?: boolean;
-    search?: string;
-    tariffType?: 'standard' | 'unlimited';
-    page?: number;
-    limit?: number;
-  }) {
+  async findAllPaginated(filters?: ProductListFilters & { page?: number; limit?: number }) {
     const page = Math.max(1, filters?.page ?? 1);
     const limit = Math.min(Math.max(1, filters?.limit ?? 50), 200);
     const skip = (page - 1) * limit;
-    const where = this.buildProductsWhere(filters);
+    const where = buildProductsWhere(filters);
 
     const [data, total] = await Promise.all([
       this.prisma.esimProduct.findMany({

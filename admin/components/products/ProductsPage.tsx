@@ -159,10 +159,16 @@ export default function ProductsPage() {
         selectedCountry={products.selectedCountry}
         showActiveOnly={products.showActiveOnly}
         tariffType={products.tariffType}
+        dataAmountQuery={products.dataAmountQuery}
+        dataUnit={products.dataUnit}
+        durationDaysQuery={products.durationDaysQuery}
         searchQuery={products.searchQuery}
         onCountryChange={products.setSelectedCountry}
         onStatusChange={products.setShowActiveOnly}
         onTariffTypeChange={products.setTariffType}
+        onDataAmountChange={products.setDataAmountQuery}
+        onDataUnitChange={products.setDataUnit}
+        onDurationDaysChange={products.setDurationDaysQuery}
         onSearchChange={products.setSearchQuery}
         onClear={products.clearFilters}
         onToggleByType={handleBulkToggleByType}

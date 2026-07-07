@@ -6,6 +6,7 @@
  * чтобы не таскать в тесты Prisma и провайдера.
  */
 import { ProductsService } from './products.service';
+import { buildProductsWhere } from './products.filters';
 
 function makeService(): ProductsService {
   // ProductsService хранит только инжекты; для проверки чистой функции
@@ -191,6 +192,40 @@ describe('ProductsService.inferTagsFromPackage', () => {
         'EU',
       );
       expect(tags.filter((t) => t === '5G').length).toBe(1);
+    });
+  });
+});
+
+describe('buildProductsWhere', () => {
+  it('строит точный фильтр по объёму и единице трафика', () => {
+    expect(buildProductsWhere({ dataAmount: '5', dataUnit: 'GB' })).toEqual({
+      AND: [
+        {
+          OR: [
+            { dataAmount: { equals: '5 GB', mode: 'insensitive' } },
+            { dataAmount: { equals: '5GB', mode: 'insensitive' } },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('фильтрует по единице трафика без указанного объёма', () => {
+    expect(buildProductsWhere({ dataUnit: 'MB' })).toEqual({
+      AND: [
+        {
+          dataAmount: {
+            endsWith: 'MB',
+            mode: 'insensitive',
+          },
+        },
+      ],
+    });
+  });
+
+  it('маппит Duration(days) на срок тарифа validityDays', () => {
+    expect(buildProductsWhere({ durationDays: '30' })).toEqual({
+      AND: [{ validityDays: 30 }],
     });
   });
 });

@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards } fro
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
 import { JwtAdminGuard } from '@/common/auth/jwt-user.guard';
+import type { ProductDataUnit } from './products.filters';
 
 @ApiTags('products')
 @Controller('products')
@@ -15,6 +16,9 @@ export class ProductsController {
     @Query('isActive') isActive?: string,
     @Query('search') search?: string,
     @Query('tariffType') tariffType?: 'standard' | 'unlimited',
+    @Query('dataAmount') dataAmount?: string,
+    @Query('dataUnit') dataUnit?: ProductDataUnit,
+    @Query('durationDays') durationDays?: string,
     @Query('paginated') paginated?: string,
     @Query('page') page = 1,
     @Query('limit') limit = 50,
@@ -26,6 +30,9 @@ export class ProductsController {
       isActive: isActiveFilter,
       search,
       tariffType,
+      dataAmount,
+      dataUnit,
+      durationDays,
     };
 
     if (paginated === 'true') {

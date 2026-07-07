@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/ToastProvider'
 import { createEmptyProduct, getMarkupPercent, getProviderPriceUSD } from './products.helpers'
 import { useProductFilters } from './useProductFilters'
 export type TariffFilter = 'all' | 'standard' | 'unlimited'
+export type DataUnitFilter = 'all' | 'MB' | 'GB'
 export function useProducts() {
   const toast = useToast()
   const [products, setProducts] = useState<AdminProduct[]>([])
@@ -36,11 +37,15 @@ export function useProducts() {
     try {
       setLoading(true)
       setError(null)
+      const durationDays = Number(filters.appliedDurationDaysQuery)
       const response = await productsApi.getAll({
         country: filters.selectedCountry || undefined,
         isActive: filters.showActiveOnly ?? undefined,
         search: filters.appliedSearchQuery.trim() || undefined,
         tariffType: filters.tariffType === 'all' ? undefined : filters.tariffType,
+        dataAmount: filters.appliedDataAmountQuery.trim() || undefined,
+        dataUnit: filters.dataUnit === 'all' ? undefined : filters.dataUnit,
+        durationDays: Number.isInteger(durationDays) && durationDays > 0 ? durationDays : undefined,
         page: filters.page,
         limit: 50,
       })
@@ -55,7 +60,16 @@ export function useProducts() {
     } finally {
       setLoading(false)
     }
-  }, [filters.appliedSearchQuery, filters.page, filters.selectedCountry, filters.showActiveOnly, filters.tariffType])
+  }, [
+    filters.appliedDataAmountQuery,
+    filters.appliedDurationDaysQuery,
+    filters.appliedSearchQuery,
+    filters.dataUnit,
+    filters.page,
+    filters.selectedCountry,
+    filters.showActiveOnly,
+    filters.tariffType,
+  ])
   const loadCountries = async () => {
     try {
       const response = await productsApi.getCountries()
@@ -143,7 +157,16 @@ export function useProducts() {
   const resetSelection = () => setSelectedIds(new Set())
   useEffect(() => {
     resetSelection()
-  }, [filters.appliedSearchQuery, filters.page, filters.selectedCountry, filters.showActiveOnly, filters.tariffType])
+  }, [
+    filters.appliedDataAmountQuery,
+    filters.appliedDurationDaysQuery,
+    filters.appliedSearchQuery,
+    filters.dataUnit,
+    filters.page,
+    filters.selectedCountry,
+    filters.showActiveOnly,
+    filters.tariffType,
+  ])
 
   const handleSelectAll = () => {
     if (selectedIds.size === products.length) return resetSelection()
@@ -174,6 +197,9 @@ export function useProducts() {
     selectedCountry: filters.selectedCountry,
     showActiveOnly: filters.showActiveOnly,
     tariffType: filters.tariffType,
+    dataAmountQuery: filters.dataAmountQuery,
+    dataUnit: filters.dataUnit,
+    durationDaysQuery: filters.durationDaysQuery,
     searchQuery: filters.searchQuery,
     selectedIds,
     showBulkBadgeModal,
@@ -192,6 +218,9 @@ export function useProducts() {
     setSelectedCountry: filters.setSelectedCountry,
     setShowActiveOnly: filters.setShowActiveOnly,
     setTariffType: filters.setTariffType,
+    setDataAmountQuery: filters.setDataAmountQuery,
+    setDataUnit: filters.setDataUnit,
+    setDurationDaysQuery: filters.setDurationDaysQuery,
     setPage: filters.setPage,
     setSearchQuery: filters.setSearchQuery,
     setShowBulkBadgeModal,

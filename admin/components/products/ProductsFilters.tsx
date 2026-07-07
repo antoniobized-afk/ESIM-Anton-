@@ -1,7 +1,7 @@
 import type { AdminProduct } from '@/lib/types'
 import Button from '@/components/ui/Button'
 import { ChevronDown, Eye, EyeOff, Filter, Search } from 'lucide-react'
-import type { TariffFilter } from './useProducts'
+import type { DataUnitFilter, TariffFilter } from './useProducts'
 import { getCountryFilterLabel, isMultiCountryValue } from '@shared/country-display'
 
 type CountryFilterOption = {
@@ -18,10 +18,16 @@ interface ProductsFiltersProps {
   selectedCountry: string
   showActiveOnly: boolean | null
   tariffType: TariffFilter
+  dataAmountQuery: string
+  dataUnit: DataUnitFilter
+  durationDaysQuery: string
   searchQuery: string
   onCountryChange: (value: string) => void
   onStatusChange: (value: boolean | null) => void
   onTariffTypeChange: (value: TariffFilter) => void
+  onDataAmountChange: (value: string) => void
+  onDataUnitChange: (value: DataUnitFilter) => void
+  onDurationDaysChange: (value: string) => void
   onSearchChange: (value: string) => void
   onClear: () => void
   onToggleByType: (tariffType: 'standard' | 'unlimited', isActive: boolean) => void
@@ -37,10 +43,16 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
     selectedCountry,
     showActiveOnly,
     tariffType,
+    dataAmountQuery,
+    dataUnit,
+    durationDaysQuery,
     searchQuery,
     onCountryChange,
     onStatusChange,
     onTariffTypeChange,
+    onDataAmountChange,
+    onDataUnitChange,
+    onDurationDaysChange,
     onSearchChange,
     onClear,
     onToggleByType,
@@ -68,7 +80,7 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
         <Filter className="w-5 h-5 text-slate-500" />
         <h3 className="font-semibold text-lg">Фильтры</h3>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8 gap-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
@@ -130,6 +142,39 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         </div>
+
+        <input
+          type="text"
+          inputMode="decimal"
+          pattern="\d*([.,]\d*)?"
+          value={dataAmountQuery}
+          onChange={(event) => onDataAmountChange(event.target.value)}
+          placeholder="Объем"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+        />
+
+        <div className="relative">
+          <select
+            value={dataUnit}
+            onChange={(event) => onDataUnitChange(event.target.value as DataUnitFilter)}
+            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all appearance-none bg-white"
+          >
+            <option value="all">MB/GB</option>
+            <option value="MB">MB</option>
+            <option value="GB">GB</option>
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        </div>
+
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[1-9]\d*"
+          value={durationDaysQuery}
+          onChange={(event) => onDurationDaysChange(event.target.value)}
+          placeholder="Срок (дней)"
+          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+        />
 
         <Button onClick={onClear} variant="secondary">
           Сбросить фильтры
