@@ -16,9 +16,10 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
 const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || 'mojo_mobile_bot'
 
 const OAUTH_PROVIDERS = [
-  { id: 'google', label: 'Google', color: '#EA4335', bg: '#EA433515', icon: GoogleIcon },
+  { id: 'google', label: 'Google', color: '#EA4335', bg: '#EA433515', icon: GoogleIcon, visible: false },
   { id: 'yandex', label: 'Яндекс', color: '#FC3F1D', bg: '#FC3F1D15', icon: YandexIcon },
 ]
+const VISIBLE_OAUTH_PROVIDERS = OAUTH_PROVIDERS.filter(({ visible }) => visible !== false)
 
 function LoginInner() {
   const router = useRouter()
@@ -169,7 +170,7 @@ function LoginInner() {
             </div>
 
             {/* OAuth кнопки */}
-            {OAUTH_PROVIDERS.map(({ id, label, color, bg, icon: Icon }) => (
+            {VISIBLE_OAUTH_PROVIDERS.map(({ id, label, color, bg, icon: Icon }) => (
               <button key={id} onClick={() => handleOAuth(id)}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white/60 dark:bg-white/5 hover:bg-white/80 dark:hover:bg-white/10 transition-all">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: bg }}>
