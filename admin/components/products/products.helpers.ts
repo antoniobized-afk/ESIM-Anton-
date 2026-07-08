@@ -1,17 +1,12 @@
 import type { EditableProduct } from '@/lib/types'
+import {
+  getProductMarkupPercent,
+  getProviderPriceUsd,
+} from '@shared/product-pricing'
 
-export const getProviderPriceUSD = (providerPrice: number | string) => Number(providerPrice) / 10000
+export const getProviderPriceUSD = getProviderPriceUsd
 
-export const getMarkupPercent = (
-  providerPrice: number | string,
-  ourPrice: number | string,
-  exchangeRate: number,
-) => {
-  const providerPriceUSD = getProviderPriceUSD(providerPrice)
-  const ourPriceRUB = Number(ourPrice)
-  if (!providerPriceUSD || !exchangeRate) return 0
-  return ((ourPriceRUB / (providerPriceUSD * exchangeRate)) - 1) * 100
-}
+export const getMarkupPercent = getProductMarkupPercent
 
 export const createEmptyProduct = (): EditableProduct => ({
   country: '',

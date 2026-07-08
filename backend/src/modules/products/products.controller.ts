@@ -1,16 +1,22 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, Res, StreamableFile, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { ProductsService } from './products.service';
+import { ProductsExportService } from './products-export.service';
 import { JwtAdminGuard } from '@/common/auth/jwt-user.guard';
 import type { ProductDataUnit } from './products.filters';
 import { BulkToggleByDataTypeDto } from './dto/bulk-toggle-by-data-type.dto';
 import { CreateProductDto } from './dto/create-product.dto';
+import { ProductExportQueryDto } from './dto/product-export-query.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 
 @ApiTags('products')
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly productsExportService: ProductsExportService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Получить все продукты' })
@@ -59,6 +65,27 @@ export class ProductsController {
   @ApiOperation({ summary: 'Получить список стран' })
   async getCountries() {
     return this.productsService.getCountries();
+  }
+
+  @Get('export')
+  @UseGuards(JwtAdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Экспортировать продукты в Excel' })
+  async exportExcel(
+    @Query() query: ProductExportQueryDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<StreamableFile> {
+    const file = await this.productsExportService.buildExcelFile(query);
+    const encodedFilename = encodeURIComponent(file.filename);
+
+    response.set({
+      'Content-Type': file.mimeType,
+      'Content-Disposition': `attachment; filename="${file.filename}"; filename*=UTF-8''${encodedFilename}`,
+      'Content-Length': file.buffer.length.toString(),
+      'Access-Control-Expose-Headers': 'Content-Disposition',
+    });
+
+    return new StreamableFile(file.buffer);
   }
 
   @Post('sync')

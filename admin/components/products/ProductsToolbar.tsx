@@ -1,19 +1,25 @@
-import { Plus, RefreshCw } from 'lucide-react'
+import { FileSpreadsheet, Plus, RefreshCw } from 'lucide-react'
 import Button from '@/components/ui/Button'
 
 interface ProductsToolbarProps {
   productsCount: number
   syncing: boolean
+  exporting: boolean
+  canExport: boolean
   onCreate: () => void
   onSync: () => void
+  onExport: () => void
   onRefresh: () => void
 }
 
 export default function ProductsToolbar({
   productsCount,
   syncing,
+  exporting,
+  canExport,
   onCreate,
   onSync,
+  onExport,
   onRefresh,
 }: ProductsToolbarProps) {
   return (
@@ -27,6 +33,10 @@ export default function ProductsToolbar({
           <Button onClick={onSync} disabled={syncing} className="shadow-lg hover:shadow-xl">
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? 'Синхронизация...' : 'Синхронизировать с провайдером'}
+          </Button>
+          <Button onClick={onExport} disabled={!canExport || exporting} variant="secondary">
+            <FileSpreadsheet className="w-4 h-4" />
+            {exporting ? 'Экспорт...' : 'Экспорт Excel'}
           </Button>
           <Button onClick={onRefresh} variant="secondary">
             <RefreshCw className="w-4 h-4" />

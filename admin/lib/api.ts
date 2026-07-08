@@ -112,6 +112,13 @@ export const ordersApi = {
 export const productsApi = {
   getAll: (filters?: ProductFilters) =>
     api.get<PaginatedResponse<AdminProduct>>('/products', { params: { ...filters, paginated: true } }),
+  exportExcel: (filters?: ProductFilters) => {
+    const params = { ...filters }
+    delete params.page
+    delete params.limit
+
+    return api.get<Blob>('/products/export', { params, responseType: 'blob' })
+  },
   getCountries: () => api.get<string[]>('/products/countries'),
   create: (data: CreateProductDto) => api.post<AdminProduct>('/products', data),
   update: (id: string, data: UpdateProductDto) => api.put<AdminProduct>(`/products/${id}`, data),

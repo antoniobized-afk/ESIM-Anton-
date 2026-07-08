@@ -153,8 +153,11 @@ export default function ProductsPage() {
       <ProductsToolbar
         productsCount={products.totalProducts}
         syncing={products.syncing}
+        exporting={products.exporting}
+        canExport={products.totalProducts > 0}
         onCreate={products.handleCreate}
         onSync={products.handleSync}
+        onExport={products.handleExport}
         onRefresh={products.loadProducts}
       />
       <ProductsFilters

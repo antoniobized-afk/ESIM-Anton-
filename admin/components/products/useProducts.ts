@@ -1,10 +1,17 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { productsApi, systemSettingsApi } from '@/lib/api'
 import { isUnauthorizedError } from '@/lib/auth'
-import type { AdminProduct, CreateProductDto, EditableProduct } from '@/lib/types'
-import { getErrorMessage } from '@/lib/errors'
+import type {
+  AdminProduct,
+  CreateProductDto,
+  EditableProduct,
+  ProductFilters,
+  ProductSortField,
+  ProductSortOrder,
+} from '@/lib/types'
+import { getBlobErrorMessage, getErrorMessage } from '@/lib/errors'
 import { useToast } from '@/components/ui/ToastProvider'
 import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, type ProductDataType } from '@shared/product-data-type'
 import { createEmptyProduct, getMarkupPercent, getProviderPriceUSD } from './products.helpers'
@@ -42,6 +49,75 @@ const toProductMutationPayload = (product: EditableProduct): CreateProductDto =>
   return payload
 }
 
+interface ProductQueryFilterSource {
+  appliedDataAmountQuery: string
+  appliedDurationDaysQuery: string
+  appliedSearchQuery: string
+  dataUnit: DataUnitFilter
+  page: number
+  selectedCountry: string
+  showActiveOnly: boolean | null
+  dataType: ProductDataTypeFilter
+  sortBy: ProductSortField
+  sortOrder: ProductSortOrder
+}
+
+const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+const buildProductQueryFilters = (
+  filters: ProductQueryFilterSource,
+  options: { includePagination: boolean },
+): ProductFilters => {
+  const durationDays = Number(filters.appliedDurationDaysQuery)
+  const selectedDataType =
+    filters.dataType === 'all'
+      ? undefined
+      : filters.dataType === DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE
+        ? DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE
+        : Number(filters.dataType) as ProductDataType
+
+  return {
+    country: filters.selectedCountry || undefined,
+    isActive: filters.showActiveOnly ?? undefined,
+    search: filters.appliedSearchQuery.trim() || undefined,
+    dataType: selectedDataType,
+    dataAmount: filters.appliedDataAmountQuery.trim() || undefined,
+    dataUnit: filters.dataUnit === 'all' ? undefined : filters.dataUnit,
+    durationDays: Number.isInteger(durationDays) && durationDays > 0 ? durationDays : undefined,
+    sortBy: filters.sortBy,
+    sortOrder: filters.sortOrder,
+    ...(options.includePagination ? { page: filters.page, limit: 50 } : {}),
+  }
+}
+
+const getProductsExportFilename = (contentDisposition?: string): string => {
+  const fallback = `products_${new Date().toISOString().slice(0, 10)}.xlsx`
+  if (!contentDisposition) return fallback
+
+  const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (encodedMatch?.[1]) {
+    try {
+      return decodeURIComponent(encodedMatch[1].replace(/"/g, ''))
+    } catch {
+      return fallback
+    }
+  }
+
+  const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+  return plainMatch?.[1] || fallback
+}
+
+const downloadProductsExport = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 export function useProducts() {
   const toast = useToast()
   const [products, setProducts] = useState<AdminProduct[]>([])
@@ -51,6 +127,7 @@ export function useProducts() {
   const [loading, setLoading] = useState(true)
   const [loadedOnce, setLoadedOnce] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [editingProduct, setEditingProduct] = useState<EditableProduct | null>(null)
   const [isCreating, setIsCreating] = useState(false)
@@ -65,30 +142,75 @@ export function useProducts() {
   const [editingMarkupPercent, setEditingMarkupPercent] = useState('0')
   const [viewingProduct, setViewingProduct] = useState<AdminProduct | null>(null)
   const filters = useProductFilters(products)
+  const {
+    appliedDataAmountQuery,
+    appliedDurationDaysQuery,
+    appliedSearchQuery,
+    dataUnit,
+    page,
+    selectedCountry,
+    showActiveOnly,
+    dataType,
+    sortBy,
+    sortOrder,
+  } = filters
+  const listQueryFilters = useMemo(
+    () => buildProductQueryFilters({
+      appliedDataAmountQuery,
+      appliedDurationDaysQuery,
+      appliedSearchQuery,
+      dataUnit,
+      page,
+      selectedCountry,
+      showActiveOnly,
+      dataType,
+      sortBy,
+      sortOrder,
+    }, { includePagination: true }),
+    [
+      appliedDataAmountQuery,
+      appliedDurationDaysQuery,
+      appliedSearchQuery,
+      dataUnit,
+      page,
+      selectedCountry,
+      showActiveOnly,
+      dataType,
+      sortBy,
+      sortOrder,
+    ],
+  )
+  const exportQueryFilters = useMemo(
+    () => buildProductQueryFilters({
+      appliedDataAmountQuery,
+      appliedDurationDaysQuery,
+      appliedSearchQuery,
+      dataUnit,
+      page,
+      selectedCountry,
+      showActiveOnly,
+      dataType,
+      sortBy,
+      sortOrder,
+    }, { includePagination: false }),
+    [
+      appliedDataAmountQuery,
+      appliedDurationDaysQuery,
+      appliedSearchQuery,
+      dataUnit,
+      page,
+      selectedCountry,
+      showActiveOnly,
+      dataType,
+      sortBy,
+      sortOrder,
+    ],
+  )
   const loadProducts = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      const durationDays = Number(filters.appliedDurationDaysQuery)
-      const selectedDataType =
-        filters.dataType === 'all'
-          ? undefined
-          : filters.dataType === DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE
-            ? DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE
-            : Number(filters.dataType) as ProductDataType
-      const response = await productsApi.getAll({
-        country: filters.selectedCountry || undefined,
-        isActive: filters.showActiveOnly ?? undefined,
-        search: filters.appliedSearchQuery.trim() || undefined,
-        dataType: selectedDataType,
-        dataAmount: filters.appliedDataAmountQuery.trim() || undefined,
-        dataUnit: filters.dataUnit === 'all' ? undefined : filters.dataUnit,
-        durationDays: Number.isInteger(durationDays) && durationDays > 0 ? durationDays : undefined,
-        sortBy: filters.sortBy,
-        sortOrder: filters.sortOrder,
-        page: filters.page,
-        limit: 50,
-      })
+      const response = await productsApi.getAll(listQueryFilters)
       setProducts(response.data.data)
       setTotalProducts(response.data.meta.total)
       setTotalPages(response.data.meta.totalPages)
@@ -100,18 +222,7 @@ export function useProducts() {
     } finally {
       setLoading(false)
     }
-  }, [
-    filters.appliedDataAmountQuery,
-    filters.appliedDurationDaysQuery,
-    filters.appliedSearchQuery,
-    filters.dataUnit,
-    filters.page,
-    filters.selectedCountry,
-    filters.showActiveOnly,
-    filters.dataType,
-    filters.sortBy,
-    filters.sortOrder,
-  ])
+  }, [listQueryFilters])
   const loadCountries = async () => {
     try {
       const response = await productsApi.getCountries()
@@ -170,6 +281,31 @@ export function useProducts() {
       toast.error(`Ошибка синхронизации: ${getErrorMessage(error, 'Неизвестная ошибка')}`)
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handleExport = async () => {
+    if (totalProducts === 0) return
+
+    try {
+      setExporting(true)
+      const response = await productsApi.exportExcel(exportQueryFilters)
+      const contentDisposition = response.headers['content-disposition']
+      const filename = getProductsExportFilename(
+        typeof contentDisposition === 'string' ? contentDisposition : undefined,
+      )
+      const blob = response.data instanceof Blob
+        ? response.data
+        : new Blob([response.data], { type: XLSX_MIME_TYPE })
+
+      downloadProductsExport(blob, filename)
+      toast.success('Экспорт Excel запущен')
+    } catch (error) {
+      if (isUnauthorizedError(error)) return
+      const message = await getBlobErrorMessage(error, 'Неизвестная ошибка')
+      toast.error(`Не удалось экспортировать продукты: ${message}`)
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -241,6 +377,7 @@ export function useProducts() {
     loading,
     loadedOnce,
     syncing,
+    exporting,
     error,
     editingProduct,
     isCreating,
@@ -287,6 +424,7 @@ export function useProducts() {
     setViewingProduct,
     loadProducts,
     handleSync,
+    handleExport,
     handleCreate,
     handleEdit,
     handleSave,

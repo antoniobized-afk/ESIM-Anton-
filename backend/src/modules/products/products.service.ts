@@ -12,6 +12,13 @@ import {
   type ProductDataType,
   type ProductDataTypeSelector,
 } from '@shared/product-data-type';
+import {
+  PRODUCT_PROVIDER_PRICE_UNIT_DIVISOR,
+  calculateProductPriceRub,
+  getProviderPriceUsd,
+  getProviderPriceUsdWithMarkup,
+  type ProductPricingNumeric,
+} from '@shared/product-pricing';
 import { buildProductsWhere, type ProductListFilters } from './products.filters';
 import { buildProductSortKeyData } from './products.sort-keys';
 import { buildProductsOrderBy } from './products.sorting';
@@ -47,10 +54,12 @@ export class ProductsService implements OnModuleInit {
     return this.systemSettingsService.getPricingSettings();
   }
 
-  private calculateRubPrice(providerPriceRaw: number, exchangeRate: number, markupPercent: number) {
-    const providerPriceUSD = Number(providerPriceRaw) / 10000;
-    const priceWithMarkup = providerPriceUSD * (1 + markupPercent / 100);
-    return Math.round(priceWithMarkup * exchangeRate);
+  private calculateRubPrice(
+    providerPriceRaw: ProductPricingNumeric,
+    exchangeRate: number,
+    markupPercent: number,
+  ) {
+    return calculateProductPriceRub(providerPriceRaw, exchangeRate, markupPercent);
   }
 
   private shouldRepairSyncedProductPrice(
@@ -334,7 +343,7 @@ export class ProductsService implements OnModuleInit {
     let updated = 0;
 
     for (const product of products) {
-      const newPrice = this.calculateRubPrice(Number(product.providerPrice), exchangeRate, markupPercent);
+      const newPrice = this.calculateRubPrice(product.providerPrice, exchangeRate, markupPercent);
 
       await this.prisma.esimProduct.update({
         where: { id: product.id },
@@ -380,7 +389,7 @@ export class ProductsService implements OnModuleInit {
     let updated = 0;
 
     for (const product of products) {
-      const newPrice = this.calculateRubPrice(Number(product.providerPrice), exchangeRate, defaultMarkup);
+      const newPrice = this.calculateRubPrice(product.providerPrice, exchangeRate, defaultMarkup);
 
       await this.prisma.esimProduct.update({
         where: { id: product.id },
@@ -588,8 +597,7 @@ export class ProductsService implements OnModuleInit {
       const pricingSettings = await this.getPricingSettings();
       const exchangeRate = pricingSettings.exchangeRate;
       const defaultMarkup = pricingSettings.defaultMarkupPercent;
-      const markupMultiplier = 1 + defaultMarkup / 100;
-      
+
       this.logger.log(`📊 Настройки: курс=${exchangeRate}₽/$, наценка=${defaultMarkup}%`);
       
       const packageBatchResults = await Promise.allSettled(
@@ -641,15 +649,15 @@ export class ProductsService implements OnModuleInit {
           const plan = buildSyncedProductPlan(pkg);
           
           const priceRaw = Number(pkg.price) || 0;
-          const priceInUSD = priceRaw / 10000;  // сотые центы -> доллары
-          const priceWithMarkup = priceInUSD * markupMultiplier;
+          const priceInUSD = getProviderPriceUsd(priceRaw);
+          const priceWithMarkup = getProviderPriceUsdWithMarkup(priceRaw, defaultMarkup);
           const priceInRUB = this.calculateRubPrice(priceRaw, exchangeRate, defaultMarkup);
           
           if (synced === 0) {
             this.logger.warn(`🔍 ${syncLogTag} Первый пакет:`);
             this.logger.warn(`   name: ${pkg.name}`);
             this.logger.warn(`   volume: ${volumeInBytes} bytes -> ${volumeInMB.toFixed(1)} MB -> ${volumeInGB.toFixed(2)} GB -> "${plan.dataAmount}"`);
-            this.logger.warn(`   price: ${priceRaw} / 10000 = $${priceInUSD.toFixed(2)} -> +${defaultMarkup}% -> $${priceWithMarkup.toFixed(2)} -> ₽${priceInRUB}`);
+            this.logger.warn(`   price: ${priceRaw} / ${PRODUCT_PROVIDER_PRICE_UNIT_DIVISOR} = $${priceInUSD.toFixed(2)} -> +${defaultMarkup}% -> $${priceWithMarkup.toFixed(2)} -> ₽${priceInRUB}`);
           }
           
           const pkgName = pkg.name || pkg.slug || '';
