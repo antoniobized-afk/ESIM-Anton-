@@ -2,6 +2,80 @@ import { Injectable, ConflictException, NotFoundException } from '@nestjs/common
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { AuthIdentityProvider, Prisma } from '@prisma/client';
 import { AuthIdentityResolverService } from '../auth/identity-resolver/auth-identity-resolver.service';
+import {
+  buildUsersOrderBy,
+  resolveUserSort,
+  type UserSortInput,
+} from './users.sorting';
+
+const DEFAULT_USERS_PAGE = 1;
+const DEFAULT_USERS_LIMIT = 20;
+const MAX_USERS_LIMIT = 100;
+const POSTGRES_BIGINT_MAX = 9223372036854775807n;
+
+export interface UsersListQuery extends UserSortInput {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+type UserWithLoyaltyLevel = Prisma.UserGetPayload<{
+  include: { loyaltyLevel: true };
+}>;
+
+function normalizePositiveInteger(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' && typeof value !== 'string') return fallback;
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeLimit(value: unknown): number {
+  return Math.min(
+    normalizePositiveInteger(value, DEFAULT_USERS_LIMIT),
+    MAX_USERS_LIMIT,
+  );
+}
+
+function normalizeSearch(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseTelegramIdSearch(value: string): bigint | undefined {
+  if (!/^\d+$/.test(value)) return undefined;
+
+  const parsed = BigInt(value);
+  return parsed <= POSTGRES_BIGINT_MAX ? parsed : undefined;
+}
+
+function buildUsersWhere(searchValue?: string): Prisma.UserWhereInput {
+  const search = normalizeSearch(searchValue);
+  if (!search) return {};
+
+  const conditions: Prisma.UserWhereInput[] = [
+    { id: { startsWith: search } },
+    { username: { contains: search, mode: 'insensitive' } },
+    { email: { contains: search, mode: 'insensitive' } },
+    { phone: { contains: search, mode: 'insensitive' } },
+    { firstName: { contains: search, mode: 'insensitive' } },
+    { lastName: { contains: search, mode: 'insensitive' } },
+  ];
+  const telegramId = parseTelegramIdSearch(search);
+
+  if (telegramId !== undefined) {
+    conditions.push({ telegramId });
+  }
+
+  return { OR: conditions };
+}
+
+function andWhere(
+  base: Prisma.UserWhereInput,
+  condition: Prisma.UserWhereInput,
+): Prisma.UserWhereInput {
+  return Object.keys(base).length > 0 ? { AND: [base, condition] } : condition;
+}
 
 @Injectable()
 export class UsersService {
@@ -167,22 +241,72 @@ export class UsersService {
     }
   }
 
+  private async findAllByLoyaltyLevelSort(
+    where: Prisma.UserWhereInput,
+    page: number,
+    limit: number,
+    skip: number,
+    order: 'asc' | 'desc',
+  ) {
+    const withLevelWhere = andWhere(where, { loyaltyLevelId: { not: null } });
+    const withoutLevelWhere = andWhere(where, { loyaltyLevelId: null });
+    const [total, withLevelTotal] = await Promise.all([
+      this.prisma.user.count({ where }),
+      this.prisma.user.count({ where: withLevelWhere }),
+    ]);
+    const data: UserWithLoyaltyLevel[] = [];
+
+    if (skip < withLevelTotal) {
+      const takeFromRankedUsers = Math.min(limit, withLevelTotal - skip);
+      const rankedUsers = await this.prisma.user.findMany({
+        where: withLevelWhere,
+        skip,
+        take: takeFromRankedUsers,
+        orderBy: buildUsersOrderBy({ sortBy: 'loyaltyLevel', sortOrder: order }),
+        include: {
+          loyaltyLevel: true,
+        },
+      });
+      data.push(...rankedUsers);
+    }
+
+    if (data.length < limit) {
+      const nullUsersSkip = Math.max(0, skip - withLevelTotal);
+      const usersWithoutLevel = await this.prisma.user.findMany({
+        where: withoutLevelWhere,
+        skip: nullUsersSkip,
+        take: limit - data.length,
+        orderBy: { id: 'asc' },
+        include: {
+          loyaltyLevel: true,
+        },
+      });
+      data.push(...usersWithoutLevel);
+    }
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   /**
    * Получить всех пользователей (для админки)
    */
-  async findAll(page = 1, limit = 20, search?: string) {
+  async findAll(query?: UsersListQuery) {
+    const page = normalizePositiveInteger(query?.page, DEFAULT_USERS_PAGE);
+    const limit = normalizeLimit(query?.limit);
     const skip = (page - 1) * limit;
+    const where = buildUsersWhere(query?.search);
+    const sort = resolveUserSort(query);
 
-    const where: Prisma.UserWhereInput = {};
-    if (search?.trim()) {
-      const q = search.trim();
-      where.OR = [
-        { firstName: { contains: q, mode: 'insensitive' } },
-        { username: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
-        { phone: { contains: q, mode: 'insensitive' } },
-        { id: { startsWith: q } },
-      ];
+    if (sort.field === 'loyaltyLevel') {
+      return this.findAllByLoyaltyLevelSort(where, page, limit, skip, sort.order);
     }
 
     const [users, total] = await Promise.all([
@@ -190,7 +314,7 @@ export class UsersService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: buildUsersOrderBy(query),
         include: {
           loyaltyLevel: true,
         },

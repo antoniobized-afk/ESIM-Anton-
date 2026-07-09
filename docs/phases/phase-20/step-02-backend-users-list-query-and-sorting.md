@@ -20,16 +20,14 @@
   - `backend/src/modules/users/users.sorting.ts`;
   - stable Prisma `orderBy` с tie-breakers;
   - relation sort по `loyaltyLevel` только если Prisma mapping покрыт тестом.
-  - Null-политика для `loyaltyLevel`: сортировать по естественному rank
-    `LoyaltyLevel.minSpent` через
-    `orderBy: { loyaltyLevel: { minSpent: { sort: order, nulls: 'last' } } }`
-    (тот же `sort`/`nulls` API Prisma 5.8, что уже используют nullable поля в
-    `backend/src/modules/products/products.sorting.ts`). Пользователи без
-    уровня (`loyaltyLevelId = null`, UI показывает "Новичок") остаются в конце
-    списка **в обоих направлениях** (asc и desc) — "Новичок" это baseline
-    tier, а не sort-neutral значение, поэтому нельзя давать ему всплывать
-    наверх при `sortOrder=desc`. Tie-breaker — `id asc`, как в products
-    паттерне.
+  - Null-политика для `loyaltyLevel`: сортировать пользователей с уровнем по
+    естественному rank `LoyaltyLevel.minSpent`, а пользователей без уровня
+    (`loyaltyLevelId = null`, UI показывает "Новичок") оставлять в конце списка
+    **в обоих направлениях** (asc и desc). Prisma `nulls` поддерживается только
+    для optional scalar fields, не для relation field, поэтому backend держит
+    контракт через partitioned Prisma queries: сначала users с уровнем
+    `orderBy: { loyaltyLevel: { minSpent: order } }`, затем users без уровня.
+    Tie-breaker — `id asc`, как в products паттерне.
 - Добавить DTO для list query:
   - `page`;
   - `limit`;
@@ -82,11 +80,34 @@
 
 ## Статус
 
-`planned`
+`completed`
 
 ## Evidence
 
-- Шаг создан при promotion входного plan в Phase 20.
+- Реализованы `shared/user-sorting.ts`, `backend/src/modules/users/users.sorting.ts`
+  и `backend/src/modules/users/dto/users-list-query.dto.ts`.
+- `UsersController.findAll()` принимает DTO query, `UsersService.findAll()`
+  нормализует `page/limit/search/sortBy/sortOrder`, ищет по `id`,
+  `telegramId`, `username`, `email`, `phone`, `firstName`, `lastName` и
+  применяет backend sort до pagination.
+- Для `telegramId` используется только safe exact BigInt lookup в пределах
+  PostgreSQL bigint range; слишком большие numeric search values не передаются
+  в BigInt predicate.
+- `loyaltyLevel` sort покрыт отдельным service path: users с уровнем сортируются
+  по `LoyaltyLevel.minSpent`, users без уровня добираются в конец страницы в
+  обоих направлениях без raw SQL.
+- Targeted tests:
+  `pnpm --filter backend test -- users.service.spec.ts users.controller.spec.ts`
+  — green, `22 passed`.
+- Type/build gate:
+  `pnpm --filter backend exec nest build` — green. Полный
+  `pnpm --filter backend build` остановился на known Windows Prisma engine lock:
+  `EPERM ... query_engine-windows.dll.node.tmp... -> query_engine-windows.dll.node`.
+- Consumer audit:
+  `rg -n "usersApi\\.getAll|AdminUser|UserIdentity|authProvider|providerId|sortBy|sortOrder|loyaltyLevel" admin backend client bot shared`
+  выполнен; текущие admin `usersApi.getAll` call-sites остаются
+  `page/limit/search` до Step 06, product `providerId` hits не относятся к
+  legacy user identity cleanup.
 
 ## Файлы
 

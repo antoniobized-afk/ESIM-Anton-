@@ -212,8 +212,8 @@
 
 ## Статус / Evidence
 
-- Status: `planned`
-- Current step: Step 02
+- Status: `in_progress`
+- Current step: Step 03
 - Last evidence:
   - Phase создана после сверки `docs/README.md`,
     `docs/phases/PHASE_AUTHORING_GUIDE.md`, phase roadmap, architecture wiki,
@@ -233,3 +233,13 @@
     endpoint `GET /users/:id`, отсутствие sort/search DTO в users list,
     legacy `authProvider/providerId` dependencies и отдельный future scope для
     campaign/touch tracking.
+  - Step 02 закрыт 2026-07-09: добавлены `shared/user-sorting.ts`,
+    `backend/src/modules/users/users.sorting.ts`, `UsersListQueryDto`,
+    backend search/sort before pagination и targeted specs. Для
+    `loyaltyLevel` подтверждено, что Prisma `nulls` нельзя применять к
+    relation field, поэтому users без уровня удерживаются в конце через
+    partitioned Prisma queries без raw SQL. Evidence:
+    `pnpm --filter backend test -- users.service.spec.ts users.controller.spec.ts`
+    green; `pnpm --filter backend exec nest build` green; полный
+    `pnpm --filter backend build` остановился на Windows Prisma
+    `query_engine-windows.dll.node` EPERM.

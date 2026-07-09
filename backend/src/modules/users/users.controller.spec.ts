@@ -39,6 +39,33 @@ describe('UsersController', () => {
     expect(guards).toEqual([JwtAdminGuard]);
   });
 
+  it('findAll передает DTO query в UsersService и сериализует BigInt', async () => {
+    usersService.findAll.mockResolvedValue({
+      data: [{ id: 'user_1', telegramId: 123456789n }],
+      meta: { total: 1, page: 2, limit: 10, totalPages: 1 },
+    });
+
+    const result = await controller.findAll({
+      page: 2,
+      limit: 10,
+      search: 'owner@example.com',
+      sortBy: 'balance',
+      sortOrder: 'asc',
+    });
+
+    expect(usersService.findAll).toHaveBeenCalledWith({
+      page: 2,
+      limit: 10,
+      search: 'owner@example.com',
+      sortBy: 'balance',
+      sortOrder: 'asc',
+    });
+    expect(result).toEqual({
+      data: [{ id: 'user_1', telegramId: '123456789' }],
+      meta: { total: 1, page: 2, limit: 10, totalPages: 1 },
+    });
+  });
+
   it('findOrCreate использует ServiceTokenGuard', () => {
     const guards = Reflect.getMetadata(GUARDS_METADATA, UsersController.prototype.findOrCreate);
     expect(guards).toEqual([ServiceTokenGuard]);

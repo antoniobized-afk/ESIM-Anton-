@@ -22,15 +22,16 @@ import { FindOrCreateUserDto } from './dto/find-or-create-user.dto';
 import { MergePreflightQueryDto } from './dto/merge-preflight.dto';
 import { PushSubscribeDto, PushUnsubscribeDto } from './dto/push-subscription.dto';
 import { UpdateMyEmailDto } from './dto/user-profile.dto';
+import { UsersListQueryDto } from './dto/users-list-query.dto';
 
 const UserAccessGuard = OrGuard(JwtAdminGuard, JwtUserGuard);
 
 // Хелпер для сериализации BigInt в JSON
-function serializeUser(user: any): any {
+function serializeUser<T>(user: T): T {
   if (!user) return user;
   return JSON.parse(JSON.stringify(user, (_, value) =>
     typeof value === 'bigint' ? value.toString() : value
-  ));
+  )) as T;
 }
 
 @ApiTags('users')
@@ -48,11 +49,9 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Получить список всех пользователей' })
   async findAll(
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-    @Query('search') search?: string,
+    @Query() query: UsersListQueryDto,
   ) {
-    const result = await this.usersService.findAll(+page, +limit, search);
+    const result = await this.usersService.findAll(query);
     return {
       ...result,
       data: result.data.map(serializeUser),
