@@ -1,6 +1,9 @@
+'use client'
+
 import type { AdminProduct } from '@/lib/types'
 import Button from '@/components/ui/Button'
-import { ChevronDown, Eye, EyeOff, Filter, Search } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, ChevronUp, Eye, EyeOff, Filter, Search, Zap } from 'lucide-react'
 import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, PRODUCT_DATA_TYPE_OPTIONS } from '@shared/product-data-type'
 import type { ProductDataTypeSelector } from '@shared/product-data-type'
 import type { DataUnitFilter, ProductDataTypeFilter } from './useProducts'
@@ -36,6 +39,7 @@ interface ProductsFiltersProps {
 }
 
 export default function ProductsFilters(props: ProductsFiltersProps) {
+  const [showBulkDataTypeActions, setShowBulkDataTypeActions] = useState(false)
   const {
     countries,
     products,
@@ -75,6 +79,7 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
         {option.label}
       </option>
     ))
+  const bulkDataTypeActionsId = 'products-bulk-data-type-actions'
   const bulkDataTypeOptions: Array<{ value: ProductDataTypeSelector; label: string; enableClassName: string }> = [
     {
       value: 1,
@@ -214,25 +219,51 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
         <span>Скрытых на странице: <strong className="text-slate-400">{products.filter((product) => !product.isActive).length}</strong></span>
       </div>
 
-      <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
-        <h4 className="font-semibold text-slate-700 mb-3">⚡ Быстрые действия по provider dataType</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {bulkDataTypeOptions.map((option) => (
-            <div key={option.value} className="flex gap-2 items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
-              <span className="min-w-0 text-sm text-slate-600 font-medium break-words">{option.label}</span>
-              <div className="flex gap-2 shrink-0">
-                <Button onClick={() => onToggleByDataType(option.value, true)} size="sm" className={option.enableClassName}>
-                  <Eye className="w-3.5 h-3.5" />
-                  Включить
-                </Button>
-                <Button onClick={() => onToggleByDataType(option.value, false)} size="sm" className="bg-slate-400 hover:bg-slate-500">
-                  <EyeOff className="w-3.5 h-3.5" />
-                  Выключить
-                </Button>
-              </div>
-            </div>
-          ))}
+      <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <Zap className="h-4 w-4 shrink-0 text-slate-500" />
+            <h4 className="min-w-0 text-sm font-semibold leading-snug text-slate-700 sm:text-base">
+              Быстрые действия
+            </h4>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="w-full whitespace-nowrap sm:w-auto"
+            aria-expanded={showBulkDataTypeActions}
+            aria-controls={bulkDataTypeActionsId}
+            onClick={() => setShowBulkDataTypeActions((visible) => !visible)}
+          >
+            {showBulkDataTypeActions ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+            {showBulkDataTypeActions ? 'Скрыть' : 'Развернуть'}
+          </Button>
         </div>
+
+        {showBulkDataTypeActions && (
+          <div id={bulkDataTypeActionsId} className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-3">
+            {bulkDataTypeOptions.map((option) => (
+              <div key={option.value} className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <span className="min-w-0 text-sm font-medium leading-snug text-slate-600">{option.label}</span>
+                <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:shrink-0">
+                  <Button onClick={() => onToggleByDataType(option.value, true)} size="sm" className={`w-full whitespace-nowrap sm:w-auto ${option.enableClassName}`}>
+                    <Eye className="h-3.5 w-3.5" />
+                    Включить
+                  </Button>
+                  <Button onClick={() => onToggleByDataType(option.value, false)} size="sm" className="w-full whitespace-nowrap bg-slate-400 hover:bg-slate-500 sm:w-auto">
+                    <EyeOff className="h-3.5 w-3.5" />
+                    Выключить
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
