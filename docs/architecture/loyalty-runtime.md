@@ -140,6 +140,15 @@ Guard:
 
 После `create/update/delete` уровня backend сразу пересчитывает `loyaltyLevelId` у пользователей. Admin-изменения не должны оставлять промежуточное состояние, где экран `/loyalty` и checkout расходятся.
 
+### Presentation Boundary
+
+Цвета и варианты бейджей уровней лояльности не являются runtime/pricing
+данными и не хранятся в Prisma. Presentation policy живёт в
+`shared/loyalty-level-presentation.ts`: seeded уровни (`Новичок`, `Бронза`,
+`Серебро`, `Золото`, `Платина`) получают стабильные variants, custom уровни
+получают детерминированный fallback по `id` или `name`. Admin UI переводит
+variant в локальные CSS/Tailwind classes на своей стороне.
+
 ## Verification Baseline
 
 - `backend`: `npx jest src/modules/loyalty/loyalty.controller.spec.ts src/modules/orders/orders.service.spec.ts --runInBand`

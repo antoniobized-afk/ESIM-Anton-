@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { usersApi } from '@/lib/api'
 import { getAdminRoleFromToken, isUnauthorizedError } from '@/lib/auth'
 import { getErrorMessage } from '@/lib/errors'
+import LoyaltyLevelBadge from '@/components/users/LoyaltyLevelBadge'
 import type {
   AdminRole,
   AdminUser,
@@ -228,9 +229,7 @@ export default function Users() {
                       ₽{Number(user.totalSpent || 0).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      <span className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-700">
-                        {user.loyaltyLevel?.name || 'Новичок'}
-                      </span>
+                      <LoyaltyLevelBadge level={user.loyaltyLevel} />
                     </TableCell>
                     <TableCell className="text-sm text-slate-600">
                       {new Date(user.createdAt).toLocaleDateString('ru-RU')}

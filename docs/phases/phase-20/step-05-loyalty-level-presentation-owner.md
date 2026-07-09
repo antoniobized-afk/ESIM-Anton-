@@ -39,11 +39,38 @@ presentation owner для цветов уровней без изменения 
 
 ## Статус
 
-`planned`
+`completed`
 
 ## Evidence
 
 - Шаг создан при promotion входного plan в Phase 20.
+- Preflight по Step 04 перед реализацией: live `rg` подтвердил, что
+  `authProvider/providerId` остаются только в auth/backfill/merge-preflight
+  blocker-path и тестах, admin users read model/types не возвращают legacy
+  slot; `toUserProfileReadModel` остается whitelist boundary для user-facing
+  responses. Regression:
+  `pnpm --filter backend test -- users.controller.spec.ts users.service.spec.ts user-profile-read-model.spec.ts auth-identity-resolver.service.spec.ts auth.service.spec.ts`
+  green (5 suites / 49 tests).
+- Закрыт 2026-07-09: reuse audit
+  `rg -n "loyaltyLevel|LoyaltyLevel|Новичок|Бронза|Серебро|Золото|Платина|bg-purple" admin client backend shared`
+  подтвердил, что локальный purple-only badge живёт в `admin/components/Users.tsx`,
+  product badges используют отдельный persisted product `badge/badgeColor`
+  contract и не подходят для loyalty, а loyalty runtime не содержит color
+  field.
+- Добавлен shared presentation owner
+  `shared/loyalty-level-presentation.ts`: seeded уровни получают стабильные
+  variants, custom уровни получают deterministic fallback по `id` или `name`,
+  отсутствующий cached level не маскируется под seeded `Новичок`.
+- Добавлен `admin/components/users/LoyaltyLevelBadge.tsx`; users table больше
+  не держит локальную `bg-purple-*` карту и рендерит variant через shared
+  policy. Prisma schema, loyalty pricing/runtime и API response shape не
+  менялись.
+- `docs/architecture/loyalty-runtime.md` обновлен только как presentation
+  boundary: цвета не являются runtime/pricing данными и не хранятся в БД.
+- Verification 2026-07-09:
+  `pnpm --filter backend test -- loyalty-level-presentation.spec.ts` green;
+  `pnpm --filter admin build` green; `pnpm --filter admin lint` exit 0;
+  `git diff --check` green.
 
 ## Файлы
 

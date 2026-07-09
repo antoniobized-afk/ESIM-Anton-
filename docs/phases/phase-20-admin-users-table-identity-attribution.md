@@ -213,7 +213,7 @@
 ## Статус / Evidence
 
 - Status: `in_progress`
-- Current step: Step 05
+- Current step: Step 06
 - Last evidence:
   - Phase создана после сверки `docs/README.md`,
     `docs/phases/PHASE_AUTHORING_GUIDE.md`, phase roadmap, architecture wiki,
@@ -273,3 +273,14 @@
     boundary в orders-модуле зафиксирован как отдельный шаг (свои потребители).
     Verification: users/identity specs green (49 tests), orders/payments specs
     green (75 tests), backend build (type gate) green.
+  - Step 05 закрыт 2026-07-09: добавлен shared presentation owner
+    `shared/loyalty-level-presentation.ts` с stable variants для seeded уровней
+    и deterministic fallback для custom уровней; `admin/components/users/LoyaltyLevelBadge.tsx`
+    заменил локальный purple-only badge в users table. Prisma/API/runtime
+    loyalty model не менялись; `loyalty-runtime.md` фиксирует presentation
+    boundary. Step 04 preflight перед patch: legacy slot остается только в
+    blocker-path и тестах, admin/user-facing whitelist boundary не разошелся;
+    regression users/auth slice green (5 suites / 49 tests). Verification:
+    `pnpm --filter backend test -- loyalty-level-presentation.spec.ts` green;
+    `pnpm --filter admin build` green; `pnpm --filter admin lint` exit 0;
+    `git diff --check` green.
