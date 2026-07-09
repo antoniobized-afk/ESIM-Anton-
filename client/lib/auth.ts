@@ -15,7 +15,6 @@ export interface AuthUser {
   referredById?: string | null
   referralLinkId?: string | null
   totalSpent: number
-  authProvider?: string
 }
 
 export function getToken(): string | null {

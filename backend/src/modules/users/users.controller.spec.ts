@@ -1,9 +1,36 @@
 import 'reflect-metadata';
 import { ForbiddenException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { Prisma } from '@prisma/client';
 import { ServiceTokenGuard } from '@/common/auth/service-token.guard';
 import { JwtAdminGuard, JwtUserGuard } from '@/common/auth/jwt-user.guard';
 import { UsersController } from './users.controller';
+
+// Реалистичный источник для user-facing profile projection: скаляры + legacy
+// slot + вложенные relation-записи, как реально возвращает Prisma. Проверяем,
+// что whitelist-проекция отдает только контрактные поля.
+function makeUserSource(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'user_1',
+    telegramId: 123456789n,
+    username: 'mojo_user',
+    firstName: 'Mojo',
+    lastName: 'User',
+    phone: null,
+    email: 'owner@example.com',
+    authProvider: 'telegram',
+    providerId: '123456789',
+    balance: new Prisma.Decimal('150.50'),
+    bonusBalance: new Prisma.Decimal('10'),
+    referralCode: 'ref_user_1',
+    referredById: null,
+    referralLinkId: null,
+    totalSpent: new Prisma.Decimal('999.99'),
+    isBlocked: false,
+    loyaltyLevel: null,
+    ...overrides,
+  };
+}
 
 describe('UsersController', () => {
   const usersService = {
@@ -40,9 +67,11 @@ describe('UsersController', () => {
     expect(guards).toEqual([JwtAdminGuard]);
   });
 
-  it('findAll передает DTO query в UsersService и сериализует BigInt', async () => {
+  it('findAll передает DTO query и отдает admin read model без доп. проекции', async () => {
+    // findAll(service) уже возвращает admin-safe read model (telegramId строкой,
+    // без legacy slot); контроллер отдает его как есть.
     usersService.findAll.mockResolvedValue({
-      data: [{ id: 'user_1', telegramId: 123456789n }],
+      data: [{ id: 'user_1', telegramId: '123456789' }],
       meta: { total: 1, page: 2, limit: 10, totalPages: 1 },
     });
 
@@ -72,8 +101,8 @@ describe('UsersController', () => {
     expect(guards).toEqual([ServiceTokenGuard]);
   });
 
-  it('findOrCreate передает валидированный bot payload в UsersService', async () => {
-    usersService.findOrCreate.mockResolvedValue({ id: 'user_1', telegramId: 123456789n });
+  it('findOrCreate передает bot payload и отдает profile без legacy slot', async () => {
+    usersService.findOrCreate.mockResolvedValue(makeUserSource());
 
     const result = await controller.findOrCreate({
       telegramId: '123456789',
@@ -85,7 +114,15 @@ describe('UsersController', () => {
       username: 'mojo_user',
       utmSource: 'telegram',
     });
-    expect(result).toEqual({ id: 'user_1', telegramId: '123456789' });
+    expect(result).toMatchObject({
+      id: 'user_1',
+      telegramId: '123456789',
+      balance: 150.5,
+      bonusBalance: 10,
+      totalSpent: 999.99,
+    });
+    expect(result).not.toHaveProperty('authProvider');
+    expect(result).not.toHaveProperty('providerId');
   });
 
   it('mergePreflight использует JwtAdminGuard и вызывает read-only service', async () => {
@@ -154,18 +191,59 @@ describe('UsersController', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('findOne не использует admin-only detail read model для user-facing route', async () => {
-    usersService.findById.mockResolvedValue({ id: 'user_1', telegramId: 123456789n });
+  it('findOne не использует admin-only detail read model и не отдает legacy identity slot', async () => {
+    usersService.findById.mockResolvedValue(makeUserSource());
 
     const result = await controller.findOne('user_1', { id: 'user_1', type: 'user' });
 
     expect(usersService.findById).toHaveBeenCalledWith('user_1');
     expect(usersService.findAdminById).not.toHaveBeenCalled();
-    expect(result).toEqual({ id: 'user_1', telegramId: '123456789' });
+    expect(result).toMatchObject({ id: 'user_1', telegramId: '123456789' });
+    expect(result).not.toHaveProperty('authProvider');
+    expect(result).not.toHaveProperty('providerId');
   });
 
-  it('updateMyEmail читает user.id из auth context', async () => {
-    usersService.updateEmail.mockResolvedValue({ id: 'user_1', email: 'new@example.com' });
+  it('findOne очищает вложенные referredBy/referrals от legacy identity slot и чужих данных', async () => {
+    // Регрессия на audit-находку Step 04: whitelist-проекция не должна
+    // протаскивать legacy slot и финансовые данные чужих пользователей через
+    // relation-объекты, даже если источник их содержит.
+    usersService.findById.mockResolvedValue(
+      makeUserSource({
+        referredBy: {
+          id: 'referrer_1',
+          authProvider: 'google',
+          providerId: 'secret-provider-id',
+          balance: new Prisma.Decimal('9999'),
+          email: 'referrer@example.com',
+          phone: '+70000000000',
+        },
+        referrals: [
+          {
+            id: 'invitee_1',
+            authProvider: 'yandex',
+            providerId: 'another-secret',
+            balance: new Prisma.Decimal('500'),
+            email: 'invitee@example.com',
+          },
+        ],
+      }),
+    );
+
+    const result = await controller.findOne('user_1', { id: 'user_1', type: 'admin' });
+
+    expect(result).not.toHaveProperty('referredBy');
+    expect(result).not.toHaveProperty('referrals');
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain('secret-provider-id');
+    expect(serialized).not.toContain('another-secret');
+    expect(serialized).not.toContain('referrer@example.com');
+    expect(serialized).not.toContain('invitee@example.com');
+  });
+
+  it('updateMyEmail читает user.id из auth context и отдает profile без legacy slot', async () => {
+    usersService.updateEmail.mockResolvedValue(
+      makeUserSource({ email: 'new@example.com' }),
+    );
 
     const result = await controller.updateMyEmail(
       { id: 'user_1', type: 'user' },
@@ -173,7 +251,9 @@ describe('UsersController', () => {
     );
 
     expect(usersService.updateEmail).toHaveBeenCalledWith('user_1', 'new@example.com');
-    expect(result).toEqual({ id: 'user_1', email: 'new@example.com' });
+    expect(result).toMatchObject({ id: 'user_1', email: 'new@example.com' });
+    expect(result).not.toHaveProperty('authProvider');
+    expect(result).not.toHaveProperty('providerId');
   });
 
   it('static push VAPID route объявлен раньше параметрического findOne', () => {

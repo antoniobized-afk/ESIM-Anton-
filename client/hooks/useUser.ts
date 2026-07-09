@@ -16,7 +16,6 @@ export interface AppUser {
   bonusBalance: number
   referralCode: string
   totalSpent: number
-  authProvider?: string
 }
 
 export function useUser() {

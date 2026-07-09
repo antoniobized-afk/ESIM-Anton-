@@ -213,7 +213,7 @@
 ## Статус / Evidence
 
 - Status: `in_progress`
-- Current step: Step 04
+- Current step: Step 05
 - Last evidence:
   - Phase создана после сверки `docs/README.md`,
     `docs/phases/PHASE_AUTHORING_GUIDE.md`, phase roadmap, architecture wiki,
@@ -254,3 +254,22 @@
     `pnpm --filter backend test -- users.service.spec.ts users.controller.spec.ts`
     green (28 tests); `pnpm --filter backend build` green; admin `lint`/`build`
     green; `git diff --check` green.
+  - Step 04 закрыт 2026-07-09 по blocker-path: consumer audit подтвердил, что
+    schema drop `users.authProvider/providerId` пока небезопасен из-за
+    `AuthIdentityResolverService` legacy fallback/write, Phase 18 identity
+    backfill и `UserMergePreflightService` drift-check. Admin users read model
+    и `AdminUser` types остаются без legacy slot; дополнительно `/auth/me`,
+    client `AuthUser`/`AppUser`, top-level user responses в `UsersController`
+    и login snapshot resolver-а очищены от чтения/возврата legacy hint.
+    `auth-identity-runtime.md` и migration gotcha обновлены. Schema migration
+    не создавалась. Verification: targeted backend identity/users tests green
+    (6 suites / 55 tests), backend build green, client build green, client lint
+    exit 0 with existing warnings, admin build green, `git diff --check` green.
+  - Step 04 audit follow-up 2026-07-09: закрыта утечка legacy slot и чужих
+    user-данных через вложенные `referredBy`/`referrals` в user-facing
+    responses. Введен whitelist-owner `users/user-profile-read-model.ts`,
+    `serializeUser` blacklist-scrub удален, `findById`/`BOT_USER_INCLUDE`
+    очищены от лишних relation-объектов. Остаточный `order.user.referredBy`
+    boundary в orders-модуле зафиксирован как отдельный шаг (свои потребители).
+    Verification: users/identity specs green (49 tests), orders/payments specs
+    green (75 tests), backend build (type gate) green.

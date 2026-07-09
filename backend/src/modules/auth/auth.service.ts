@@ -129,7 +129,6 @@ export class AuthService {
         lastName: true,
         phone: true,
         email: true,
-        authProvider: true,
         balance: true,
         bonusBalance: true,
         referralCode: true,
@@ -144,16 +143,26 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('Пользователь не найден');
 
     return {
-      ...user,
+      id: user.id,
       telegramId: user.telegramId ? user.telegramId.toString() : null,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      email: user.email,
       balance: Number(user.balance),
       bonusBalance: Number(user.bonusBalance),
+      referralCode: user.referralCode,
+      referredById: user.referredById,
+      referralLinkId: user.referralLinkId,
       totalSpent: Number(user.totalSpent),
+      isBlocked: user.isBlocked,
+      createdAt: user.createdAt,
     };
   }
 
   private generateUserToken(
-    user: { id: string; authProvider?: string | null },
+    user: { id: string },
     provider: AuthIdentityProvider,
   ) {
     const payload = { sub: user.id, type: 'user', provider: provider.toLowerCase() };

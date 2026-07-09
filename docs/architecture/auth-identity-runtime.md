@@ -43,15 +43,43 @@ email        String? @unique
 authProvider String?
 providerId   String?
 ```
-Этот контракт описывает только один текущий provider slot. `phone` в `User` является contact-полем, live phone-login потока нет.
+`authProvider/providerId` остаются legacy deprecation slot, а не расширяемой
+моделью входов. После Phase 20 Step 04 они не являются response contract для
+admin users read model, `/auth/me` и user-facing responses из `UsersController`.
+
+User-facing users responses (`GET /users/:id`, bot `find-or-create`,
+`PATCH /users/me/email`) проходят через whitelist-owner
+`users/user-profile-read-model.ts` (`toUserProfileReadModel`), а не через
+blacklist-scrub полей. Проекция отдает только контрактные скаляры + собственный
+`loyaltyLevel`, поэтому legacy slot и чужие связанные записи (`referredBy`,
+`referrals`) структурно не попадают в ответ. Admin surface владеет отдельным
+read model (`users/admin-user-read-model.ts`). Известный остаточный boundary:
+`orders.service.findById` включает `order.user.referredBy` полным объектом и
+отдает его через `GET /orders/:id` — это отдельная ответственность order-модуля,
+подлежит своему шагу, не user-profile owner-у.
+
+Schema drop пока заблокирован live consumers:
+- `AuthIdentityResolverService` еще использует legacy exact-provider lookup
+  для continuity и пишет slot при создании OAuth/email users;
+- Phase 18 identity backfill использует slot как источник кандидатов и
+  диагностики конфликтов;
+- `UserMergePreflightService` сверяет slot с `UserIdentity` для drift-warning.
+
+До снятия этих blockers поля остаются в schema и индексе, но UI/API не должны
+использовать их как fallback для отображения способов входа. `phone` в `User`
+является contact-полем, live phone-login потока нет.
 
 ### User JWT
-`JwtUserGuard` принимает токен: `{ sub: user.id, type: 'user', provider: user.authProvider }`.
-`sub` — это canonical boundary. `provider` — лишь legacy hint.
+`JwtUserGuard` принимает токен: `{ sub: user.id, type: 'user', provider }`.
+`sub` — это canonical boundary. `provider` — hint от текущего
+`UserIdentity` resolver-а, а не чтение `User.authProvider`.
 
 ### Login Flows
 - **Email OTP**: `POST /auth/email/verify` ищет/создает `User` по `email`.
-- **OAuth (Google/Yandex/VK)**: Ищет по `(authProvider, providerId)`, затем по `telegramId` (для Telegram), затем по `email`. Если email совпал, логинит, но durable link не создает, если провайдер другой.
+- **OAuth (Google/Yandex/VK)**: сначала ищет `UserIdentity`, затем держит
+  legacy exact-provider fallback по `(authProvider, providerId)` для
+  continuity старых аккаунтов. Если email совпал с другим аккаунтом,
+  возвращает conflict и не делает silent link.
 - **Telegram (Bot)**: `POST /users/find-or-create` ищет по `telegramId`.
 - **Client**: Хранит JWT в `localStorage`.
 

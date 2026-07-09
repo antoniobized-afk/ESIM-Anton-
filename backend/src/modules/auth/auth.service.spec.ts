@@ -35,7 +35,7 @@ describe('AuthService identity ownership boundary', () => {
   it('loginWithOAuth выпускает JWT на canonical user.id, а не identity id/provider subject', async () => {
     const { service, jwtService, identityResolver } = makeService();
     identityResolver.resolveOAuthLogin.mockResolvedValue({
-      user: { id: 'user_1', authProvider: 'google', isBlocked: false },
+      user: { id: 'user_1', isBlocked: false },
       provider: AuthIdentityProvider.GOOGLE,
     });
 
@@ -55,7 +55,7 @@ describe('AuthService identity ownership boundary', () => {
   it('loginWithEmail сохраняет тот же JWT subject contract', async () => {
     const { service, jwtService, identityResolver } = makeService();
     identityResolver.resolveEmailLogin.mockResolvedValue({
-      user: { id: 'user_email', authProvider: 'email', isBlocked: false },
+      user: { id: 'user_email', isBlocked: false },
       provider: AuthIdentityProvider.EMAIL,
     });
 
@@ -65,5 +65,41 @@ describe('AuthService identity ownership boundary', () => {
       { sub: 'user_email', type: 'user', provider: 'email' },
       { expiresIn: '30d' },
     );
+  });
+
+  it('getMe не выбирает и не возвращает legacy identity slot', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValue({
+      id: 'user_1',
+      telegramId: 123456789n,
+      username: 'mojo_user',
+      firstName: 'Mojo',
+      lastName: 'User',
+      phone: null,
+      email: 'user@example.com',
+      authProvider: 'google',
+      providerId: 'secret-provider-subject',
+      balance: 100,
+      bonusBalance: 25,
+      referralCode: 'REF1',
+      referredById: null,
+      referralLinkId: null,
+      totalSpent: 1000,
+      isBlocked: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    const result = await service.getMe('user_1');
+    const select = prisma.user.findUnique.mock.calls[0][0].select;
+
+    expect(select).not.toHaveProperty('authProvider');
+    expect(select).not.toHaveProperty('providerId');
+    expect(result).toEqual(expect.objectContaining({
+      id: 'user_1',
+      telegramId: '123456789',
+      email: 'user@example.com',
+    }));
+    expect(result).not.toHaveProperty('authProvider');
+    expect(result).not.toHaveProperty('providerId');
   });
 });

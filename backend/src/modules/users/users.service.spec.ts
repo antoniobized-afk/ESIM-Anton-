@@ -141,6 +141,22 @@ describe('UsersService', () => {
     expect(prisma.user.update).not.toHaveBeenCalled();
     expect(result).toEqual({ id: 'user_1', email: 'owner@example.com' });
   });
+
+  it('findById не тянет relation-объекты пользователей (referredBy/referrals/orders)', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findUnique.mockResolvedValue({ id: 'user_1' });
+
+    await service.findById('user_1');
+
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: 'user_1' },
+      include: { loyaltyLevel: true },
+    });
+    const [[call]] = prisma.user.findUnique.mock.calls;
+    expect(call.include).not.toHaveProperty('referredBy');
+    expect(call.include).not.toHaveProperty('referrals');
+    expect(call.include).not.toHaveProperty('orders');
+  });
 });
 
 describe('Users sorting contract', () => {

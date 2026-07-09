@@ -11,7 +11,6 @@ import { OAuthIdentityProfileMapper } from './oauth-identity-profile.mapper';
 function loginUser(overrides: Record<string, unknown> = {}) {
   return {
     id: 'user_1',
-    authProvider: null,
     isBlocked: false,
     ...overrides,
   };
@@ -64,7 +63,6 @@ describe('AuthIdentityResolverService', () => {
       .mockResolvedValueOnce(null);
     prisma.user.findUnique.mockResolvedValue(loginUser({
       id: 'email_user',
-      authProvider: 'email',
     }));
 
     const result = await service.resolveEmailLogin('  Test@Example.com  ');
@@ -112,7 +110,7 @@ describe('AuthIdentityResolverService', () => {
       .mockResolvedValueOnce(null);
     prisma.user.findUnique.mockResolvedValue(null);
     prisma.user.findMany.mockResolvedValue([
-      loginUser({ id: 'mixed_case_email_user', authProvider: 'email' }),
+      loginUser({ id: 'mixed_case_email_user' }),
     ]);
 
     const result = await service.resolveEmailLogin('test@example.com');
@@ -222,7 +220,6 @@ describe('AuthIdentityResolverService', () => {
     prisma.userIdentity.findUnique.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue(loginUser({
       id: 'email_user',
-      authProvider: 'email',
     }));
     prisma.userIdentity.create.mockRejectedValueOnce(uniqueConstraintError());
 
@@ -253,7 +250,6 @@ describe('AuthIdentityResolverService', () => {
     prisma.userIdentity.findUnique.mockResolvedValue(null);
     prisma.user.findUnique.mockResolvedValue(loginUser({
       id: 'email_user',
-      authProvider: 'email',
     }));
     prisma.userIdentity.findFirst.mockResolvedValue({
       id: 'existing_email_identity',
@@ -423,10 +419,8 @@ describe('AuthIdentityResolverService', () => {
       user: {
         id: 'bot_user',
         telegramId: 123456789n,
-        authProvider: null,
         isBlocked: false,
         loyaltyLevel: null,
-        referredBy: null,
       },
     });
 

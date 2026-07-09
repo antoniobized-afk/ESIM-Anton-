@@ -118,12 +118,6 @@ export class UsersService {
       where: { id },
       include: {
         loyaltyLevel: true,
-        referredBy: true,
-        referrals: true,
-        orders: {
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        },
       },
     });
 
@@ -238,7 +232,11 @@ export class UsersService {
     }
 
     if (existingUser?.id === userId) {
-      return this.prisma.user.findUnique({ where: { id: userId } });
+      const current = await this.prisma.user.findUnique({
+        where: { id: userId },
+      });
+      if (!current) throw new NotFoundException('Пользователь не найден');
+      return current;
     }
 
     try {

@@ -27,14 +27,12 @@ import { OAuthIdentityProfileMapper } from './oauth-identity-profile.mapper';
 
 const LOGIN_USER_SELECT = {
   id: true,
-  authProvider: true,
   isBlocked: true,
   telegramId: true,
 } satisfies Prisma.UserSelect;
 
 const BOT_USER_INCLUDE = {
   loyaltyLevel: true,
-  referredBy: true,
 } satisfies Prisma.UserInclude;
 
 @Injectable()
@@ -109,8 +107,8 @@ export class AuthIdentityResolverService {
       await this.linkIdentityToExistingUser(
         {
           id: existingUser.id,
-          authProvider: existingUser.authProvider,
           isBlocked: existingUser.isBlocked,
+          telegramId: existingUser.telegramId,
         },
         identityInput,
         'bot_telegram_existing_user',

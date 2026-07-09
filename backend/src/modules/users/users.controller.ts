@@ -23,16 +23,9 @@ import { MergePreflightQueryDto } from './dto/merge-preflight.dto';
 import { PushSubscribeDto, PushUnsubscribeDto } from './dto/push-subscription.dto';
 import { UpdateMyEmailDto } from './dto/user-profile.dto';
 import { UsersListQueryDto } from './dto/users-list-query.dto';
+import { toUserProfileReadModel } from './user-profile-read-model';
 
 const UserAccessGuard = OrGuard(JwtAdminGuard, JwtUserGuard);
-
-// Хелпер для сериализации BigInt в JSON
-function serializeUser<T>(user: T): T {
-  if (!user) return user;
-  return JSON.parse(JSON.stringify(user, (_, value) =>
-    typeof value === 'bigint' ? value.toString() : value
-  )) as T;
-}
 
 @ApiTags('users')
 @Controller('users')
@@ -51,11 +44,9 @@ export class UsersController {
   async findAll(
     @Query() query: UsersListQueryDto,
   ) {
-    const result = await this.usersService.findAll(query);
-    return {
-      ...result,
-      data: result.data.map(serializeUser),
-    };
+    // findAll уже отдает admin-safe read model (без legacy slot, telegramId
+    // и decimal сериализованы), поэтому дополнительная проекция не нужна.
+    return this.usersService.findAll(query);
   }
 
   @Get('admin/merge-preflight')
@@ -96,7 +87,7 @@ export class UsersController {
       throw new ForbiddenException('Доступ к чужому профилю запрещён');
     }
     const foundUser = await this.usersService.findById(id);
-    return serializeUser(foundUser);
+    return toUserProfileReadModel(foundUser);
   }
 
   @Get(':id/stats')
@@ -104,11 +95,8 @@ export class UsersController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Получить статистику пользователя' })
   async getStats(@Param('id') id: string) {
-    const stats = await this.usersService.getUserStats(id);
-    return {
-      ...stats,
-      user: serializeUser(stats.user),
-    };
+    // getUserStats.user уже приходит через admin-safe read model.
+    return this.usersService.getUserStats(id);
   }
 
   @Delete('admin/:id')
@@ -135,7 +123,7 @@ export class UsersController {
       BigInt(telegramId),
       userData
     );
-    return serializeUser(user);
+    return toUserProfileReadModel(user);
   }
 
   @Patch('me/email')
@@ -147,7 +135,7 @@ export class UsersController {
     @Body() dto: UpdateMyEmailDto,
   ) {
     const updated = await this.usersService.updateEmail(user.id, dto.email);
-    return serializeUser(updated);
+    return toUserProfileReadModel(updated);
   }
 
   @Post(':id/push/subscribe')

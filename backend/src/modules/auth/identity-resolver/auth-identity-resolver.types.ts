@@ -13,7 +13,6 @@ export type AuthIdentityInput = {
 
 export type AuthIdentityLoginUser = {
   id: string;
-  authProvider?: string | null;
   isBlocked: boolean;
   telegramId?: bigint | null;
 };
