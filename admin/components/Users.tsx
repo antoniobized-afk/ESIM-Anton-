@@ -5,7 +5,12 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { usersApi } from '@/lib/api'
 import { getAdminRoleFromToken, isUnauthorizedError } from '@/lib/auth'
 import { getErrorMessage } from '@/lib/errors'
-import type { AdminRole, AdminUser, AdminUserDeleteBlocker } from '@/lib/types'
+import type {
+  AdminRole,
+  AdminUser,
+  AdminUserAttributionBucket,
+  AdminUserDeleteBlocker,
+} from '@/lib/types'
 import Button from '@/components/ui/Button'
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 import Pagination from '@/components/ui/Pagination'
@@ -75,6 +80,35 @@ export default function Users() {
   const userDisplayName = (user: AdminUser) => {
     const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
     return fullName || user.username || user.email || `#${user.id.slice(0, 8)}`
+  }
+
+  const identitySummary = (user: AdminUser) => {
+    const identities = user.identityProviders ?? []
+    if (identities.length === 0) return '—'
+    return identities.map((identity) => identity.label).join(', ')
+  }
+
+  const attributionBucketText = (bucket: AdminUserAttributionBucket) => {
+    if (bucket.kind === 'referral') {
+      const parts = [
+        bucket.referralLinkCode ? `#${bucket.referralLinkCode}` : null,
+        bucket.referrer?.displayName ?? null,
+      ].filter(Boolean)
+      return parts.length > 0 ? `${bucket.label}: ${parts.join(' / ')}` : bucket.label
+    }
+
+    if (bucket.kind === 'utm') {
+      const parts = [bucket.source, bucket.medium, bucket.campaign].filter(Boolean)
+      return parts.length > 0 ? `${bucket.label}: ${parts.join(' / ')}` : bucket.label
+    }
+
+    return bucket.label
+  }
+
+  const attributionSummary = (user: AdminUser) => {
+    const buckets = user.attributionSummary?.buckets ?? []
+    if (buckets.length === 0) return '—'
+    return buckets.map(attributionBucketText).join(' · ')
   }
 
   const deleteErrorMessage = (error: unknown) => {
@@ -151,8 +185,8 @@ export default function Users() {
                   <TableHeaderCell>ID</TableHeaderCell>
                   <TableHeaderCell>Имя</TableHeaderCell>
                   <TableHeaderCell>Telegram</TableHeaderCell>
-                  <TableHeaderCell>Провайдер</TableHeaderCell>
-                  <TableHeaderCell>Источник</TableHeaderCell>
+                  <TableHeaderCell>Вход</TableHeaderCell>
+                  <TableHeaderCell>Атрибуция</TableHeaderCell>
                   <TableHeaderCell>Баланс</TableHeaderCell>
                   <TableHeaderCell>Потрачено</TableHeaderCell>
                   <TableHeaderCell>Уровень</TableHeaderCell>
@@ -177,13 +211,10 @@ export default function Users() {
                       {user.username ? `@${user.username}` : user.telegramId}
                     </TableCell>
                     <TableCell className="text-sm text-slate-700">
-                      {user.authProvider || '—'}
+                      {identitySummary(user)}
                     </TableCell>
                     <TableCell className="text-sm">
-                      <div className="text-slate-700">{user.utmSource || '—'}</div>
-                      <div className="text-xs text-slate-500">
-                        {user.utmMedium || '—'} / {user.utmCampaign || '—'}
-                      </div>
+                      <div className="text-slate-700">{attributionSummary(user)}</div>
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">

@@ -73,6 +73,14 @@ export class UsersController {
     );
   }
 
+  @Get('admin/:id')
+  @UseGuards(JwtAdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Получить admin-safe detail пользователя' })
+  async findAdminOne(@Param('id') id: string) {
+    return this.usersService.findAdminById(id);
+  }
+
   @Get('push/vapid-public-key')
   @ApiOperation({ summary: 'Получить VAPID публичный ключ для web push' })
   getVapidPublicKey() {

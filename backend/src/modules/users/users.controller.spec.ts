@@ -9,6 +9,7 @@ describe('UsersController', () => {
   const usersService = {
     findAll: jest.fn(),
     findById: jest.fn(),
+    findAdminById: jest.fn(),
     getUserStats: jest.fn(),
     findOrCreate: jest.fn(),
     updateEmail: jest.fn(),
@@ -105,6 +106,22 @@ describe('UsersController', () => {
     expect(result).toEqual({ mode: 'read_only_preflight' });
   });
 
+  it('findAdminOne использует JwtAdminGuard и admin-safe read model service', async () => {
+    const guards = Reflect.getMetadata(GUARDS_METADATA, UsersController.prototype.findAdminOne);
+    const adminDetail = {
+      id: 'user_1',
+      identityProviders: [],
+      attributionSummary: { buckets: [{ kind: 'unknown', label: 'Неизвестно' }] },
+    };
+    usersService.findAdminById.mockResolvedValue(adminDetail);
+
+    const result = await controller.findAdminOne('user_1');
+
+    expect(guards).toEqual([JwtAdminGuard]);
+    expect(usersService.findAdminById).toHaveBeenCalledWith('user_1');
+    expect(result).toEqual(adminDetail);
+  });
+
   it('deleteUser доступен только SUPER_ADMIN и вызывает deletion service', async () => {
     const guards = Reflect.getMetadata(GUARDS_METADATA, UsersController.prototype.deleteUser);
     adminDeletionService.deleteUser.mockResolvedValue({
@@ -137,6 +154,16 @@ describe('UsersController', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
+  it('findOne не использует admin-only detail read model для user-facing route', async () => {
+    usersService.findById.mockResolvedValue({ id: 'user_1', telegramId: 123456789n });
+
+    const result = await controller.findOne('user_1', { id: 'user_1', type: 'user' });
+
+    expect(usersService.findById).toHaveBeenCalledWith('user_1');
+    expect(usersService.findAdminById).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: 'user_1', telegramId: '123456789' });
+  });
+
   it('updateMyEmail читает user.id из auth context', async () => {
     usersService.updateEmail.mockResolvedValue({ id: 'user_1', email: 'new@example.com' });
 
@@ -152,6 +179,12 @@ describe('UsersController', () => {
   it('static push VAPID route объявлен раньше параметрического findOne', () => {
     const methodOrder = Object.getOwnPropertyNames(UsersController.prototype);
     expect(methodOrder.indexOf('getVapidPublicKey')).toBeLessThan(
+      methodOrder.indexOf('findOne'),
+    );
+    expect(methodOrder.indexOf('mergePreflight')).toBeLessThan(
+      methodOrder.indexOf('findAdminOne'),
+    );
+    expect(methodOrder.indexOf('findAdminOne')).toBeLessThan(
       methodOrder.indexOf('findOne'),
     );
   });

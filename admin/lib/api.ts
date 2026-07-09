@@ -105,7 +105,7 @@ export const dashboardApi = {
 export const usersApi = {
   getAll: (page = 1, limit = 20, search?: string) =>
     api.get<PaginatedResponse<AdminUser>>(`/users`, { params: { page, limit, search } }),
-  getById: (id: string) => api.get<AdminUser>(`/users/${id}`),
+  getById: (id: string) => api.get<AdminUser>(`/users/admin/${id}`),
   getStats: (id: string) => api.get<UserStatsResponse>(`/users/${id}/stats`),
   delete: (id: string) => api.delete<AdminUserDeleteResult>(`/users/admin/${id}`),
 }

@@ -72,30 +72,83 @@ export interface LoyaltyLevel {
   discount: number
 }
 
+export type AuthIdentityProviderValue = 'EMAIL' | 'TELEGRAM' | 'GOOGLE' | 'YANDEX' | 'VK'
+
+export interface AdminUserIdentityProvider {
+  id: string
+  provider: AuthIdentityProviderValue
+  label: string
+  email: string | null
+  emailVerified: boolean
+  displayName: string | null
+  linkedAt: string
+  lastLoginAt: string | null
+}
+
+export interface AdminUserCompactReference {
+  id: string
+  displayName: string
+  username: string | null
+  email: string | null
+}
+
+export type AdminUserAttributionBucket =
+  | {
+      kind: 'referral'
+      label: string
+      referredById: string | null
+      referralLinkId: string | null
+      referralLinkCode: string | null
+      referralLinkLabel: string | null
+      referrer: AdminUserCompactReference | null
+    }
+  | {
+      kind: 'utm'
+      label: string
+      source: string | null
+      medium: string | null
+      campaign: string | null
+    }
+  | {
+      kind: 'entryChannel'
+      label: string
+      channel: 'telegram' | 'direct'
+    }
+  | {
+      kind: 'unknown'
+      label: string
+    }
+
+export interface AdminUserAttributionSummary {
+  buckets: AdminUserAttributionBucket[]
+}
+
+export interface AdminUserLoyaltyLevel {
+  id: string
+  name: string
+  minSpent: NumericLike
+  cashbackPercent: NumericLike
+  discount: NumericLike
+}
+
 export interface AdminUser {
   id: string
-  telegramId?: string | null
+  telegramId: string | null
   username?: string | null
   firstName?: string | null
   lastName?: string | null
   phone?: string | null
   email?: string | null
-  authProvider?: string | null
-  providerId?: string | null
   balance: NumericLike
   bonusBalance: NumericLike
-  referralCode?: string
+  referralCode: string
   totalSpent: NumericLike
-  isBlocked?: boolean
-  utmCampaign?: string | null
-  utmMedium?: string | null
-  utmSource?: string | null
+  isBlocked: boolean
   createdAt: string
-  updatedAt?: string
-  loyaltyLevel?: LoyaltyLevel | null
-  referredBy?: Pick<AdminUser, 'id' | 'username' | 'firstName' | 'lastName'> | null
-  referrals?: Array<Pick<AdminUser, 'id' | 'username' | 'firstName' | 'lastName'>>
-  orders?: AdminOrder[]
+  updatedAt: string
+  loyaltyLevel: AdminUserLoyaltyLevel | null
+  identityProviders: AdminUserIdentityProvider[]
+  attributionSummary: AdminUserAttributionSummary
 }
 
 export interface AdminProduct {

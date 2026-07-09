@@ -68,7 +68,7 @@ list/detail users surface: identities, attribution и support hints должны
 
 ## Статус
 
-`planned`
+`completed`
 
 ## Evidence
 
@@ -76,6 +76,38 @@ list/detail users surface: identities, attribution и support hints должны
 - После review `docs/work/session.md` scope шага зафиксирован как текущий admin
   users read model; полноценный campaign/touch tracking вынесен в будущий
   audit-first phase.
+- Закрыт 2026-07-09: добавлен backend owner
+  `backend/src/modules/users/admin-user-read-model.ts` с explicit Prisma
+  include/select для admin users list/detail. `UserIdentity.providerSubject` и
+  raw `metadata` не запрашиваются и не сериализуются; decimal/bigint/date
+  приводятся в контролируемые string/ISO поля.
+- Provider labels вынесены в общий backend helper
+  `backend/src/modules/auth/identity/auth-identity-provider-labels.ts`;
+  `AuthIdentityManagementService` и admin users read model используют один
+  owner, без третьей карты labels в admin UI.
+- `GET /users` теперь возвращает `identityProviders` и
+  `attributionSummary.buckets` поверх backend read model. Referral и UTM
+  buckets могут возвращаться вместе; entry channel используется только когда
+  нет explicit referral/UTM; `unknown` остается только для отсутствия всех
+  фактов.
+- Добавлен admin-only detail boundary `GET /users/admin/:id` под
+  `JwtAdminGuard`. Mixed `GET /users/:id` не расширен admin diagnostics и
+  остается user/admin profile route с прежней access check.
+- Admin consumer contract минимально синхронизирован: `usersApi.getById`
+  читает `/users/admin/:id`, `AdminUser` больше не описывает legacy
+  `authProvider/providerId`, текущая `/users` таблица читает
+  `identityProviders`/`attributionSummary` без legacy fallback.
+- Review follow-up 2026-07-09: `GET /users/:id/stats` теперь возвращает
+  `user` через тот же admin-safe read model (`findAdminById`), поэтому
+  `UserStatsResponse.user: AdminUser` больше не расходится с backend contract
+  и не протаскивает legacy `authProvider/providerId`.
+- Targeted tests:
+  `pnpm --filter backend test -- users.service.spec.ts users.controller.spec.ts`
+  green (28 tests). Covered privacy (`providerSubject`/`metadata` not exposed),
+  referral+UTM buckets together, admin-only detail route/guard, user-facing
+  route separation and stats `user` read-model alignment.
+- Build/gates: `pnpm --filter backend build` green; `pnpm --filter admin lint`
+  green; `pnpm --filter admin build` green; `git diff --check` green.
 
 ## Файлы
 

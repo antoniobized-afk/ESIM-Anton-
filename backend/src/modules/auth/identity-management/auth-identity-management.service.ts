@@ -17,6 +17,7 @@ import {
   normalizeEmail,
   normalizeProviderSubject,
 } from '../identity/auth-identity-normalizer';
+import { getAuthIdentityProviderLabel } from '../identity/auth-identity-provider-labels';
 import {
   AuthIdentityConflictException,
   isAuthIdentityConflictException,
@@ -374,7 +375,7 @@ export class AuthIdentityManagementService {
     return {
       id: identity.id,
       provider: identity.provider,
-      label: this.providerLabel(identity.provider),
+      label: getAuthIdentityProviderLabel(identity.provider),
       email: identity.email,
       emailVerified: identity.emailVerified,
       displayName: identity.displayName,
@@ -382,17 +383,6 @@ export class AuthIdentityManagementService {
       lastLoginAt: identity.lastLoginAt,
       canUnlink: identityCount > 1,
     };
-  }
-
-  private providerLabel(provider: AuthIdentityProvider): string {
-    const labels: Record<AuthIdentityProvider, string> = {
-      [AuthIdentityProvider.EMAIL]: 'Email',
-      [AuthIdentityProvider.TELEGRAM]: 'Telegram',
-      [AuthIdentityProvider.GOOGLE]: 'Google',
-      [AuthIdentityProvider.YANDEX]: 'Яндекс',
-      [AuthIdentityProvider.VK]: 'VK',
-    };
-    return labels[provider];
   }
 
   private assertOAuthLinkProvider(provider: string): OAuthIdentityLinkProvider {

@@ -213,7 +213,7 @@
 ## Статус / Evidence
 
 - Status: `in_progress`
-- Current step: Step 03
+- Current step: Step 04
 - Last evidence:
   - Phase создана после сверки `docs/README.md`,
     `docs/phases/PHASE_AUTHORING_GUIDE.md`, phase roadmap, architecture wiki,
@@ -243,3 +243,14 @@
     green; `pnpm --filter backend exec nest build` green; полный
     `pnpm --filter backend build` остановился на Windows Prisma
     `query_engine-windows.dll.node` EPERM.
+  - Step 03 закрыт 2026-07-09: добавлен backend admin users read model
+    (`admin-user-read-model.ts`) с safe identity select, общим provider-label
+    owner, `identityProviders`, `attributionSummary.buckets` и отдельным
+    admin-only detail route `GET /users/admin/:id`. Legacy
+    `authProvider/providerId` убраны из admin users API/type surface; mixed
+    `GET /users/:id` не расширялся admin diagnostics. Review follow-up:
+    `GET /users/:id/stats` возвращает `user` через admin-safe read model, чтобы
+    `UserStatsResponse.user: AdminUser` совпадал с backend contract. Evidence:
+    `pnpm --filter backend test -- users.service.spec.ts users.controller.spec.ts`
+    green (28 tests); `pnpm --filter backend build` green; admin `lint`/`build`
+    green; `git diff --check` green.

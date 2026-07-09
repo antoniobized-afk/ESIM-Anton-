@@ -7,6 +7,13 @@ import {
   resolveUserSort,
   type UserSortInput,
 } from './users.sorting';
+import {
+  ADMIN_USER_READ_MODEL_INCLUDE,
+  toAdminUserDetailReadModel,
+  toAdminUserListItemReadModel,
+  type AdminUserListItemReadModel,
+  type AdminUserReadModelSource,
+} from './admin-user-read-model';
 
 const DEFAULT_USERS_PAGE = 1;
 const DEFAULT_USERS_LIMIT = 20;
@@ -18,10 +25,6 @@ export interface UsersListQuery extends UserSortInput {
   limit?: number;
   search?: string;
 }
-
-type UserWithLoyaltyLevel = Prisma.UserGetPayload<{
-  include: { loyaltyLevel: true };
-}>;
 
 function normalizePositiveInteger(value: unknown, fallback: number): number {
   if (typeof value !== 'number' && typeof value !== 'string') return fallback;
@@ -132,6 +135,22 @@ export class UsersService {
   }
 
   /**
+   * Admin-only detail read model. Не расширяет mixed GET /users/:id.
+   */
+  async findAdminById(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: ADMIN_USER_READ_MODEL_INCLUDE,
+    });
+
+    if (!user) {
+      throw new NotFoundException('Пользователь не найден');
+    }
+
+    return toAdminUserDetailReadModel(user);
+  }
+
+  /**
    * Получить пользователя по Telegram ID
    */
   async findByTelegramId(telegramId: bigint) {
@@ -161,7 +180,7 @@ export class UsersService {
    * Получить статистику пользователя
    */
   async getUserStats(userId: string) {
-    const user = await this.findById(userId);
+    const user = await this.findAdminById(userId);
 
     const ordersCount = await this.prisma.order.count({
       where: { userId, status: 'COMPLETED' },
@@ -254,7 +273,7 @@ export class UsersService {
       this.prisma.user.count({ where }),
       this.prisma.user.count({ where: withLevelWhere }),
     ]);
-    const data: UserWithLoyaltyLevel[] = [];
+    const data: AdminUserReadModelSource[] = [];
 
     if (skip < withLevelTotal) {
       const takeFromRankedUsers = Math.min(limit, withLevelTotal - skip);
@@ -263,9 +282,7 @@ export class UsersService {
         skip,
         take: takeFromRankedUsers,
         orderBy: buildUsersOrderBy({ sortBy: 'loyaltyLevel', sortOrder: order }),
-        include: {
-          loyaltyLevel: true,
-        },
+        include: ADMIN_USER_READ_MODEL_INCLUDE,
       });
       data.push(...rankedUsers);
     }
@@ -277,15 +294,13 @@ export class UsersService {
         skip: nullUsersSkip,
         take: limit - data.length,
         orderBy: { id: 'asc' },
-        include: {
-          loyaltyLevel: true,
-        },
+        include: ADMIN_USER_READ_MODEL_INCLUDE,
       });
       data.push(...usersWithoutLevel);
     }
 
     return {
-      data,
+      data: data.map(toAdminUserListItemReadModel),
       meta: {
         total,
         page,
@@ -298,7 +313,15 @@ export class UsersService {
   /**
    * Получить всех пользователей (для админки)
    */
-  async findAll(query?: UsersListQuery) {
+  async findAll(query?: UsersListQuery): Promise<{
+    data: AdminUserListItemReadModel[];
+    meta: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    };
+  }> {
     const page = normalizePositiveInteger(query?.page, DEFAULT_USERS_PAGE);
     const limit = normalizeLimit(query?.limit);
     const skip = (page - 1) * limit;
@@ -315,15 +338,13 @@ export class UsersService {
         skip,
         take: limit,
         orderBy: buildUsersOrderBy(query),
-        include: {
-          loyaltyLevel: true,
-        },
+        include: ADMIN_USER_READ_MODEL_INCLUDE,
       }),
       this.prisma.user.count({ where }),
     ]);
 
     return {
-      data: users,
+      data: users.map(toAdminUserListItemReadModel),
       meta: {
         total,
         page,
