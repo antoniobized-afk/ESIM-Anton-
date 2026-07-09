@@ -32,7 +32,11 @@
 - `referrals` — регистрация рефералов, партнёрские ссылки
 - `system-settings` — настройки, pricing, exchange rate, auto update
 - `telegram` — отправка Telegram notifications
-- `users` — bot find-or-create, stats, email update, admin merge preflight
+- `users` — bot find-or-create, stats, email update, admin merge preflight,
+  admin users list/detail read model; `users.sorting.ts` владеет backend
+  mapping для shared users sort contract, `admin-user-read-model.ts` — admin
+  safe list/detail serializer, `user-profile-read-model.ts` — user-facing
+  whitelist serializer.
 
 ### `admin`
 
@@ -43,6 +47,9 @@ Next.js 15 Admin Panel (App Router).
 - `/login` — публичный auth сегмент
 - **UI Primitives:** `Button`, `Modal`, `Toast/ToastProvider`, `ConfirmDialog`, `Table`, `Pagination` (`components/ui/`)
 - **State:** URL State (фильтры/сортировки синхронизируются через `searchParams`; admin products multi-select направлений хранит выбор повторяющимися `country` params).
+- `/users` — compact support table + detail modal над admin-safe users API:
+  scan surface держит короткие identity/attribution/value fields, detail-only
+  поля открываются через `GET /users/admin/:id`.
 
 ### `client`
 
@@ -70,6 +77,11 @@ Telegram bot runtime (Grammy).
 - `product-data-type.ts` — единый owner provider data type codes `1..4`, точной eSIM Access taxonomy (`Data in Total`, `Daily Limit (Speed Reduced)`, `Daily Limit (Service Cut-off)`, `Daily Unlimited`) и русских подписей для UI/logs.
 - `product-pricing.ts` — единый owner формул каталога для provider raw price `1/10000 USD`, RUB-пересчёта по курсу, наценки и финальной цены продукта; backend sync/reprice/export и admin products UI не дублируют эти формулы локально.
 - `product-sorting.ts` — единый owner контракта сортируемых полей списка продуктов (`ProductSortField`, `ProductSortOrder`, default sort direction) для backend API и admin URL state.
+- `user-sorting.ts` — единый owner контракта сортируемых полей admin users
+  list (`UserSortField`, `UserSortOrder`, default sort direction) для backend
+  API и admin URL state.
+- `loyalty-level-presentation.ts` — единый owner presentation variants для
+  loyalty badges; цвета не являются Prisma/runtime pricing данными.
 
 ## Data Layer
 

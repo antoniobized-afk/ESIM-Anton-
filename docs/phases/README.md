@@ -12,7 +12,6 @@
 | 8  | API Security Infrastructure (Helmet, CORS, DTO, Rate Limiting) | ⬜ Не начата         | [phase-8-api-security-infrastructure.md](./phase-8-api-security-infrastructure.md) |
 | 12 | Client PWA & Telegram Mini App Refactoring                   | ⬜ Не начата         | [phase-12-client-refactoring.md](./phase-12-client-refactoring.md)       |
 | 19 | Telegram Broadcast Campaigns                                 | 🔄 Планирование     | [phase-19-telegram-broadcasts.md](./phase-19-telegram-broadcasts.md)     |
-| 20 | Admin Users Table Identity & Attribution                     | 🔄 В работе         | [phase-20-admin-users-table-identity-attribution.md](./phase-20-admin-users-table-identity-attribution.md) |
 
 **Легенда:** ⬜ Не начата · 🔄 В работе / планирование · ✅ Завершена в [архиве](./COMPLETED_PHASES.md)
 
