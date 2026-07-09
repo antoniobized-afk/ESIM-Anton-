@@ -1,7 +1,12 @@
 # План: улучшение таблицы пользователей в админке
 
-Status: planned
+Status: promoted-to-phase
 Дата: 2026-07-08
+
+Durable phase: [Phase 20: Admin Users Table Identity & Attribution](../phases/phase-20-admin-users-table-identity-attribution.md)
+
+Этот документ остается supporting input. Source of truth по implementation DAG,
+gates и корректировкам после live-code audit теперь живет в Phase 20.
 
 ## Проверка текущего состояния
 
