@@ -20,6 +20,16 @@
   - `backend/src/modules/users/users.sorting.ts`;
   - stable Prisma `orderBy` с tie-breakers;
   - relation sort по `loyaltyLevel` только если Prisma mapping покрыт тестом.
+  - Null-политика для `loyaltyLevel`: сортировать по естественному rank
+    `LoyaltyLevel.minSpent` через
+    `orderBy: { loyaltyLevel: { minSpent: { sort: order, nulls: 'last' } } }`
+    (тот же `sort`/`nulls` API Prisma 5.8, что уже используют nullable поля в
+    `backend/src/modules/products/products.sorting.ts`). Пользователи без
+    уровня (`loyaltyLevelId = null`, UI показывает "Новичок") остаются в конце
+    списка **в обоих направлениях** (asc и desc) — "Новичок" это baseline
+    tier, а не sort-neutral значение, поэтому нельзя давать ему всплывать
+    наверх при `sortOrder=desc`. Tie-breaker — `id asc`, как в products
+    паттерне.
 - Добавить DTO для list query:
   - `page`;
   - `limit`;
@@ -42,6 +52,10 @@
   - не добавлять `attribution` sort без решения Step 01.
 - Добавить unit tests на whitelist/defaults, invalid params, search и stable
   ordering.
+  - Отдельный тест на `loyaltyLevel` relation sort: asc и desc среди
+    пользователей с уровнем упорядочены по `minSpent`; пользователи с
+    `loyaltyLevelId = null` идут последними в обоих направлениях (не
+    переворачиваются на первое место при `desc`).
 
 ## Результат шага
 
@@ -51,6 +65,8 @@
 - Невалидные sort params не ломают Prisma и возвращают default behavior.
 - Search покрывает support-friendly identifiers.
 - Нет client-side sort текущей страницы.
+- `loyaltyLevel` sort детерминирован: пользователи без уровня всегда в конце
+  независимо от direction, покрыто тестом.
 - `name` и `telegram` не входят в sort contract; поиск по имени, username,
   email и `telegramId` сохраняется.
 
