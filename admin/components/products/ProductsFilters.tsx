@@ -7,12 +7,7 @@ import { ChevronDown, ChevronUp, Eye, EyeOff, Filter, Search, Zap } from 'lucide
 import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, PRODUCT_DATA_TYPE_OPTIONS } from '@shared/product-data-type'
 import type { ProductDataTypeSelector } from '@shared/product-data-type'
 import type { DataUnitFilter, ProductDataTypeFilter } from './useProducts'
-import { getCountryFilterLabel, isMultiCountryValue } from '@shared/country-display'
-
-type CountryFilterOption = {
-  value: string
-  label: string
-}
+import ProductsCountryMultiSelect from './ProductsCountryMultiSelect'
 
 interface ProductsFiltersProps {
   countries: string[]
@@ -20,14 +15,14 @@ interface ProductsFiltersProps {
   filteredProducts: AdminProduct[]
   totalProducts: number
   page: number
-  selectedCountry: string
+  selectedCountries: string[]
   showActiveOnly: boolean | null
   dataType: ProductDataTypeFilter
   dataAmountQuery: string
   dataUnit: DataUnitFilter
   durationDaysQuery: string
   searchQuery: string
-  onCountryChange: (value: string) => void
+  onCountriesChange: (value: string[]) => void
   onStatusChange: (value: boolean | null) => void
   onDataTypeChange: (value: ProductDataTypeFilter) => void
   onDataAmountChange: (value: string) => void
@@ -46,14 +41,14 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
     filteredProducts,
     totalProducts,
     page,
-    selectedCountry,
+    selectedCountries,
     showActiveOnly,
     dataType,
     dataAmountQuery,
     dataUnit,
     durationDaysQuery,
     searchQuery,
-    onCountryChange,
+    onCountriesChange,
     onStatusChange,
     onDataTypeChange,
     onDataAmountChange,
@@ -63,22 +58,6 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
     onClear,
     onToggleByDataType,
   } = props
-  const countryOptions = countries
-    .map((country) => ({
-      value: country,
-      label: getCountryFilterLabel(country),
-      isMultiCountry: isMultiCountryValue(country),
-    }))
-    .sort((left, right) => left.label.localeCompare(right.label, 'ru'))
-  const singleCountryOptions = countryOptions.filter((option) => !option.isMultiCountry)
-  const multiCountryOptions = countryOptions.filter((option) => option.isMultiCountry)
-
-  const renderCountryOptions = (options: CountryFilterOption[]) =>
-    options.map((option) => (
-      <option key={option.value} value={option.value}>
-        {option.label}
-      </option>
-    ))
   const bulkDataTypeActionsId = 'products-bulk-data-type-actions'
   const bulkDataTypeOptions: Array<{ value: ProductDataTypeSelector; label: string; enableClassName: string }> = [
     {
@@ -101,7 +80,7 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
   ]
 
   return (
-    <div className="glass-card p-6">
+    <div className="glass-card relative z-50 p-6">
       <div className="flex items-center gap-2 mb-4">
         <Filter className="w-5 h-5 text-slate-500" />
         <h3 className="font-semibold text-lg">Фильтры</h3>
@@ -118,26 +97,11 @@ export default function ProductsFilters(props: ProductsFiltersProps) {
           />
         </div>
 
-        <div className="relative">
-          <select
-            value={selectedCountry}
-            onChange={(event) => onCountryChange(event.target.value)}
-            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all appearance-none bg-white"
-          >
-            <option value="">Все направления ({countries.length})</option>
-            {singleCountryOptions.length > 0 && (
-              <optgroup label={`Страны (${singleCountryOptions.length})`}>
-                {renderCountryOptions(singleCountryOptions)}
-              </optgroup>
-            )}
-            {multiCountryOptions.length > 0 && (
-              <optgroup label={`Мультистраны (${multiCountryOptions.length})`}>
-                {renderCountryOptions(multiCountryOptions)}
-              </optgroup>
-            )}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-        </div>
+        <ProductsCountryMultiSelect
+          countries={countries}
+          selectedCountries={selectedCountries}
+          onChange={onCountriesChange}
+        />
 
         <div className="relative">
           <select

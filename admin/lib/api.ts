@@ -48,6 +48,21 @@ import type {
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
 
+const serializeRepeatedParams = (params: Record<string, unknown>) => {
+  const searchParams = new URLSearchParams()
+
+  Object.entries(params).forEach(([key, value]) => {
+    const values = Array.isArray(value) ? value : [value]
+
+    values.forEach((item) => {
+      if (item === undefined || item === null || item === '') return
+      searchParams.append(key, String(item))
+    })
+  })
+
+  return searchParams.toString()
+}
+
 export const api = axios.create({
   baseURL: `${apiUrl}/api`,
   headers: {
@@ -111,13 +126,20 @@ export const ordersApi = {
 
 export const productsApi = {
   getAll: (filters?: ProductFilters) =>
-    api.get<PaginatedResponse<AdminProduct>>('/products', { params: { ...filters, paginated: true } }),
+    api.get<PaginatedResponse<AdminProduct>>('/products', {
+      params: { ...filters, paginated: true },
+      paramsSerializer: serializeRepeatedParams,
+    }),
   exportExcel: (filters?: ProductFilters) => {
     const params = { ...filters }
     delete params.page
     delete params.limit
 
-    return api.get<Blob>('/products/export', { params, responseType: 'blob' })
+    return api.get<Blob>('/products/export', {
+      params,
+      paramsSerializer: serializeRepeatedParams,
+      responseType: 'blob',
+    })
   },
   getCountries: () => api.get<string[]>('/products/countries'),
   create: (data: CreateProductDto) => api.post<AdminProduct>('/products', data),

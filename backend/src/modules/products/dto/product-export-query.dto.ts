@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -29,6 +30,20 @@ function trimOptionalString(value: unknown): unknown {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeOptionalStringList(value: unknown): string[] | undefined {
+  const values = Array.isArray(value) ? value : [value];
+  const normalized: string[] = [];
+
+  values.forEach((item) => {
+    const trimmed = trimOptionalString(item);
+    if (typeof trimmed === 'string' && !normalized.includes(trimmed)) {
+      normalized.push(trimmed);
+    }
+  });
+
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function normalizeOptionalBoolean(value: unknown): unknown {
@@ -64,11 +79,12 @@ function normalizeOptionalDataTypeSelector(value: unknown): unknown {
 }
 
 export class ProductExportQueryDto {
-  @Transform(({ value }) => trimOptionalString(value))
+  @Transform(({ value }) => normalizeOptionalStringList(value))
   @IsOptional()
-  @IsString()
-  @MaxLength(128)
-  country?: string;
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(128, { each: true })
+  country?: string[];
 
   @Transform(({ value }) => normalizeOptionalBoolean(value))
   @IsOptional()

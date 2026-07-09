@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { AdminProduct, ProductSortField } from '@/lib/types'
 import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, normalizeProductDataTypeSelector } from '@shared/product-data-type'
@@ -34,6 +34,17 @@ const editableDataAmountPattern = /^\d*(?:[.,]\d*)?$/
 const completeDataAmountPattern = /^\d+(?:[.,]\d+)?$/
 const durationDaysPattern = /^[1-9]\d*$/
 
+function normalizeCountryFilters(values: string[]) {
+  const countries: string[] = []
+
+  values.forEach((value) => {
+    const country = value.trim()
+    if (country && !countries.includes(country)) countries.push(country)
+  })
+
+  return countries
+}
+
 function normalizeDataAmountQuery(value: string) {
   const trimmed = value.trim()
   if (!completeDataAmountPattern.test(trimmed)) return ''
@@ -60,7 +71,10 @@ export function useProductFilters(products: AdminProduct[]) {
     router.replace(href, { scroll: false })
   }, [router])
 
-  const selectedCountry = searchParams.get('country') || ''
+  const selectedCountries = useMemo(
+    () => normalizeCountryFilters(searchParams.getAll('country')),
+    [searchParams],
+  )
   const activeParam = searchParams.get('active')
   const showActiveOnly = activeParam === 'active' ? true : activeParam === 'inactive' ? false : null
   const dataTypeParam = searchParams.get('dataType')
@@ -100,7 +114,7 @@ export function useProductFilters(products: AdminProduct[]) {
     const normalized = new URLSearchParams()
     const normalizedDataAmount = normalizeDataAmountQuery(dataAmountQuery)
     const normalizedDurationDays = normalizeDurationDaysQuery(durationDaysQuery)
-    if (selectedCountry) normalized.set('country', selectedCountry)
+    selectedCountries.forEach((country) => normalized.append('country', country))
     if (showActiveOnly === true) normalized.set('active', 'active')
     if (showActiveOnly === false) normalized.set('active', 'inactive')
     if (dataType !== 'all') normalized.set('dataType', dataType)
@@ -136,7 +150,7 @@ export function useProductFilters(products: AdminProduct[]) {
     replaceWithoutScroll,
     searchParams,
     searchQuery,
-    selectedCountry,
+    selectedCountries,
     showActiveOnly,
     dataType,
     sortBy,
@@ -165,7 +179,7 @@ export function useProductFilters(products: AdminProduct[]) {
   return {
     page,
     appliedSearchQuery: urlSearch,
-    selectedCountry,
+    selectedCountries,
     showActiveOnly,
     dataType,
     dataAmountQuery,
@@ -177,9 +191,9 @@ export function useProductFilters(products: AdminProduct[]) {
     appliedDataAmountQuery: urlDataAmount,
     appliedDurationDaysQuery: urlDurationDays,
     filteredProducts: products,
-    setSelectedCountry: (value: string) => replaceParams((params) => {
-      if (value) params.set('country', value)
-      else params.delete('country')
+    setSelectedCountries: (values: string[]) => replaceParams((params) => {
+      params.delete('country')
+      normalizeCountryFilters(values).forEach((country) => params.append('country', country))
       params.delete('page')
     }),
     setShowActiveOnly: (value: boolean | null) => replaceParams((params) => {

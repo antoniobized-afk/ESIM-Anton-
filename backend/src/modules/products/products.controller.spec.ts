@@ -8,7 +8,13 @@ import { ProductsExportService } from './products-export.service';
 import { ProductsService } from './products.service';
 
 describe('ProductsController', () => {
-  const productsService = {} as ProductsService;
+  const productsService = {
+    findAll: jest.fn(),
+    findAllPaginated: jest.fn(),
+  } as unknown as ProductsService & {
+    findAll: jest.Mock;
+    findAllPaginated: jest.Mock;
+  };
   const productsExportService = {
     buildExcelFile: jest.fn(),
   };
@@ -18,6 +24,44 @@ describe('ProductsController', () => {
   );
 
   beforeEach(() => jest.clearAllMocks());
+
+  it('findAll нормализует malformed pagination query вместо NaN', async () => {
+    productsService.findAllPaginated.mockResolvedValue({
+      data: [],
+      meta: { total: 0, page: 1, limit: 50, totalPages: 0 },
+    });
+
+    await controller.findAll(
+      { nested: 'CN' },
+      { value: 'true' },
+      { value: 'China' },
+      { value: 'unlimited' },
+      { value: 'daily' },
+      { value: '5' },
+      { value: 'GB' },
+      { value: '30' },
+      { value: 'country' },
+      { value: 'desc' },
+      'true',
+      { value: '2' },
+      { value: '100' },
+    );
+
+    expect(productsService.findAllPaginated).toHaveBeenCalledWith({
+      country: { nested: 'CN' },
+      isActive: undefined,
+      search: { value: 'China' },
+      tariffType: { value: 'unlimited' },
+      dataType: { value: 'daily' },
+      dataAmount: { value: '5' },
+      dataUnit: { value: 'GB' },
+      durationDays: { value: '30' },
+      sortBy: { value: 'country' },
+      sortOrder: { value: 'desc' },
+      page: 1,
+      limit: 50,
+    });
+  });
 
   it('exportExcel закрыт JwtAdminGuard', () => {
     const guards = Reflect.getMetadata(GUARDS_METADATA, ProductsController.prototype.exportExcel);
@@ -30,7 +74,7 @@ describe('ProductsController', () => {
   });
 
   it('exportExcel возвращает StreamableFile с XLSX headers', async () => {
-    const query: ProductExportQueryDto = { country: 'CN', sortBy: 'markupRatio', sortOrder: 'desc' };
+    const query: ProductExportQueryDto = { country: ['CN'], sortBy: 'markupRatio', sortOrder: 'desc' };
     const buffer = Buffer.from('xlsx');
     const response = {
       set: jest.fn(),

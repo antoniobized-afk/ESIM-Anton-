@@ -27,7 +27,7 @@
 - `notifications` — email, web push. (Включает подмодуль `traffic-monitor` для мониторинга трафика/валидности)
 - `orders` — заказ, free fulfill, usage, top-up flow, balance purchase flow
 - `payments` — Robokassa flow + CloudPayments (сохранение карт, рекуррентные списания)
-- `products` — каталог, sync, dedupe, bulk operations и admin-only Excel export; `products.filters.ts` владеет query-фильтрами списка тарифов (`country`, статус, provider `dataType`, объём MB/GB, срок в днях), `products.sorting.ts` строит Prisma `orderBy` для shared sort contract, `products.sort-keys.ts` владеет persisted sort keys для вычисляемых колонок (`dataAmountMb`, `providerCostPerGb`, `markupRatio`), а `products-export.service.ts` переиспользует эти owners для выгрузки полного filtered/sorted dataset без pagination. На write-boundary продукта `dataType` — единственный владелец типа данных; persisted `isUnlimited` хранится как производный legacy boolean для старых фильтров/заказов и пересчитывается сервисом из `dataType`.
+- `products` — каталог, sync, dedupe, bulk operations и admin-only Excel export; `products.filters.ts` владеет query-фильтрами списка тарифов (`country` как одиночное или повторяющееся multi-value значение, статус, provider `dataType`, объём MB/GB, срок в днях), `products.sorting.ts` строит Prisma `orderBy` для shared sort contract, `products.sort-keys.ts` владеет persisted sort keys для вычисляемых колонок (`dataAmountMb`, `providerCostPerGb`, `markupRatio`), а `products-export.service.ts` переиспользует эти owners для выгрузки полного filtered/sorted dataset без pagination. На write-boundary продукта `dataType` — единственный владелец типа данных; persisted `isUnlimited` хранится как производный legacy boolean для старых фильтров/заказов и пересчитывается сервисом из `dataType`.
 - `promo-codes` — CRUD и валидация промокодов
 - `referrals` — регистрация рефералов, партнёрские ссылки
 - `system-settings` — настройки, pricing, exchange rate, auto update
@@ -42,7 +42,7 @@ Next.js 15 Admin Panel (App Router).
 - `(admin)` — защищённые роуты: `dashboard`, `orders`, `users`, `products`, `promo`, `referral-links`, `settings`, `analytics`, `payments`
 - `/login` — публичный auth сегмент
 - **UI Primitives:** `Button`, `Modal`, `Toast/ToastProvider`, `ConfirmDialog`, `Table`, `Pagination` (`components/ui/`)
-- **State:** URL State (фильтры/сортировки синхронизируются через `searchParams`).
+- **State:** URL State (фильтры/сортировки синхронизируются через `searchParams`; admin products multi-select направлений хранит выбор повторяющимися `country` params).
 
 ### `client`
 

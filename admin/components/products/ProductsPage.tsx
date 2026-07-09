@@ -166,14 +166,14 @@ export default function ProductsPage() {
         filteredProducts={products.products}
         totalProducts={products.totalProducts}
         page={products.page}
-        selectedCountry={products.selectedCountry}
+        selectedCountries={products.selectedCountries}
         showActiveOnly={products.showActiveOnly}
         dataType={products.dataType}
         dataAmountQuery={products.dataAmountQuery}
         dataUnit={products.dataUnit}
         durationDaysQuery={products.durationDaysQuery}
         searchQuery={products.searchQuery}
-        onCountryChange={products.setSelectedCountry}
+        onCountriesChange={products.setSelectedCountries}
         onStatusChange={products.setShowActiveOnly}
         onDataTypeChange={products.setDataType}
         onDataAmountChange={products.setDataAmountQuery}

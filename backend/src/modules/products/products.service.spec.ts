@@ -896,6 +896,34 @@ describe('ProductsService.syncWithProvider', () => {
 });
 
 describe('buildProductsWhere', () => {
+  it('сохраняет backward-compatible точный country-фильтр для одного направления', () => {
+    expect(buildProductsWhere({ country: 'CN' })).toEqual({
+      AND: [{ country: 'CN' }],
+    });
+  });
+
+  it('строит multi-country фильтр для повторяющихся country query params', () => {
+    expect(buildProductsWhere({ country: ['CN', 'TH', 'CN', ' '] })).toEqual({
+      AND: [{ country: { in: ['CN', 'TH'] } }],
+    });
+  });
+
+  it('игнорирует malformed country query shape вместо падения', () => {
+    expect(buildProductsWhere({ country: { nested: 'CN' } })).toEqual({});
+  });
+
+  it('игнорирует malformed string-like query filters вместо падения', () => {
+    expect(buildProductsWhere({
+      search: { value: 'China' },
+      tariffType: { value: 'unlimited' },
+      dataAmount: { value: '5' },
+      dataUnit: { value: 'GB' },
+      durationDays: { value: '30' },
+      sortBy: { value: 'country' },
+      sortOrder: { value: 'desc' },
+    })).toEqual({});
+  });
+
   it('строит точный фильтр по объёму и единице трафика', () => {
     expect(buildProductsWhere({ dataAmount: '5', dataUnit: 'GB' })).toEqual({
       AND: [

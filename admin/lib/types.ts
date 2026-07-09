@@ -290,7 +290,7 @@ export interface SalesChartParams {
 }
 
 export interface ProductFilters {
-  country?: string
+  country?: string | string[]
   isActive?: boolean
   search?: string
   tariffType?: 'standard' | 'unlimited'

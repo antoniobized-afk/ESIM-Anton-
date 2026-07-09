@@ -4,11 +4,24 @@ import type { Response } from 'express';
 import { ProductsService } from './products.service';
 import { ProductsExportService } from './products-export.service';
 import { JwtAdminGuard } from '@/common/auth/jwt-user.guard';
-import type { ProductDataUnit } from './products.filters';
 import { BulkToggleByDataTypeDto } from './dto/bulk-toggle-by-data-type.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductExportQueryDto } from './dto/product-export-query.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+
+function normalizeBooleanQuery(value: unknown): boolean | undefined {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+
+  return undefined;
+}
+
+function normalizePositiveIntegerQuery(value: unknown, fallback: number): number {
+  if (typeof value !== 'string' && typeof value !== 'number') return fallback;
+
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 @ApiTags('products')
 @Controller('products')
@@ -21,25 +34,23 @@ export class ProductsController {
   @Get()
   @ApiOperation({ summary: 'Получить все продукты' })
   async findAll(
-    @Query('country') country?: string,
-    @Query('isActive') isActive?: string,
-    @Query('search') search?: string,
-    @Query('tariffType') tariffType?: 'standard' | 'unlimited',
-    @Query('dataType') dataType?: string,
-    @Query('dataAmount') dataAmount?: string,
-    @Query('dataUnit') dataUnit?: ProductDataUnit,
-    @Query('durationDays') durationDays?: string,
-    @Query('sortBy') sortBy?: string,
-    @Query('sortOrder') sortOrder?: string,
-    @Query('paginated') paginated?: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 50,
+    @Query('country') country?: unknown,
+    @Query('isActive') isActive?: unknown,
+    @Query('search') search?: unknown,
+    @Query('tariffType') tariffType?: unknown,
+    @Query('dataType') dataType?: unknown,
+    @Query('dataAmount') dataAmount?: unknown,
+    @Query('dataUnit') dataUnit?: unknown,
+    @Query('durationDays') durationDays?: unknown,
+    @Query('sortBy') sortBy?: unknown,
+    @Query('sortOrder') sortOrder?: unknown,
+    @Query('paginated') paginated?: unknown,
+    @Query('page') page?: unknown,
+    @Query('limit') limit?: unknown,
   ) {
-    // isActive приходит как строка "true"/"false", конвертируем в boolean
-    const isActiveFilter = isActive === 'true' ? true : isActive === 'false' ? false : undefined;
     const filters = {
       country,
-      isActive: isActiveFilter,
+      isActive: normalizeBooleanQuery(isActive),
       search,
       tariffType,
       dataType,
@@ -50,11 +61,11 @@ export class ProductsController {
       sortOrder,
     };
 
-    if (paginated === 'true') {
+    if (paginated === true || paginated === 'true') {
       return this.productsService.findAllPaginated({
         ...filters,
-        page: +page,
-        limit: +limit,
+        page: normalizePositiveIntegerQuery(page, 1),
+        limit: normalizePositiveIntegerQuery(limit, 50),
       });
     }
 

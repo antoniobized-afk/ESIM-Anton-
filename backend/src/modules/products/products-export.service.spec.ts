@@ -68,7 +68,7 @@ describe('ProductsExportService', () => {
 
   it('применяет list filters/sort и не добавляет pagination в export query', async () => {
     const query: ProductExportQueryDto = {
-      country: 'CN',
+      country: ['CN', 'TH'],
       isActive: false,
       search: 'China',
       dataType: 'daily',
@@ -82,6 +82,7 @@ describe('ProductsExportService', () => {
     };
     const filters = productExportQueryToListFilters(query);
 
+    expect(filters.country).toEqual(['CN', 'TH']);
     await service.buildExcelFile(query);
 
     expect(prisma.esimProduct.count).toHaveBeenCalledWith({

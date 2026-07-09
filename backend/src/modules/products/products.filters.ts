@@ -8,32 +8,56 @@ import {
 export type ProductDataUnit = 'MB' | 'GB';
 
 export interface ProductListFilters {
-  country?: string;
+  country?: unknown;
   isActive?: boolean;
-  search?: string;
-  tariffType?: 'standard' | 'unlimited';
-  dataType?: string | number;
-  dataAmount?: string;
-  dataUnit?: string;
-  durationDays?: string | number;
-  sortBy?: string;
-  sortOrder?: string;
+  search?: unknown;
+  tariffType?: unknown;
+  dataType?: unknown;
+  dataAmount?: unknown;
+  dataUnit?: unknown;
+  durationDays?: unknown;
+  sortBy?: unknown;
+  sortOrder?: unknown;
 }
 
-function normalizeDataUnit(value?: string): ProductDataUnit | undefined {
-  const normalized = value?.trim().toUpperCase();
+function normalizeOptionalString(value?: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeDataUnit(value?: unknown): ProductDataUnit | undefined {
+  const normalized = normalizeOptionalString(value)?.toUpperCase();
   return normalized === 'MB' || normalized === 'GB' ? normalized : undefined;
 }
 
-function normalizePositiveInteger(value?: string | number): number | undefined {
+function normalizePositiveInteger(value?: unknown): number | undefined {
   if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
 
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function parseDataAmount(value?: string) {
-  const trimmed = value?.trim().replace(',', '.');
+function normalizeCountryFilters(value?: unknown): string[] {
+  const values = Array.isArray(value) ? value : [value];
+  const countries: string[] = [];
+
+  values.forEach((item) => {
+    const country = normalizeOptionalString(item);
+    if (country && !countries.includes(country)) countries.push(country);
+  });
+
+  return countries;
+}
+
+function normalizeTariffType(value?: unknown): 'standard' | 'unlimited' | undefined {
+  return value === 'standard' || value === 'unlimited' ? value : undefined;
+}
+
+function parseDataAmount(value?: unknown) {
+  const trimmed = normalizeOptionalString(value)?.replace(',', '.');
   if (!trimmed) return undefined;
 
   const match = trimmed.match(/^(\d+(?:\.\d+)?)\s*(MB|GB)?$/i);
@@ -52,7 +76,7 @@ function buildDataAmountWhere(filters: ProductListFilters): Prisma.EsimProductWh
   const parsedAmount = parseDataAmount(filters.dataAmount);
   const selectedUnit = normalizeDataUnit(filters.dataUnit);
   const unit = selectedUnit ?? parsedAmount?.unit;
-  const hasRawAmount = Boolean(filters.dataAmount?.trim());
+  const hasRawAmount = normalizeOptionalString(filters.dataAmount) !== undefined;
 
   if (hasRawAmount && !parsedAmount) return { id: '__invalid_data_amount__' };
   if (!parsedAmount && !unit) return undefined;
@@ -83,20 +107,23 @@ function buildDataAmountWhere(filters: ProductListFilters): Prisma.EsimProductWh
 }
 
 export function buildProductsWhere(filters?: ProductListFilters): Prisma.EsimProductWhereInput {
-  const search = filters?.search?.trim();
+  const search = normalizeOptionalString(filters?.search);
   const durationDays = normalizePositiveInteger(filters?.durationDays);
   const dataType = normalizeProductDataTypeSelector(filters?.dataType);
+  const tariffType = normalizeTariffType(filters?.tariffType);
+  const countries = normalizeCountryFilters(filters?.country);
   const conditions: Prisma.EsimProductWhereInput[] = [];
 
   if (filters?.isActive !== undefined) conditions.push({ isActive: filters.isActive });
-  if (filters?.country) conditions.push({ country: filters.country });
+  if (countries.length === 1) conditions.push({ country: countries[0] });
+  else if (countries.length > 1) conditions.push({ country: { in: countries } });
   if (dataType === DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE) {
     conditions.push({ dataType: { in: [...DAILY_PRODUCT_DATA_TYPES] } });
   } else if (dataType) {
     conditions.push({ dataType });
-  } else if (filters?.tariffType === 'unlimited') {
+  } else if (tariffType === 'unlimited') {
     conditions.push({ dataType: { in: [...DAILY_PRODUCT_DATA_TYPES] } });
-  } else if (filters?.tariffType === 'standard') {
+  } else if (tariffType === 'standard') {
     conditions.push({ dataType: 1 });
   }
   if (durationDays) conditions.push({ validityDays: durationDays });

@@ -9,8 +9,8 @@ import {
 export type { ProductSortField, ProductSortOrder } from '@shared/product-sorting';
 
 export interface ProductSortInput {
-  sortBy?: string;
-  sortOrder?: string;
+  sortBy?: unknown;
+  sortOrder?: unknown;
 }
 
 export interface ResolvedProductSort {

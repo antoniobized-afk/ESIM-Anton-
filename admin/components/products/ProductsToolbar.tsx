@@ -32,7 +32,7 @@ export default function ProductsToolbar({
           </Button>
           <Button onClick={onSync} disabled={syncing} className="shadow-lg hover:shadow-xl">
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Синхронизация...' : 'Синхронизировать с провайдером'}
+            {syncing ? 'Синхронизация...' : 'Синхронизировать'}
           </Button>
           <Button onClick={onExport} disabled={!canExport || exporting} variant="secondary">
             <FileSpreadsheet className="w-4 h-4" />

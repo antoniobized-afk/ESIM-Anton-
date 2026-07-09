@@ -55,7 +55,7 @@ interface ProductQueryFilterSource {
   appliedSearchQuery: string
   dataUnit: DataUnitFilter
   page: number
-  selectedCountry: string
+  selectedCountries: string[]
   showActiveOnly: boolean | null
   dataType: ProductDataTypeFilter
   sortBy: ProductSortField
@@ -77,7 +77,7 @@ const buildProductQueryFilters = (
         : Number(filters.dataType) as ProductDataType
 
   return {
-    country: filters.selectedCountry || undefined,
+    country: filters.selectedCountries.length > 0 ? filters.selectedCountries : undefined,
     isActive: filters.showActiveOnly ?? undefined,
     search: filters.appliedSearchQuery.trim() || undefined,
     dataType: selectedDataType,
@@ -148,7 +148,7 @@ export function useProducts() {
     appliedSearchQuery,
     dataUnit,
     page,
-    selectedCountry,
+    selectedCountries,
     showActiveOnly,
     dataType,
     sortBy,
@@ -161,7 +161,7 @@ export function useProducts() {
       appliedSearchQuery,
       dataUnit,
       page,
-      selectedCountry,
+      selectedCountries,
       showActiveOnly,
       dataType,
       sortBy,
@@ -173,7 +173,7 @@ export function useProducts() {
       appliedSearchQuery,
       dataUnit,
       page,
-      selectedCountry,
+      selectedCountries,
       showActiveOnly,
       dataType,
       sortBy,
@@ -187,7 +187,7 @@ export function useProducts() {
       appliedSearchQuery,
       dataUnit,
       page,
-      selectedCountry,
+      selectedCountries,
       showActiveOnly,
       dataType,
       sortBy,
@@ -199,7 +199,7 @@ export function useProducts() {
       appliedSearchQuery,
       dataUnit,
       page,
-      selectedCountry,
+      selectedCountries,
       showActiveOnly,
       dataType,
       sortBy,
@@ -347,7 +347,7 @@ export function useProducts() {
     filters.appliedSearchQuery,
     filters.dataUnit,
     filters.page,
-    filters.selectedCountry,
+    filters.selectedCountries,
     filters.showActiveOnly,
     filters.dataType,
     filters.sortBy,
@@ -381,7 +381,7 @@ export function useProducts() {
     error,
     editingProduct,
     isCreating,
-    selectedCountry: filters.selectedCountry,
+    selectedCountries: filters.selectedCountries,
     showActiveOnly: filters.showActiveOnly,
     dataType: filters.dataType,
     dataAmountQuery: filters.dataAmountQuery,
@@ -404,7 +404,7 @@ export function useProducts() {
     getProviderPriceUSD,
     getMarkupPercent: (providerPrice: number | string, ourPrice: number | string) =>
       getMarkupPercent(providerPrice, ourPrice, exchangeRate),
-    setSelectedCountry: filters.setSelectedCountry,
+    setSelectedCountries: filters.setSelectedCountries,
     setShowActiveOnly: filters.setShowActiveOnly,
     setDataType: filters.setDataType,
     setDataAmountQuery: filters.setDataAmountQuery,
