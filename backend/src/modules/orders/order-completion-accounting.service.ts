@@ -430,6 +430,8 @@ export class OrderCompletionAccountingService {
         data: { totalSpent: { increment: order.totalAmount } },
       });
 
+      await this.loyaltyService.updateUserLevel(order.userId, tx);
+
       if (manualPartnerPromoReward) {
         await this.partnerRewardsService.award({
           ownerId: manualPartnerPromoReward.ownerId,
@@ -463,14 +465,6 @@ export class OrderCompletionAccountingService {
 
     if (!accountingApplied) {
       return { applied: false };
-    }
-
-    try {
-      await this.loyaltyService.updateUserLevel(order.userId);
-    } catch (error: any) {
-      this.logger.error(
-        `Loyalty level recalculation failed for order ${order.id}: ${error.message}`,
-      );
     }
 
     return { applied: true };

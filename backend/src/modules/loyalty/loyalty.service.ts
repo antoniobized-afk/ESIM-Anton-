@@ -17,7 +17,7 @@ type ResolvedLoyaltyProgram = {
   progressToNextLevel: number;
 };
 
-type LoyaltyPrismaClient = Pick<PrismaService, 'user' | 'loyaltyLevel'>;
+export type LoyaltyPrismaClient = Pick<PrismaService, 'user' | 'loyaltyLevel'>;
 
 @Injectable()
 export class LoyaltyService {
@@ -45,7 +45,10 @@ export class LoyaltyService {
 
   private async getOrderedLevels(client: LoyaltyPrismaClient = this.prisma) {
     const levels = await client.loyaltyLevel.findMany({
-      orderBy: { minSpent: 'asc' },
+      orderBy: [
+        { minSpent: 'asc' },
+        { id: 'asc' },
+      ],
     });
 
     return levels.map((level) => this.toLevelDto(level));
@@ -145,6 +148,44 @@ export class LoyaltyService {
         data: { loyaltyLevelId: nextLevelId },
       });
     }
+  }
+
+  private async updateUserLevelTx(userId: string, client: LoyaltyPrismaClient) {
+    const [user, levels] = await Promise.all([
+      client.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          totalSpent: true,
+          loyaltyLevelId: true,
+        },
+      }),
+      this.getOrderedLevels(client),
+    ]);
+
+    if (!user) return null;
+
+    const resolved = this.resolveLevelBySpent(levels, Number(user.totalSpent));
+    const nextLevelId = resolved.currentLevel?.id ?? null;
+
+    if (nextLevelId !== user.loyaltyLevelId) {
+      return client.user.update({
+        where: { id: userId },
+        data: {
+          loyaltyLevelId: nextLevelId,
+        },
+        include: {
+          loyaltyLevel: true,
+        },
+      });
+    }
+
+    return client.user.findUnique({
+      where: { id: userId },
+      include: {
+        loyaltyLevel: true,
+      },
+    });
   }
 
   /**
@@ -259,42 +300,11 @@ export class LoyaltyService {
   /**
    * Обновить уровень пользователя на основе его трат
    */
-  async updateUserLevel(userId: string) {
-    const [user, levels] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          totalSpent: true,
-          loyaltyLevelId: true,
-        },
-      }),
-      this.getOrderedLevels(),
-    ]);
-
-    if (!user) return null;
-
-    const resolved = this.resolveLevelBySpent(levels, Number(user.totalSpent));
-    const nextLevelId = resolved.currentLevel?.id ?? null;
-
-    if (nextLevelId !== user.loyaltyLevelId) {
-      return this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          loyaltyLevelId: nextLevelId,
-        },
-        include: {
-          loyaltyLevel: true,
-        },
-      });
-    }
-
-    return this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        loyaltyLevel: true,
-      },
-    });
+  async updateUserLevel(
+    userId: string,
+    client: LoyaltyPrismaClient = this.prisma,
+  ) {
+    return this.updateUserLevelTx(userId, client);
   }
 
   async recalculateAllUserLevels() {

@@ -53,6 +53,9 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
         user: {
           update: prisma.user.update,
         },
+        loyaltyLevel: {
+          findMany: jest.fn().mockResolvedValue([]),
+        },
         transaction: {
           create: prisma.transaction.create,
         },
@@ -167,7 +170,37 @@ describe('OrderCompletionAccountingService', () => {
         referralLink: null,
       }),
     );
-    expect(loyaltyService.updateUserLevel).toHaveBeenCalledWith('user_1');
+    expect(loyaltyService.updateUserLevel).toHaveBeenCalledWith(
+      'user_1',
+      expect.objectContaining({
+        user: expect.objectContaining({
+          update: expect.any(Function),
+        }),
+      }),
+    );
+  });
+
+  it('при ошибке синхронизации loyalty level пишет FAILED для retry', async () => {
+    const { service, prisma, loyaltyService } = makeService();
+    loyaltyService.updateUserLevel.mockRejectedValueOnce(new Error('loyalty sync failed'));
+
+    const result = await service.attemptPurchaseAccounting('order_1', { force: true });
+
+    expect(result).toMatchObject({
+      orderId: 'order_1',
+      status: CompletionAccountingStatus.FAILED,
+      applied: false,
+      reason: 'failed',
+      error: 'loyalty sync failed',
+    });
+    expect(prisma.order.update).toHaveBeenCalledWith({
+      where: { id: 'order_1' },
+      data: expect.objectContaining({
+        completionAccountingStatus: CompletionAccountingStatus.FAILED,
+        completionAccountingLastError: 'loyalty sync failed',
+        completionAccountingNextRetryAt: expect.any(Date),
+      }),
+    });
   });
 
   it('не применяет accounting повторно, если marker уже выставлен', async () => {

@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { LoyaltyService } from './loyalty.service';
+import { LoyaltyService, type LoyaltyPrismaClient } from './loyalty.service';
 
 describe('LoyaltyService', () => {
   const prisma = {
@@ -125,6 +125,38 @@ describe('LoyaltyService', () => {
       data: { loyaltyLevelId: 'silver' },
       include: { loyaltyLevel: true },
     });
+  });
+
+  it('updateUserLevel использует переданный transaction client', async () => {
+    const txClient = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'user_tx',
+          totalSpent: 5100,
+          loyaltyLevelId: null,
+        }),
+        update: jest.fn().mockResolvedValue({
+          id: 'user_tx',
+          loyaltyLevelId: 'bronze',
+        }),
+      },
+      loyaltyLevel: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'starter', name: 'Старт', minSpent: 0, cashbackPercent: 1, discount: 0 },
+          { id: 'bronze', name: 'Бронза', minSpent: 5000, cashbackPercent: 3, discount: 2 },
+        ]),
+      },
+    } as unknown as LoyaltyPrismaClient;
+
+    await service.updateUserLevel('user_tx', txClient);
+
+    expect(txClient.user.update).toHaveBeenCalledWith({
+      where: { id: 'user_tx' },
+      data: { loyaltyLevelId: 'bronze' },
+      include: { loyaltyLevel: true },
+    });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    expect(prisma.loyaltyLevel.findMany).not.toHaveBeenCalled();
   });
 
   it('updateUserLevel не делает лишний update при совпадении', async () => {
