@@ -213,7 +213,7 @@
 ## Статус / Evidence
 
 - Status: `in_progress`
-- Current step: Step 06
+- Current step: Step 07
 - Last evidence:
   - Phase создана после сверки `docs/README.md`,
     `docs/phases/PHASE_AUTHORING_GUIDE.md`, phase roadmap, architecture wiki,
@@ -284,3 +284,60 @@
     `pnpm --filter backend test -- loyalty-level-presentation.spec.ts` green;
     `pnpm --filter admin build` green; `pnpm --filter admin lint` exit 0;
     `git diff --check` green.
+  - Step 06 закрыт 2026-07-09: admin `/users` переведен на URL-state
+    `page/search/sortBy/sortOrder`, `usersApi.getAll()` стал params-object
+    contract, `UserPicker` обновлен, compact list разбит на toolbar/cells/actions
+    components, а detail modal грузит admin-safe данные через
+    `GET /users/admin/:id`. Composite `Пользователь`/Telegram hints остались
+    display/search-only; sortable headers есть только для backend-owned stable
+    keys (`balance`, `totalSpent`, `createdAt`). Delete action по-прежнему
+    виден только `SUPER_ADMIN`. Verification: `pnpm --filter admin lint` green;
+    `pnpm --filter admin build` green с существующим Browserslist warning;
+    `git diff --check` green; Playwright CLI smoke с mocked admin-safe API
+    подтвердил invalid page normalization, search state, `Баланс` sort URL,
+    identity chips, referral+UTM buckets, loyalty badge, admin detail modal,
+    copy ID toast, отсутствие raw `providerSubject`/`metadata`/audit payload в
+    DOM и horizontal scroll на viewport `390px`.
+  - Step 06 UI follow-up 2026-07-09: исправлен layer/scroll bug в detail modal.
+    Общий `Modal` теперь portal-рендерится в `document.body`, блокирует body
+    scroll и фокусит dialog/input без прокрутки content к footer; user detail
+    modal получил непрозрачный `!bg-white`. Playwright smoke подтвердил
+    body-level overlay, viewport-sized backdrop, `bodyOverflow=hidden`,
+    `scrollTop=0` при открытии и корректный screenshot
+    `output/playwright/phase20-step06-users-modal-final.png`.
+  - Step 06 URL-state follow-up 2026-07-09: закрыт audit bug с двойным
+    `GET /users` при входе на `/users` и при канонизации дефолтов. Canonical URL
+    больше не эмитит `page=1`, `replaceParams` стабилен относительно
+    `searchParams` identity, а reset search/sort/page удаляет `page` вместо
+    записи default. Verification: `pnpm --filter admin lint` green;
+    `pnpm --filter admin build` green с существующим Browserslist warning;
+    `git diff --check` green; Playwright CLI smoke с mocked API подтвердил
+    один list request для `/users` и один list request для
+    `/users?page=1&sortBy=balance&sortOrder=desc`.
+  - Step 06 detail-modal follow-up 2026-07-09: закрыт audit bug с дублирующим
+    `usersApi.getById` request path в `UserDetailsModal`. `loadUser` стал
+    единственным fetch-owner для mount-effect и retry-кнопки; effect передает
+    cancel-guard, чтобы не писать state после unmount/userId switch.
+    Verification: `pnpm --filter admin lint` green; `pnpm --filter admin build`
+    green с существующим Browserslist warning; `git diff --check` green; `rg`
+    подтвердил один `usersApi.getById` call-site и отсутствие inline `run`.
+  - Step 06 shared-modal follow-up 2026-07-09: закрыт audit risk от перевода
+    общего `Modal` на body-level portal/scroll lock. Мертвый marker
+    `data-modal-close` снят; `rg` подтвердил отсутствие marker/старого
+    selector. Playwright CLI smoke с mocked API прошёл текущие consumers
+    `Modal`: product view/edit/bulk modals, promo form/stats, `ConfirmDialog`
+    через promo delete, referral form/stats, settings loyalty modal и users
+    detail modal. Для каждой модалки подтверждены body-level portal, viewport
+    overlay, body scroll lock/restore, `dialog.scrollTop=0`, focus trap,
+    Escape close и отсутствие `data-modal-close`. Verification:
+    `pnpm --filter admin lint` green; `pnpm --filter admin build` green с
+    существующим Browserslist warning; `git diff --check` green; screenshot
+    `output/playwright/phase20-modal-consumers-smoke.png`.
+  - Step 06 UserPicker/user-formatting follow-up 2026-07-09: закрыты
+    низкоприоритетные audit items по robustness и косметике users UI.
+    `UserPicker` теперь использует `setResults(data.data || [])`;
+    `getAdminUserHint` не подставляет `id.slice(0, 12)`, а `UserContactCell`
+    и `UserPicker` не рендерят пустой hint. Verification:
+    `pnpm --filter admin lint` green; `pnpm --filter admin build` green с
+    существующим Browserslist warning; `git diff --check` green; `rg`
+    подтвердил отсутствие старых patterns.

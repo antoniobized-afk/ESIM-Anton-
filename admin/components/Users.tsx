@@ -1,55 +1,148 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import {
+  DEFAULT_USER_SORT_FIELD,
+  getDefaultUserSortOrder,
+  isUserSortField,
+  normalizeUserSortField,
+  normalizeUserSortOrder,
+  type UserSortField,
+} from '@shared/user-sorting'
 import { usersApi } from '@/lib/api'
 import { getAdminRoleFromToken, isUnauthorizedError } from '@/lib/auth'
 import { getErrorMessage } from '@/lib/errors'
-import LoyaltyLevelBadge from '@/components/users/LoyaltyLevelBadge'
 import type {
   AdminRole,
   AdminUser,
-  AdminUserAttributionBucket,
   AdminUserDeleteBlocker,
+  UsersQueryParams,
 } from '@/lib/types'
 import Button from '@/components/ui/Button'
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 import Pagination from '@/components/ui/Pagination'
 import Spinner from '@/components/ui/Spinner'
-import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/Table'
+import { SortableHeader, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '@/components/ui/Table'
 import { useToast } from '@/components/ui/ToastProvider'
-import { Loader2, Trash2, Users as UsersIcon } from 'lucide-react'
+import { Users as UsersIcon } from 'lucide-react'
+import IdentityProvidersCell from '@/components/users/IdentityProvidersCell'
+import UserActionsCell from '@/components/users/UserActionsCell'
+import UserAttributionCell from '@/components/users/UserAttributionCell'
+import UserContactCell from '@/components/users/UserContactCell'
+import UserDetailsModal from '@/components/users/UserDetailsModal'
+import UsersToolbar from '@/components/users/UsersToolbar'
+import { UserBalanceCell, UserValueCell } from '@/components/users/UserValueCell'
+import { formatUserDate, getAdminUserDisplayName } from '@/components/users/user-formatting'
+
+const USERS_PAGE_SIZE = 20
+
+function normalizeSearchParam(value: string | null): string {
+  return value?.trim() ?? ''
+}
+
+function appendSortParams(params: URLSearchParams, sortBy: UserSortField, sortOrder: 'asc' | 'desc') {
+  const defaultOrder = getDefaultUserSortOrder(sortBy)
+
+  if (sortBy === DEFAULT_USER_SORT_FIELD && sortOrder === defaultOrder) return
+
+  params.set('sortBy', sortBy)
+  if (sortOrder !== defaultOrder) params.set('sortOrder', sortOrder)
+}
+
+function appendPageParam(params: URLSearchParams, page: number) {
+  if (page > 1) params.set('page', String(page))
+}
+
+function getUsersHref(pathname: string, params: URLSearchParams) {
+  const query = params.toString()
+  return query ? `${pathname}?${query}` : pathname
+}
 
 export default function Users() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const searchParamsRef = useRef(searchParams)
   const confirmDialog = useConfirmDialog()
   const toast = useToast()
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadedOnce, setLoadedOnce] = useState(false)
   const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
   const [adminRole, setAdminRole] = useState<AdminRole | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const appliedSearch = normalizeSearchParam(searchParams.get('search'))
+  const [searchDraft, setSearchDraft] = useState(appliedSearch)
 
   const rawPage = Number(searchParams.get('page') || '1')
   const page = Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1
+  const rawSortBy = searchParams.get('sortBy')
+  const sortBy = normalizeUserSortField(rawSortBy)
+  const rawSortOrder = searchParams.get('sortOrder')
+  const hasInvalidSortField = rawSortBy !== null && !isUserSortField(rawSortBy)
+  const sortOrder = hasInvalidSortField
+    ? getDefaultUserSortOrder(sortBy)
+    : normalizeUserSortOrder(rawSortOrder, sortBy)
   const canDeleteUsers = adminRole === 'SUPER_ADMIN'
+  searchParamsRef.current = searchParams
+
+  const replaceParams = useCallback((mutate: (params: URLSearchParams) => void) => {
+    const nextParams = new URLSearchParams(searchParamsRef.current.toString())
+    mutate(nextParams)
+    router.replace(getUsersHref(pathname, nextParams), { scroll: false })
+  }, [pathname, router])
 
   useEffect(() => {
     setAdminRole(getAdminRoleFromToken())
   }, [])
 
+  useEffect(() => {
+    setSearchDraft(appliedSearch)
+  }, [appliedSearch])
+
+  useEffect(() => {
+    const normalized = new URLSearchParams()
+    appendPageParam(normalized, page)
+    if (appliedSearch) normalized.set('search', appliedSearch)
+    appendSortParams(normalized, sortBy, sortOrder)
+
+    if (normalized.toString() !== searchParams.toString()) {
+      router.replace(getUsersHref(pathname, normalized), { scroll: false })
+    }
+  }, [appliedSearch, page, pathname, router, searchParams, sortBy, sortOrder])
+
   const loadUsers = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-      const response = await usersApi.getAll(page, 20)
-      
+
+      const params: UsersQueryParams = {
+        page,
+        limit: USERS_PAGE_SIZE,
+        sortBy,
+        sortOrder,
+      }
+      if (appliedSearch) params.search = appliedSearch
+
+      const response = await usersApi.getAll(params)
+
       if (response.data) {
+        const nextTotalPages = Math.max(1, response.data.meta?.totalPages || 1)
         setUsers(response.data.data || [])
-        setTotalPages(response.data.meta?.totalPages || 1)
+        setTotalPages(nextTotalPages)
+        setTotalCount(response.data.meta?.total || 0)
+        setLoadedOnce(true)
+
+        if (page > nextTotalPages) {
+          replaceParams((params) => {
+            params.delete('page')
+            appendPageParam(params, nextTotalPages)
+          })
+        }
       }
     } catch (error) {
       if (isUnauthorizedError(error)) return
@@ -58,58 +151,62 @@ export default function Users() {
     } finally {
       setLoading(false)
     }
-  }, [page])
+  }, [appliedSearch, page, replaceParams, sortBy, sortOrder])
 
   useEffect(() => {
     loadUsers()
   }, [loadUsers])
 
-  useEffect(() => {
-    const normalized = new URLSearchParams(searchParams.toString())
-    normalized.set('page', String(page))
-    if (normalized.toString() !== searchParams.toString()) {
-      router.replace(`${pathname}?${normalized.toString()}`)
-    }
-  }, [page, pathname, router, searchParams])
-
   const handlePageChange = (nextPage: number) => {
-    const nextParams = new URLSearchParams(searchParams.toString())
-    nextParams.set('page', String(nextPage))
-    router.replace(`${pathname}?${nextParams.toString()}`)
+    replaceParams((params) => {
+      params.delete('page')
+      appendPageParam(params, nextPage)
+    })
   }
 
-  const userDisplayName = (user: AdminUser) => {
-    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
-    return fullName || user.username || user.email || `#${user.id.slice(0, 8)}`
+  const handleSearchSubmit = () => {
+    const nextSearch = searchDraft.trim()
+    replaceParams((params) => {
+      if (nextSearch) params.set('search', nextSearch)
+      else params.delete('search')
+      params.delete('page')
+    })
   }
 
-  const identitySummary = (user: AdminUser) => {
-    const identities = user.identityProviders ?? []
-    if (identities.length === 0) return '—'
-    return identities.map((identity) => identity.label).join(', ')
+  const handleSearchClear = () => {
+    setSearchDraft('')
+    replaceParams((params) => {
+      params.delete('search')
+      params.delete('page')
+    })
   }
 
-  const attributionBucketText = (bucket: AdminUserAttributionBucket) => {
-    if (bucket.kind === 'referral') {
-      const parts = [
-        bucket.referralLinkCode ? `#${bucket.referralLinkCode}` : null,
-        bucket.referrer?.displayName ?? null,
-      ].filter(Boolean)
-      return parts.length > 0 ? `${bucket.label}: ${parts.join(' / ')}` : bucket.label
+  const handleSort = (field: UserSortField) => {
+    replaceParams((params) => {
+      const nextOrder = sortBy === field
+        ? sortOrder === 'asc' ? 'desc' : 'asc'
+        : getDefaultUserSortOrder(field)
+
+      params.delete('page')
+      if (field === DEFAULT_USER_SORT_FIELD && nextOrder === getDefaultUserSortOrder(field)) {
+        params.delete('sortBy')
+        params.delete('sortOrder')
+        return
+      }
+
+      params.set('sortBy', field)
+      if (nextOrder === getDefaultUserSortOrder(field)) params.delete('sortOrder')
+      else params.set('sortOrder', nextOrder)
+    })
+  }
+
+  const handleCopyUserId = async (userId: string) => {
+    try {
+      await navigator.clipboard.writeText(userId)
+      toast.success('ID скопирован')
+    } catch {
+      toast.error('Не удалось скопировать ID')
     }
-
-    if (bucket.kind === 'utm') {
-      const parts = [bucket.source, bucket.medium, bucket.campaign].filter(Boolean)
-      return parts.length > 0 ? `${bucket.label}: ${parts.join(' / ')}` : bucket.label
-    }
-
-    return bucket.label
-  }
-
-  const attributionSummary = (user: AdminUser) => {
-    const buckets = user.attributionSummary?.buckets ?? []
-    if (buckets.length === 0) return '—'
-    return buckets.map(attributionBucketText).join(' · ')
   }
 
   const deleteErrorMessage = (error: unknown) => {
@@ -125,7 +222,7 @@ export default function Users() {
     const confirmed = await confirmDialog({
       title: 'Удаление пользователя',
       description:
-        `Удалить ${userDisplayName(user)}? Если у пользователя есть заказы, платежи, карты, баланс или партнёрские связи, backend заблокирует удаление.`,
+        `Удалить ${getAdminUserDisplayName(user)}? Если у пользователя есть заказы, платежи, карты, баланс или партнёрские связи, backend заблокирует удаление.`,
       confirmLabel: 'Удалить',
       variant: 'destructive',
     })
@@ -133,17 +230,17 @@ export default function Users() {
 
     try {
       setDeletingUserId(user.id)
-      const { data } = await usersApi.delete(user.id)
-      setUsers((current) => current.filter((item) => item.id !== data.deletedUserId))
+      await usersApi.delete(user.id)
       toast.success('Пользователь удален')
-    } catch (e) {
-      toast.error(deleteErrorMessage(e))
+      await loadUsers()
+    } catch (error) {
+      toast.error(deleteErrorMessage(error))
     } finally {
       setDeletingUserId(null)
     }
   }
 
-  if (loading) {
+  if (loading && !loadedOnce) {
     return (
       <div className="glass-card p-8">
         <Spinner centered />
@@ -151,7 +248,7 @@ export default function Users() {
     )
   }
 
-  if (error) {
+  if (error && !loadedOnce) {
     return (
       <div className="glass-card glass-card--static p-8 text-center">
         <h2 className="text-2xl font-bold text-slate-900">Не удалось загрузить пользователей</h2>
@@ -164,18 +261,26 @@ export default function Users() {
   }
 
   return (
-    <div className="glass-card glass-card--static p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold">Пользователи</h2>
-        <Button onClick={loadUsers} variant="ghost" size="sm" className="px-0 text-blue-600 hover:bg-transparent hover:text-blue-700">
-          Обновить
-        </Button>
-      </div>
+    <div className="glass-card glass-card--static p-6" aria-busy={loading}>
+      <UsersToolbar
+        totalCount={totalCount}
+        searchValue={searchDraft}
+        onSearchValueChange={setSearchDraft}
+        onSearchSubmit={handleSearchSubmit}
+        onSearchClear={handleSearchClear}
+        onRefresh={loadUsers}
+      />
+
+      {error ? (
+        <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
 
       {users.length === 0 ? (
-        <div className="text-center py-12 text-slate-500">
-          <UsersIcon className="w-16 h-16 mx-auto mb-3 opacity-30" />
-          <p className="text-lg">Пока нет пользователей</p>
+        <div className="py-12 text-center text-slate-500">
+          <UsersIcon className="mx-auto mb-3 h-16 w-16 opacity-30" />
+          <p className="text-lg">{appliedSearch ? 'Пользователи не найдены' : 'Пока нет пользователей'}</p>
         </div>
       ) : (
         <>
@@ -183,76 +288,55 @@ export default function Users() {
             <Table>
               <TableHead>
                 <TableRow className="border-b border-slate-200">
-                  <TableHeaderCell>ID</TableHeaderCell>
-                  <TableHeaderCell>Имя</TableHeaderCell>
-                  <TableHeaderCell>Telegram</TableHeaderCell>
+                  <TableHeaderCell>Пользователь</TableHeaderCell>
                   <TableHeaderCell>Вход</TableHeaderCell>
                   <TableHeaderCell>Атрибуция</TableHeaderCell>
-                  <TableHeaderCell>Баланс</TableHeaderCell>
-                  <TableHeaderCell>Потрачено</TableHeaderCell>
-                  <TableHeaderCell>Уровень</TableHeaderCell>
-                  <TableHeaderCell>Дата</TableHeaderCell>
-                  {canDeleteUsers && <TableHeaderCell className="text-right">Действия</TableHeaderCell>}
+                  <SortableHeader active={sortBy === 'balance'} direction={sortOrder} onClick={() => handleSort('balance')}>
+                    Баланс
+                  </SortableHeader>
+                  <SortableHeader active={sortBy === 'totalSpent'} direction={sortOrder} onClick={() => handleSort('totalSpent')}>
+                    Ценность
+                  </SortableHeader>
+                  <SortableHeader active={sortBy === 'createdAt'} direction={sortOrder} onClick={() => handleSort('createdAt')}>
+                    Дата
+                  </SortableHeader>
+                  <TableHeaderCell className="text-right">Действия</TableHeaderCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {users.map((user) => (
                   <TableRow
                     key={user.id}
-                    className="border-b border-slate-100 hover:bg-white/50 transition-colors"
+                    className="border-b border-slate-100 transition-colors hover:bg-white/50"
                   >
-                    <TableCell className="font-mono text-sm">
-                      #{user.id.slice(0, 8)}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {user.firstName || user.username || 'Без имени'}
-                      {user.lastName && ` ${user.lastName}`}
-                    </TableCell>
-                    <TableCell className="text-blue-600">
-                      {user.username ? `@${user.username}` : user.telegramId}
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-700">
-                      {identitySummary(user)}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      <div className="text-slate-700">{attributionSummary(user)}</div>
+                    <TableCell>
+                      <UserContactCell user={user} onCopyId={handleCopyUserId} />
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm">
-                        <div>₽{Number(user.balance || 0).toLocaleString()}</div>
-                        <div className="text-green-600">
-                          +₽{Number(user.bonusBalance || 0).toLocaleString()} бонусов
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-bold">
-                      ₽{Number(user.totalSpent || 0).toLocaleString()}
+                      <IdentityProvidersCell providers={user.identityProviders} />
                     </TableCell>
                     <TableCell>
-                      <LoyaltyLevelBadge level={user.loyaltyLevel} />
+                      <UserAttributionCell buckets={user.attributionSummary.buckets} />
                     </TableCell>
-                    <TableCell className="text-sm text-slate-600">
-                      {new Date(user.createdAt).toLocaleDateString('ru-RU')}
+                    <TableCell>
+                      <UserBalanceCell user={user} />
                     </TableCell>
-                    {canDeleteUsers && (
-                      <TableCell className="text-right">
-                        <Button
-                          onClick={() => handleDeleteUser(user)}
-                          variant="ghost"
-                          size="sm"
-                          iconOnly
-                          aria-label="Удалить пользователя"
-                          disabled={Boolean(deletingUserId)}
-                          className="text-slate-500 hover:bg-red-50 hover:text-red-600"
-                        >
-                          {deletingUserId === user.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </TableCell>
-                    )}
+                    <TableCell>
+                      <UserValueCell user={user} />
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-slate-600">
+                      {formatUserDate(user.createdAt)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <UserActionsCell
+                        user={user}
+                        canDelete={canDeleteUsers}
+                        deleting={deletingUserId === user.id}
+                        deletingDisabled={Boolean(deletingUserId)}
+                        onOpenDetails={setSelectedUserId}
+                        onDelete={handleDeleteUser}
+                      />
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -262,6 +346,14 @@ export default function Users() {
           <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
         </>
       )}
+
+      {selectedUserId ? (
+        <UserDetailsModal
+          userId={selectedUserId}
+          onClose={() => setSelectedUserId(null)}
+          onCopyId={handleCopyUserId}
+        />
+      ) : null}
     </div>
   )
 }

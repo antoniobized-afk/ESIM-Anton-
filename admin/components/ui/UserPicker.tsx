@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { usersApi } from '@/lib/api'
 import type { AdminUser } from '@/lib/types'
+import { getAdminUserDisplayName, getAdminUserHint } from '@/components/users/user-formatting'
 import { Search, X } from 'lucide-react'
 
 interface UserPickerProps {
@@ -11,18 +12,6 @@ interface UserPickerProps {
   placeholder?: string
   disabled?: boolean
   className?: string
-}
-
-function displayName(u: AdminUser): string {
-  return u.firstName || u.username || u.email || u.phone || u.id.slice(0, 8)
-}
-
-function userHint(u: AdminUser): string {
-  const parts: string[] = []
-  if (u.email) parts.push(u.email)
-  if (u.phone) parts.push(u.phone)
-  if (u.username && u.firstName) parts.push(`@${u.username}`)
-  return parts.join(' · ') || u.id.slice(0, 12)
 }
 
 export default function UserPicker({
@@ -74,8 +63,8 @@ export default function UserPicker({
     debounceRef.current = setTimeout(async () => {
       setLoading(true)
       try {
-        const { data } = await usersApi.getAll(1, 10, q.trim())
-        setResults(data.data)
+        const { data } = await usersApi.getAll({ page: 1, limit: 10, search: q.trim() })
+        setResults(data.data || [])
         setOpen(true)
       } catch {
         setResults([])
@@ -114,13 +103,15 @@ export default function UserPicker({
 
   // Selected state
   if (selected) {
+    const selectedHint = getAdminUserHint(selected)
+
     return (
       <div
         className={`flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-white/80 text-sm ${className ?? ''}`}
       >
         <div className="flex-1 min-w-0">
-          <span className="font-medium text-slate-800">{displayName(selected)}</span>
-          <span className="ml-2 text-xs text-slate-400">{userHint(selected)}</span>
+          <span className="font-medium text-slate-800">{getAdminUserDisplayName(selected)}</span>
+          {selectedHint ? <span className="ml-2 text-xs text-slate-400">{selectedHint}</span> : null}
         </div>
         {!disabled && (
           <button
@@ -160,18 +151,22 @@ export default function UserPicker({
 
       {open && results.length > 0 && (
         <ul className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-          {results.map((u) => (
-            <li key={u.id}>
-              <button
-                type="button"
-                onClick={() => handleSelect(u)}
-                className="w-full px-3 py-2 text-left hover:bg-blue-50 transition-colors"
-              >
-                <div className="text-sm font-medium text-slate-800">{displayName(u)}</div>
-                <div className="text-xs text-slate-400 truncate">{userHint(u)}</div>
-              </button>
-            </li>
-          ))}
+          {results.map((u) => {
+            const hint = getAdminUserHint(u)
+
+            return (
+              <li key={u.id}>
+                <button
+                  type="button"
+                  onClick={() => handleSelect(u)}
+                  className="w-full px-3 py-2 text-left hover:bg-blue-50 transition-colors"
+                >
+                  <div className="text-sm font-medium text-slate-800">{getAdminUserDisplayName(u)}</div>
+                  {hint ? <div className="text-xs text-slate-400 truncate">{hint}</div> : null}
+                </button>
+              </li>
+            )
+          })}
         </ul>
       )}
 

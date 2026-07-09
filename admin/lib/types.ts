@@ -4,8 +4,10 @@ import type {
   ProductDataTypeValue,
 } from '@shared/product-data-type'
 import type { ProductSortField, ProductSortOrder } from '@shared/product-sorting'
+import type { UserSortField, UserSortOrder } from '@shared/user-sorting'
 
 export type { ProductSortField, ProductSortOrder } from '@shared/product-sorting'
+export type { UserSortField, UserSortOrder } from '@shared/user-sorting'
 
 export type NumericLike = number | string
 
@@ -326,6 +328,14 @@ export interface PaymentsQueryParams {
   type?: TransactionType
   page?: number
   limit?: number
+}
+
+export interface UsersQueryParams {
+  page?: number
+  limit?: number
+  search?: string
+  sortBy?: UserSortField
+  sortOrder?: UserSortOrder
 }
 
 export interface AnalyticsRangeParams {
