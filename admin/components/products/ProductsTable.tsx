@@ -1,6 +1,6 @@
 import type { AdminProduct, ProductSortField, ProductSortOrder } from '@/lib/types'
 import Button from '@/components/ui/Button'
-import { SortableHeader, Table, TableBody, TableHead, TableHeaderCell, TableRow } from '@/components/ui/Table'
+import { Table, TableBody, TableHead, TableHeaderCell, TableRow } from '@/components/ui/Table'
 import { Package } from 'lucide-react'
 import ProductsTableRow from './ProductsTableRow'
 
@@ -26,8 +26,8 @@ export default function ProductsTable(props: ProductsTableProps) {
   const { filteredProducts, selectedIds, exchangeRate, sortBy, sortOrder, error, onRetry, onSelectAll, onSelectOne, onView, onEdit, onToggleActive, onSort, getProviderPriceUSD, getMarkupPercent } = props
 
   return (
-    <div className="glass-card glass-card--static p-6">
-      <h2 className="text-2xl font-bold mb-6">Продукты (тарифы eSIM)</h2>
+    <div className="glass-card glass-card--static p-4">
+      <h2 className="mb-4 text-xl font-bold text-slate-800">Продукты (тарифы eSIM)</h2>
       {error ? (
         <div className="glass-card p-6 bg-red-50 border-red-200">
           <p className="text-red-700 font-medium">{error}</p>
@@ -41,53 +41,82 @@ export default function ProductsTable(props: ProductsTableProps) {
           <p className="text-lg">Нет продуктов по выбранным фильтрам</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <Table>
+        <div className="overflow-x-auto overflow-y-visible">
+          <Table className="min-w-max table-auto">
             <TableHead>
-              <TableRow className="border-b-2 border-slate-300 bg-slate-50">
-                <TableHeaderCell className="w-10 px-2">
+              <TableRow className="border-b border-slate-200 bg-white">
+                <TableHeaderCell className="px-1.5 py-2 align-middle">
                   <input
                     type="checkbox"
                     checked={selectedIds.size === filteredProducts.length && filteredProducts.length > 0}
                     onChange={onSelectAll}
+                    aria-label="Выбрать все тарифы на странице"
                     className="w-4 h-4 rounded"
                   />
                 </TableHeaderCell>
-                <SortableHeader active={sortBy === 'name'} direction={sortOrder} onClick={() => onSort('name')} className="px-2">
-                  Name
-                </SortableHeader>
-                <SortableHeader active={sortBy === 'providerPrice'} direction={sortOrder} onClick={() => onSort('providerPrice')} className="px-2">
-                  Цена поставщика
-                </SortableHeader>
-                <SortableHeader active={sortBy === 'dataAmountMb'} direction={sortOrder} onClick={() => onSort('dataAmountMb')} className="px-2">
-                  Data
-                </SortableHeader>
-                <SortableHeader active={sortBy === 'validityDays'} direction={sortOrder} onClick={() => onSort('validityDays')} className="px-2">
-                  Duration
-                </SortableHeader>
-                <SortableHeader active={sortBy === 'providerCostPerGb'} direction={sortOrder} onClick={() => onSort('providerCostPerGb')} className="px-2">
-                  Себестоимость / GB
-                </SortableHeader>
-                <SortableHeader active={sortBy === 'ourPrice'} direction={sortOrder} onClick={() => onSort('ourPrice')} className="px-2">
-                  Наша цена
-                </SortableHeader>
-                <SortableHeader active={sortBy === 'markupRatio'} direction={sortOrder} onClick={() => onSort('markupRatio')} className="px-2">
-                  Наценка
-                </SortableHeader>
-                <TableHeaderCell className="px-2">Скорость</TableHeaderCell>
-                <SortableHeader active={sortBy === 'country'} direction={sortOrder} onClick={() => onSort('country')} className="px-2">
-                  Код
-                </SortableHeader>
-                <SortableHeader active={sortBy === 'dataType'} direction={sortOrder} onClick={() => onSort('dataType')} className="px-2">
-                  Тип
-                </SortableHeader>
-                <SortableHeader active={sortBy === 'badge'} direction={sortOrder} onClick={() => onSort('badge')} className="px-2">
-                  Бейдж
-                </SortableHeader>
-                <SortableHeader active={sortBy === 'isActive'} direction={sortOrder} onClick={() => onSort('isActive')} className="px-2">
-                  Статус
-                </SortableHeader>
-                <TableHeaderCell className="px-2" />
+                <TableHeaderCell className="px-1 py-2 align-middle" aria-label="Иконка локации" />
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-center">
+                  <span className="text-xs font-medium leading-none text-slate-900">Тип</span>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-center">
+                  <CompactSortButton field="dataType" activeField={sortBy} direction={sortOrder} onSort={onSort}>
+                    План
+                  </CompactSortButton>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle">
+                  <span className="text-xs font-medium leading-none text-slate-900">Локация</span>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle">
+                  <CompactSortButton field="name" activeField={sortBy} direction={sortOrder} onSort={onSort}>
+                    Название
+                  </CompactSortButton>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-right">
+                  <CompactSortButton field="providerPrice" activeField={sortBy} direction={sortOrder} onSort={onSort}>
+                    Поставщик
+                  </CompactSortButton>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-right">
+                  <CompactSortButton field="ourPrice" activeField={sortBy} direction={sortOrder} onSort={onSort}>
+                    Наша цена
+                  </CompactSortButton>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-center">
+                  <CompactSortButton field="dataAmountMb" activeField={sortBy} direction={sortOrder} onSort={onSort}>
+                    ГБ
+                  </CompactSortButton>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-center">
+                  <CompactSortButton field="validityDays" activeField={sortBy} direction={sortOrder} onSort={onSort}>
+                    Дни
+                  </CompactSortButton>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-center">
+                  <CompactSortButton field="providerCostPerGb" activeField={sortBy} direction={sortOrder} onSort={onSort}>
+                    ₽/ГБ
+                  </CompactSortButton>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-center text-xs font-medium text-slate-900">
+                  Скорость
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-center">
+                  <CompactSortButton field="badge" activeField={sortBy} direction={sortOrder} onSort={onSort}>
+                    Бейдж
+                  </CompactSortButton>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-center text-xs font-medium text-slate-900">
+                  Top
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-center">
+                  <CompactSortButton field="isActive" activeField={sortBy} direction={sortOrder} onSort={onSort}>
+                    Статус
+                  </CompactSortButton>
+                </TableHeaderCell>
+                <TableHeaderCell className="px-1.5 py-2 align-middle text-center text-xs font-medium text-slate-900">
+                  <CompactSortButton field="country" activeField={sortBy} direction={sortOrder} onSort={onSort}>
+                    Код
+                  </CompactSortButton>
+                </TableHeaderCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -110,5 +139,33 @@ export default function ProductsTable(props: ProductsTableProps) {
         </div>
       )}
     </div>
+  )
+}
+
+interface CompactSortButtonProps {
+  field: ProductSortField
+  activeField: ProductSortField
+  direction: ProductSortOrder
+  onSort: (field: ProductSortField) => void
+  children: string
+}
+
+function CompactSortButton(props: CompactSortButtonProps) {
+  const { field, activeField, direction, onSort, children } = props
+  const active = activeField === field
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(field)}
+      title={active ? `Сортировка: ${children}, ${direction === 'asc' ? 'по возрастанию' : 'по убыванию'}` : `Сортировать по колонке "${children}"`}
+      aria-label={active ? `Сортировка по колонке ${children}, ${direction === 'asc' ? 'по возрастанию' : 'по убыванию'}` : `Сортировать по колонке ${children}`}
+      className={`inline-flex items-center gap-1 whitespace-nowrap text-left text-xs font-medium leading-none transition-colors hover:text-blue-600 ${active ? 'text-blue-600' : 'text-slate-900'}`}
+    >
+      <span>{children}</span>
+      <span className={active ? 'text-blue-600' : 'text-slate-300'} aria-hidden="true">
+        {active ? (direction === 'asc' ? '↑' : '↓') : ''}
+      </span>
+    </button>
   )
 }
