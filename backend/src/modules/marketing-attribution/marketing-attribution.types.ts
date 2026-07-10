@@ -6,8 +6,16 @@ export const MARKETING_CAMPAIGN_CODE_MAX_LENGTH = 32;
 export const MARKETING_CAMPAIGN_CODE_REGEX = new RegExp(
   `^[A-Za-z0-9_-]{${MARKETING_CAMPAIGN_CODE_MIN_LENGTH},${MARKETING_CAMPAIGN_CODE_MAX_LENGTH}}$`,
 );
+export const MARKETING_SOURCE_EVENT_KEY_REGEX = /^[A-Za-z0-9:_-]{1,180}$/;
 
 export type MarketingAttributionTransaction = Prisma.TransactionClient;
+
+export type VerifiedTelegramMiniAppLaunch = {
+  userId: string;
+  telegramId: string;
+  startParam?: string;
+  sourceEventKey: string;
+};
 
 export type MarketingCampaignActor = {
   id: string;

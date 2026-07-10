@@ -1,7 +1,7 @@
 import { IsOptional, IsString, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { MARKETING_SOURCE_EVENT_KEY_REGEX } from '../marketing-attribution.types';
 
 const TELEGRAM_ID_REGEX = /^\d+$/;
-const SOURCE_EVENT_KEY_REGEX = /^[A-Za-z0-9:_-]{1,180}$/;
 
 export class CaptureMarketingTelegramBotTouchDto {
   @IsString()
@@ -17,8 +17,11 @@ export class CaptureMarketingTelegramBotTouchDto {
   @MaxLength(64)
   startParam?: string;
 
-  @ValidateIf((dto: CaptureMarketingTelegramBotTouchDto) => dto.startParam?.startsWith('ma_'))
+  @ValidateIf(
+    (dto: CaptureMarketingTelegramBotTouchDto) =>
+      typeof dto.startParam === 'string' && dto.startParam.startsWith('ma_'),
+  )
   @IsString()
-  @Matches(SOURCE_EVENT_KEY_REGEX)
+  @Matches(MARKETING_SOURCE_EVENT_KEY_REGEX)
   sourceEventKey?: string;
 }

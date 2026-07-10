@@ -198,11 +198,16 @@ describe('MarketingAttributionLifecycleService', () => {
     };
     tx.userMarketingAttribution.findUnique
       .mockReset()
-      .mockResolvedValueOnce(state)
+      .mockResolvedValueOnce({ id: state.id, registrationEligibleAt: new Date('2026-07-09T09:00:00.000Z') })
       .mockResolvedValueOnce(stateAfterCurrentTouch)
       .mockResolvedValueOnce(stateAfterCurrentTouch);
 
-    await service.finalizeRegistrationAttribution(tx as unknown as MarketingAttributionTransaction, 'user_1');
+    await expect(
+      service.finalizeRegistrationAttributionForNewUser(
+        tx as unknown as MarketingAttributionTransaction,
+        'user_1',
+      ),
+    ).resolves.toBe(true);
 
     const lockSql = tx.$queryRaw.mock.calls[0][0].join('');
     expect(lockSql).toContain('FROM "user_marketing_attribution"');

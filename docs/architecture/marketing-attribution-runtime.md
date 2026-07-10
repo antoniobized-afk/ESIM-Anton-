@@ -24,7 +24,10 @@ campaign audit, attribution read models и export.
 - `admin`, `client` и `bot` — клиенты backend API, а не владельцы attribution
   business logic;
 - Phase 19 резервирует `TelegramBroadcastCampaign` для outbound-рассылок.
-  В marketing attribution допустимо только имя `MarketingCampaign`.
+  В marketing attribution допустимо только имя `MarketingCampaign`;
+- поведенческая веб-аналитика (pageviews, сессии, воронки) принадлежит
+  внешнему счётчику (Яндекс.Метрика); контур хранит только attribution-факты
+  для Telegram-каналов, регистраций, заказов и CPA.
 
 Dependency direction односторонний: `auth`, `users` и `orders` вызывают
 exported marketing owner. Marketing module не импортирует их модули обратно и
@@ -175,6 +178,21 @@ Bot flow принимает `ma_` раньше решения find-or-create и 
 исключительно из server-validated `initData`: HMAC и freshness `auth_date`
 проверяются до write. Значения из `initDataUnsafe`, URL query или client state
 не являются source of truth.
+
+После успешного Mini App login auth передаёт marketing owner только verified
+launch intent: canonical `userId`, Telegram provider subject, bounded
+`start_param` и opaque source-event key. Marketing owner durable upsert-ит
+intent по source-event key; raw `initData`, Telegram hash и JWT в нём не
+хранятся. Для нового Mini App account intent создаётся в той же transaction,
+что `UserIdentity` и registration eligibility. Existing account создаёт intent
+только для `ma_` launch; обычный повторный Mini App login без campaign не
+создаёт marketing write. Auth не ждёт capture transaction: cron — единственный
+consumer pending/failed intent, захватывает его lease через compare-and-set и
+обрабатывает с bounded backoff. Успешная transaction создаёт touch и
+финализирует registration snapshot, после чего intent удаляется; terminal
+identity/input/idempotency conflict помечается `REJECTED` без бесконечного
+retry и хранится семь дней только для диагностики. Операционный intent не
+является историческим фактом и также удаляется вместе с removable user.
 
 `start` и `startapp` — независимые event domains и имеют разные idempotency
 keys; один flow не является fallback-дублем другого.

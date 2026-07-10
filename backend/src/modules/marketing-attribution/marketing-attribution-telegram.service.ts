@@ -7,14 +7,8 @@ import { MarketingAttributionLifecycleService } from './marketing-attribution-li
 import {
   MARKETING_CAMPAIGN_CODE_REGEX,
   MarketingAttributionTransaction,
+  VerifiedTelegramMiniAppLaunch,
 } from './marketing-attribution.types';
-
-type VerifiedTelegramMiniAppLaunch = {
-  userId: string;
-  telegramId: string;
-  startParam?: string;
-  sourceEventKey: string;
-};
 
 type TelegramLaunchCapture = {
   userId: string;

@@ -4,6 +4,7 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
 import {
   MARKETING_CAMPAIGN_CODE_REGEX,
+  MARKETING_SOURCE_EVENT_KEY_REGEX,
   MarketingAttributionTransaction,
   TrustedMarketingTouchInput,
 } from './marketing-attribution.types';
@@ -171,7 +172,7 @@ export class MarketingAttributionCaptureService {
     if (!Object.values(MarketingTouchChannel).includes(input.channel)) {
       throw new BadRequestException('Некорректный канал маркетингового касания');
     }
-    if (!/^[A-Za-z0-9:_-]{1,180}$/.test(input.sourceEventKey)) {
+    if (!MARKETING_SOURCE_EVENT_KEY_REGEX.test(input.sourceEventKey)) {
       throw new BadRequestException('Некорректный ключ идемпотентности маркетингового касания');
     }
     if (input.userId !== undefined && (!hasUser || input.userId !== input.userId.trim())) {

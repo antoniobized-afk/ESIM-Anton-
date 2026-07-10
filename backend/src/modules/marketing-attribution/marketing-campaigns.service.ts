@@ -188,13 +188,6 @@ export class MarketingCampaignsService {
     });
   }
 
-  async findActiveCampaignByCode(shortCode: string) {
-    const normalizedCode = this.normalizeShortCode(shortCode);
-    return this.prisma.marketingCampaign.findFirst({
-      where: { shortCode: normalizedCode, isActive: true },
-    });
-  }
-
   private campaignInclude() {
     return {
       referralLink: {
@@ -305,14 +298,6 @@ export class MarketingCampaignsService {
     }
 
     return `${resolved.pathname}${resolved.search}${resolved.hash}`;
-  }
-
-  private normalizeShortCode(value: string) {
-    const code = value.trim();
-    if (!MARKETING_CAMPAIGN_CODE_REGEX.test(code)) {
-      throw new BadRequestException('Некорректный код маркетинговой кампании');
-    }
-    return code;
   }
 
   private normalizeReferralLinkId(value: string | null | undefined) {

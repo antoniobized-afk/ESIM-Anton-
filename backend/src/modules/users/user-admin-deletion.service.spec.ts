@@ -42,17 +42,18 @@ function makeService(user = baseUser) {
     notification: {
       deleteMany: jest.fn().mockResolvedValue({ count: 3 }),
     },
-    marketingTouch: {
-      updateMany: jest.fn().mockResolvedValue({ count: 4 }),
-    },
-    userMarketingAttribution: {
-      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-    },
+  };
+  const marketingAttributionLifecycle = {
+    anonymizeUserMarketingData: jest.fn().mockResolvedValue({
+      anonymizedMarketingTouchCount: 4,
+      unlinkedMarketingAttributionCount: 1,
+    }),
   };
 
   return {
     prisma,
-    service: new UserAdminDeletionService(prisma as any),
+    marketingAttributionLifecycle,
+    service: new UserAdminDeletionService(prisma as any, marketingAttributionLifecycle as any),
   };
 }
 
@@ -88,7 +89,7 @@ describe('UserAdminDeletionService', () => {
   });
 
   it('удаляет пустого пользователя и его хвосты', async () => {
-    const { service, prisma } = makeService();
+    const { service, prisma, marketingAttributionLifecycle } = makeService();
 
     const result = await service.deleteUser('user_1');
 
@@ -107,14 +108,10 @@ describe('UserAdminDeletionService', () => {
     expect(prisma.userIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user_1' } });
     expect(prisma.pushSubscription.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user_1' } });
     expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user_1' } });
-    expect(prisma.marketingTouch.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'user_1' },
-      data: { userId: null, visitorKeyHash: null },
-    });
-    expect(prisma.userMarketingAttribution.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'user_1' },
-      data: { userId: null },
-    });
+    expect(marketingAttributionLifecycle.anonymizeUserMarketingData).toHaveBeenCalledWith(
+      prisma,
+      'user_1',
+    );
     expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: 'user_1' } });
     expect(result).toEqual({
       success: true,

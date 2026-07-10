@@ -138,5 +138,7 @@ Phase 19 не является dependency: у неё только naming/semanti
 
 - Status: `in_progress`
 - Current step: Step 04
-- Last evidence: Step 04 code и automated gates completed; manual bot/Mini App
-  smoke на configured runtime остаётся для closure
+- Last evidence: Step 04 добавил durable Mini App capture intent с retry без
+  отказа auth; full backend 64 suites / 544 tests и Nest build зелёные. Manual
+  bot/Mini App smoke на configured runtime и remaining bot reliability audit
+  остаются для closure

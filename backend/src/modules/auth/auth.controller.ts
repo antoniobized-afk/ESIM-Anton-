@@ -27,7 +27,7 @@ import { EmailCodeService } from './email-code.service';
 import { normalizeRelativeReturnTo } from './identity/auth-redirect-normalizer';
 import { AuthIdentityManagementService } from './identity-management/auth-identity-management.service';
 import { OAuthService } from './oauth.service';
-import { MarketingAttributionTelegramService } from '../marketing-attribution/marketing-attribution-telegram.service';
+import { MarketingAttributionMiniAppCaptureService } from '../marketing-attribution/marketing-attribution-mini-app-capture.service';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -40,7 +40,7 @@ export class AuthController {
     private readonly oauthService: OAuthService,
     private readonly identityManagementService: AuthIdentityManagementService,
     private readonly callbackUrlService: AuthCallbackUrlService,
-    private readonly telegramAttribution: MarketingAttributionTelegramService,
+    private readonly miniAppCapture: MarketingAttributionMiniAppCaptureService,
   ) {}
 
   // ─── Admin ───────────────────────────────────────────────────
@@ -224,12 +224,20 @@ export class AuthController {
     if (!dto.initData) throw new BadRequestException('initData required');
     const profile = this.oauthService.verifyTelegramWebAppInitData(dto.initData);
     const login = await this.authService.loginWithOAuth(profile);
-    await this.telegramAttribution.captureMiniAppTouch({
-      userId: login.userId,
-      telegramId: profile.providerId,
-      startParam: profile.telegramWebAppStartParam,
-      sourceEventKey: profile.telegramWebAppEventKey!,
-    });
+    if (profile.telegramWebAppStartParam?.startsWith('ma_')) {
+      try {
+        await this.miniAppCapture.enqueueVerifiedMiniAppLaunch({
+          userId: login.userId,
+          telegramId: profile.providerId,
+          startParam: profile.telegramWebAppStartParam,
+          sourceEventKey: profile.telegramWebAppEventKey!,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Mini App marketing intent enqueue failed for ${login.userId}: ${this.authErrorMessage(error)}`,
+        );
+      }
+    }
     return login;
   }
 

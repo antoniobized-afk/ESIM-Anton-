@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { MarketingAttributionLifecycleService } from '../marketing-attribution/marketing-attribution-lifecycle.service';
 
 const USER_DELETE_SELECT = {
   id: true,
@@ -58,7 +59,10 @@ const COUNT_BLOCKERS: Array<[CountKey, string, string]> = [
 
 @Injectable()
 export class UserAdminDeletionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly marketingAttributionLifecycle: MarketingAttributionLifecycleService,
+  ) {}
 
   async deleteUser(userId: string): Promise<DeleteResult> {
     return this.prisma.$transaction(async (tx) => {
@@ -93,14 +97,8 @@ export class UserAdminDeletionService {
       const deletedIdentities = await tx.userIdentity.deleteMany({ where: { userId } });
       const deletedPushSubscriptions = await tx.pushSubscription.deleteMany({ where: { userId } });
       const deletedNotifications = await tx.notification.deleteMany({ where: { userId } });
-      const anonymizedMarketingTouches = await tx.marketingTouch.updateMany({
-        where: { userId },
-        data: { userId: null, visitorKeyHash: null },
-      });
-      const unlinkedMarketingAttribution = await tx.userMarketingAttribution.updateMany({
-        where: { userId },
-        data: { userId: null },
-      });
+      const { anonymizedMarketingTouchCount, unlinkedMarketingAttributionCount } =
+        await this.marketingAttributionLifecycle.anonymizeUserMarketingData(tx, userId);
 
       await tx.user.delete({ where: { id: userId } });
 
@@ -111,8 +109,8 @@ export class UserAdminDeletionService {
         deletedIdentityAuditCount: deletedIdentityAudits.count,
         deletedPushSubscriptionCount: deletedPushSubscriptions.count,
         deletedNotificationCount: deletedNotifications.count,
-        anonymizedMarketingTouchCount: anonymizedMarketingTouches.count,
-        unlinkedMarketingAttributionCount: unlinkedMarketingAttribution.count,
+        anonymizedMarketingTouchCount,
+        unlinkedMarketingAttributionCount,
       };
     });
   }

@@ -5,6 +5,7 @@ import { MarketingAttributionWebController } from './marketing-attribution-web.c
 import { MarketingAttributionWebService } from './marketing-attribution-web.service';
 import { MarketingAttributionTelegramController } from './marketing-attribution-telegram.controller';
 import { MarketingAttributionTelegramService } from './marketing-attribution-telegram.service';
+import { MarketingAttributionMiniAppCaptureService } from './marketing-attribution-mini-app-capture.service';
 import { MarketingCampaignsController } from './marketing-campaigns.controller';
 import { MarketingCampaignsService } from './marketing-campaigns.service';
 
@@ -20,6 +21,7 @@ import { MarketingCampaignsService } from './marketing-campaigns.service';
     MarketingAttributionCaptureService,
     MarketingAttributionWebService,
     MarketingAttributionTelegramService,
+    MarketingAttributionMiniAppCaptureService,
   ],
   exports: [
     MarketingCampaignsService,
@@ -27,6 +29,7 @@ import { MarketingCampaignsService } from './marketing-campaigns.service';
     MarketingAttributionCaptureService,
     MarketingAttributionWebService,
     MarketingAttributionTelegramService,
+    MarketingAttributionMiniAppCaptureService,
   ],
 })
 export class MarketingAttributionModule {}

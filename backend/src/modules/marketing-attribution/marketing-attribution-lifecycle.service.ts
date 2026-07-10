@@ -113,12 +113,6 @@ export class MarketingAttributionLifecycleService {
     };
   }
 
-  async finalizeRegistrationAttribution(tx: MarketingAttributionTransaction, userId: string) {
-    await this.ensureRegistrationState(tx, userId);
-
-    return this.finalizeRegistrationSnapshot(tx, userId);
-  }
-
   async finalizeRegistrationAttributionForNewUser(
     tx: MarketingAttributionTransaction,
     userId: string,
@@ -172,6 +166,22 @@ export class MarketingAttributionLifecycleService {
     });
 
     return this.loadUserState(tx, userId);
+  }
+
+  async anonymizeUserMarketingData(tx: MarketingAttributionTransaction, userId: string) {
+    const anonymizedMarketingTouches = await tx.marketingTouch.updateMany({
+      where: { userId },
+      data: { userId: null, visitorKeyHash: null },
+    });
+    const unlinkedMarketingAttribution = await tx.userMarketingAttribution.updateMany({
+      where: { userId },
+      data: { userId: null },
+    });
+
+    return {
+      anonymizedMarketingTouchCount: anonymizedMarketingTouches.count,
+      unlinkedMarketingAttributionCount: unlinkedMarketingAttribution.count,
+    };
   }
 
   async createOrderSnapshot(

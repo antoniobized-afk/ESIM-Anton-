@@ -7,6 +7,8 @@ import {
 import { AuthIdentityProvider, Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { MarketingAttributionLifecycleService } from '@/modules/marketing-attribution/marketing-attribution-lifecycle.service';
+import { MarketingAttributionMiniAppCaptureService } from '@/modules/marketing-attribution/marketing-attribution-mini-app-capture.service';
+import { VerifiedTelegramMiniAppLaunch } from '@/modules/marketing-attribution/marketing-attribution.types';
 import { OAuthProfile } from '../oauth.service';
 import {
   normalizeEmail,
@@ -36,6 +38,8 @@ const BOT_USER_INCLUDE = {
   loyaltyLevel: true,
 } satisfies Prisma.UserInclude;
 
+type NewMiniAppLaunch = Omit<VerifiedTelegramMiniAppLaunch, 'userId'>;
+
 @Injectable()
 export class AuthIdentityResolverService {
   constructor(
@@ -43,6 +47,7 @@ export class AuthIdentityResolverService {
     private readonly profileMapper: OAuthIdentityProfileMapper,
     private readonly auditService: AuthIdentityAuditService,
     private readonly marketingLifecycle: MarketingAttributionLifecycleService,
+    private readonly miniAppCapture: MarketingAttributionMiniAppCaptureService,
   ) {}
 
   async resolveEmailLogin(email: string): Promise<AuthIdentityLoginResult> {
@@ -62,6 +67,7 @@ export class AuthIdentityResolverService {
 
   async resolveOAuthLogin(profile: OAuthProfile): Promise<AuthIdentityLoginResult> {
     const input = this.profileMapper.map(profile);
+    const miniAppLaunch = this.newMiniAppLaunch(profile, input);
     const existingIdentity = await this.findIdentityLogin(input);
     if (existingIdentity) return existingIdentity;
 
@@ -75,7 +81,7 @@ export class AuthIdentityResolverService {
     }
 
     await this.assertNoOAuthEmailCollision(input);
-    return this.createUserWithIdentity(input, 'login_new_oauth_user');
+    return this.createUserWithIdentity(input, 'login_new_oauth_user', miniAppLaunch);
   }
 
   async resolveTelegramBotUser(input: TelegramBotIdentityInput) {
@@ -343,6 +349,7 @@ export class AuthIdentityResolverService {
   private async createUserWithIdentity(
     input: AuthIdentityInput,
     reason: string,
+    miniAppLaunch?: NewMiniAppLaunch,
   ): Promise<AuthIdentityLoginResult> {
     const user = await this.prisma.$transaction(async (tx) => {
       const createdUser = await tx.user.create({
@@ -360,6 +367,12 @@ export class AuthIdentityResolverService {
         input,
         reason,
       });
+      if (miniAppLaunch) {
+        await this.miniAppCapture.enqueueVerifiedMiniAppLaunchInTransaction(tx, {
+          ...miniAppLaunch,
+          userId: createdUser.id,
+        });
+      }
       return createdUser;
     });
 
@@ -460,6 +473,22 @@ export class AuthIdentityResolverService {
       lastName: input.lastName,
       username: input.username,
       telegramId: input.telegramId,
+    };
+  }
+
+  private newMiniAppLaunch(
+    profile: OAuthProfile,
+    input: AuthIdentityInput,
+  ): NewMiniAppLaunch | undefined {
+    if (!profile.telegramWebAppEventKey) return undefined;
+    if (input.provider !== AuthIdentityProvider.TELEGRAM || input.telegramId === undefined) {
+      throw new UnauthorizedException('Mini App launch должен содержать Telegram identity');
+    }
+
+    return {
+      telegramId: input.telegramId.toString(),
+      startParam: profile.telegramWebAppStartParam,
+      sourceEventKey: profile.telegramWebAppEventKey,
     };
   }
 

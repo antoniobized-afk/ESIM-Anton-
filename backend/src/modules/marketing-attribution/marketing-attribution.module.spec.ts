@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { MarketingAttributionCaptureService } from './marketing-attribution-capture.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
 import { MarketingAttributionTelegramService } from './marketing-attribution-telegram.service';
+import { MarketingAttributionMiniAppCaptureService } from './marketing-attribution-mini-app-capture.service';
 import { MarketingAttributionWebService } from './marketing-attribution-web.service';
 import { MarketingAttributionModule } from './marketing-attribution.module';
 import { MarketingCampaignsService } from './marketing-campaigns.service';
@@ -20,6 +21,7 @@ describe('MarketingAttributionModule graph', () => {
         MarketingAttributionLifecycleService,
         MarketingAttributionWebService,
         MarketingAttributionTelegramService,
+        MarketingAttributionMiniAppCaptureService,
       ]),
     );
     expect(exports).toEqual(
@@ -29,6 +31,7 @@ describe('MarketingAttributionModule graph', () => {
         MarketingAttributionLifecycleService,
         MarketingAttributionWebService,
         MarketingAttributionTelegramService,
+        MarketingAttributionMiniAppCaptureService,
       ]),
     );
   });

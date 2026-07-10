@@ -7,6 +7,7 @@ import {
 import { AuthIdentityAuditService } from './auth-identity-audit.service';
 import { AuthIdentityResolverService } from './auth-identity-resolver.service';
 import { OAuthIdentityProfileMapper } from './oauth-identity-profile.mapper';
+import { MarketingAttributionMiniAppCaptureService } from '@/modules/marketing-attribution/marketing-attribution-mini-app-capture.service';
 
 function loginUser(overrides: Record<string, unknown> = {}) {
   return {
@@ -38,15 +39,20 @@ function makeService() {
   const marketingLifecycle = {
     initializeRegistrationAttributionForNewUser: jest.fn().mockResolvedValue({ id: 'state_1' }),
   };
+  const miniAppCapture = {
+    enqueueVerifiedMiniAppLaunchInTransaction: jest.fn().mockResolvedValue({ id: 'intent_1' }),
+  };
 
   return {
     prisma,
     marketingLifecycle,
+    miniAppCapture,
     service: new AuthIdentityResolverService(
       prisma as any,
       new OAuthIdentityProfileMapper(),
       new AuthIdentityAuditService(),
       marketingLifecycle as any,
+      miniAppCapture as unknown as MarketingAttributionMiniAppCaptureService,
     ),
   };
 }
@@ -73,18 +79,29 @@ describe('AuthIdentityResolverService', () => {
     );
   });
 
-  it('создаёт registration eligibility для нового Telegram Mini App account', async () => {
-    const { service, prisma, marketingLifecycle } = makeService();
+  it('создаёт registration eligibility и durable Mini App intent в transaction нового account', async () => {
+    const { service, prisma, marketingLifecycle, miniAppCapture } = makeService();
 
     await service.resolveOAuthLogin({
       provider: 'telegram',
       providerId: '123456789',
       username: 'mojo_user',
+      telegramWebAppStartParam: 'ma_Campaign123',
+      telegramWebAppEventKey: 'telegram-mini-app:event_1',
     });
 
     expect(marketingLifecycle.initializeRegistrationAttributionForNewUser).toHaveBeenCalledWith(
       prisma,
       'user_1',
+    );
+    expect(miniAppCapture.enqueueVerifiedMiniAppLaunchInTransaction).toHaveBeenCalledWith(
+      prisma,
+      {
+        userId: 'user_1',
+        telegramId: '123456789',
+        startParam: 'ma_Campaign123',
+        sourceEventKey: 'telegram-mini-app:event_1',
+      },
     );
   });
 

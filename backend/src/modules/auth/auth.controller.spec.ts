@@ -40,8 +40,8 @@ describe('AuthController', () => {
     getOAuthCallbackUrl: jest.fn(),
     getFrontendUrl: jest.fn(),
   };
-  const telegramAttribution = {
-    captureMiniAppTouch: jest.fn(),
+  const miniAppCapture = {
+    enqueueVerifiedMiniAppLaunch: jest.fn(),
   };
 
   const controller = new AuthController(
@@ -50,7 +50,7 @@ describe('AuthController', () => {
     oauthService as any,
     identityManagementService as any,
     callbackUrlService as any,
-    telegramAttribution as any,
+    miniAppCapture as any,
   );
 
   beforeEach(() => {
@@ -61,10 +61,7 @@ describe('AuthController', () => {
       'https://api.example.com/api/auth/oauth/google/callback',
     );
     callbackUrlService.getFrontendUrl.mockReturnValue('https://app.example.com');
-    telegramAttribution.captureMiniAppTouch.mockResolvedValue({
-      accepted: true,
-      registrationFinalized: true,
-    });
+    miniAppCapture.enqueueVerifiedMiniAppLaunch.mockResolvedValue({ id: 'intent_1' });
   });
 
   // ─── Admin ────────────────────────────────────────────────────
@@ -265,7 +262,7 @@ describe('AuthController', () => {
     });
   });
 
-  it('передаёт Mini App launch marketing owner-у только после verified initData и login', async () => {
+  it('ставит campaign Mini App launch в marketing intent только после verified initData и login', async () => {
     oauthService.verifyTelegramWebAppInitData.mockReturnValue({
       provider: 'telegram',
       providerId: '123456789',
@@ -287,7 +284,57 @@ describe('AuthController', () => {
     expect(authService.loginWithOAuth).toHaveBeenCalledWith(
       expect.objectContaining({ provider: 'telegram', providerId: '123456789' }),
     );
-    expect(telegramAttribution.captureMiniAppTouch).toHaveBeenCalledWith({
+    expect(miniAppCapture.enqueueVerifiedMiniAppLaunch).toHaveBeenCalledWith({
+      userId: 'user_1',
+      telegramId: '123456789',
+      startParam: 'ma_Campaign123',
+      sourceEventKey: 'telegram-mini-app:event_1',
+    });
+  });
+
+  it('не пишет intent для existing Mini App login без campaign launch', async () => {
+    oauthService.verifyTelegramWebAppInitData.mockReturnValue({
+      provider: 'telegram',
+      providerId: '123456789',
+      telegramWebAppEventKey: 'telegram-mini-app:event_1',
+    });
+    authService.loginWithOAuth.mockResolvedValue({
+      access_token: 'jwt_token',
+      userId: 'user_1',
+    });
+    await expect(
+      controller.telegramWebAppAuth({ initData: 'verified-init-data' }),
+    ).resolves.toEqual({
+      access_token: 'jwt_token',
+      userId: 'user_1',
+    });
+
+    expect(miniAppCapture.enqueueVerifiedMiniAppLaunch).not.toHaveBeenCalled();
+  });
+
+  it('не отменяет успешный Mini App login, если campaign intent временно не записался', async () => {
+    oauthService.verifyTelegramWebAppInitData.mockReturnValue({
+      provider: 'telegram',
+      providerId: '123456789',
+      telegramWebAppStartParam: 'ma_Campaign123',
+      telegramWebAppEventKey: 'telegram-mini-app:event_1',
+    });
+    authService.loginWithOAuth.mockResolvedValue({
+      access_token: 'jwt_token',
+      userId: 'user_1',
+    });
+    miniAppCapture.enqueueVerifiedMiniAppLaunch.mockRejectedValue(
+      new Error('database unavailable'),
+    );
+
+    await expect(
+      controller.telegramWebAppAuth({ initData: 'verified-init-data' }),
+    ).resolves.toEqual({
+      access_token: 'jwt_token',
+      userId: 'user_1',
+    });
+
+    expect(miniAppCapture.enqueueVerifiedMiniAppLaunch).toHaveBeenCalledWith({
       userId: 'user_1',
       telegramId: '123456789',
       startParam: 'ma_Campaign123',

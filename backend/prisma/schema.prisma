@@ -45,6 +45,7 @@ model User {
   identityAudits          UserIdentityAudit[]
   marketingAttribution    UserMarketingAttribution? @relation("UserMarketingAttributionUser")
   marketingTouches        MarketingTouch[]          @relation("MarketingTouchUser")
+  marketingMiniAppCaptureIntents MarketingMiniAppCaptureIntent[]
   loyaltyLevel            LoyaltyLevel?            @relation(fields: [loyaltyLevelId], references: [id])
   referredBy              User?                    @relation("Referrals", fields: [referredById], references: [id])
   referrals               User[]                   @relation("Referrals")
@@ -387,6 +388,26 @@ model MarketingTouch {
   @@map("marketing_touches")
 }
 
+model MarketingMiniAppCaptureIntent {
+  id             String                         @id @default(cuid())
+  userId         String
+  telegramId     BigInt
+  startParam     String?
+  sourceEventKey String                         @unique
+  status         MarketingTelegramCaptureStatus @default(PENDING)
+  attempts       Int                            @default(0)
+  lastAttemptAt  DateTime?
+  nextRetryAt    DateTime?
+  lastError      String?
+  createdAt      DateTime                       @default(now())
+  updatedAt      DateTime                       @updatedAt
+  user           User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextRetryAt])
+  @@index([userId, createdAt])
+  @@map("marketing_mini_app_capture_intents")
+}
+
 model UserMarketingAttribution {
   id                             String                                  @id @default(cuid())
   userId                         String?                                 @unique
@@ -713,6 +734,12 @@ enum MarketingTouchChannel {
   WEB
   TELEGRAM_BOT
   TELEGRAM_MINI_APP
+}
+
+enum MarketingTelegramCaptureStatus {
+  PENDING
+  FAILED
+  REJECTED
 }
 
 enum MarketingRegistrationAttributionStatus {
