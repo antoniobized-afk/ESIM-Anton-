@@ -3,6 +3,7 @@ import { MarketingTouchChannel, Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
 import {
+  MARKETING_CAMPAIGN_CODE_REGEX,
   MarketingAttributionTransaction,
   TrustedMarketingTouchInput,
 } from './marketing-attribution.types';
@@ -161,7 +162,7 @@ export class MarketingAttributionCaptureService {
     const hasUser = Boolean(input.userId?.trim());
     const hasVisitor = Boolean(input.visitorKeyHash?.trim());
 
-    if (!/^[A-Za-z0-9_-]{8,32}$/.test(input.campaignCode)) {
+    if (!MARKETING_CAMPAIGN_CODE_REGEX.test(input.campaignCode)) {
       throw new BadRequestException('Некорректный код маркетинговой кампании');
     }
     if (!Object.values(MarketingTouchChannel).includes(input.channel)) {

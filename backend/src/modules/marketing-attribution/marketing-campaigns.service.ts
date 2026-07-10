@@ -17,7 +17,11 @@ import { PrismaService } from '@/common/prisma/prisma.service';
 import { CreateMarketingCampaignDto } from './dto/create-marketing-campaign.dto';
 import { MarketingCampaignsQueryDto } from './dto/marketing-campaigns-query.dto';
 import { UpdateMarketingCampaignDto } from './dto/update-marketing-campaign.dto';
-import { MarketingCampaignActor } from './marketing-attribution.types';
+import {
+  MARKETING_CAMPAIGN_CODE_LENGTH,
+  MARKETING_CAMPAIGN_CODE_REGEX,
+  MarketingCampaignActor,
+} from './marketing-attribution.types';
 
 type CampaignUpdate = UpdateMarketingCampaignDto;
 
@@ -36,8 +40,8 @@ type CampaignWithRelations = Prisma.MarketingCampaignGetPayload<{
 }>;
 
 const MANAGE_CAMPAIGN_ROLES = new Set(['MANAGER', 'SUPER_ADMIN']);
-const SHORT_CODE_LENGTH = 12;
 const MAX_SHORT_CODE_ATTEMPTS = 5;
+const SHORT_CODE_RANDOM_BYTES = Math.ceil((MARKETING_CAMPAIGN_CODE_LENGTH * 3) / 4);
 
 @Injectable()
 export class MarketingCampaignsService {
@@ -296,7 +300,7 @@ export class MarketingCampaignsService {
 
   private normalizeShortCode(value: string) {
     const code = value.trim();
-    if (!/^[A-Za-z0-9_-]{8,32}$/.test(code)) {
+    if (!MARKETING_CAMPAIGN_CODE_REGEX.test(code)) {
       throw new BadRequestException('Некорректный код маркетинговой кампании');
     }
     return code;
@@ -425,8 +429,10 @@ export class MarketingCampaignsService {
   }
 
   private generateShortCode() {
-    const code = randomBytes(9).toString('base64url');
-    if (code.length !== SHORT_CODE_LENGTH) {
+    const code = randomBytes(SHORT_CODE_RANDOM_BYTES)
+      .toString('base64url')
+      .slice(0, MARKETING_CAMPAIGN_CODE_LENGTH);
+    if (code.length !== MARKETING_CAMPAIGN_CODE_LENGTH || !MARKETING_CAMPAIGN_CODE_REGEX.test(code)) {
       throw new InternalServerErrorException('Не удалось сгенерировать короткий код кампании');
     }
     return code;

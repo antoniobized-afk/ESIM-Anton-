@@ -8,6 +8,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { MarketingCampaignAuditEvent, Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import {
+  MARKETING_CAMPAIGN_CODE_LENGTH,
+  MARKETING_CAMPAIGN_CODE_REGEX,
+} from './marketing-attribution.types';
 import { MarketingCampaignsService } from './marketing-campaigns.service';
 
 const baseCampaign = {
@@ -144,10 +148,12 @@ describe('MarketingCampaignsService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           name: 'Summer launch',
-          shortCode: expect.stringMatching(/^[A-Za-z0-9_-]{12}$/),
+          shortCode: expect.stringMatching(MARKETING_CAMPAIGN_CODE_REGEX),
         }),
       }),
     );
+    const createdShortCode = prisma.marketingCampaign.create.mock.calls[0][0].data.shortCode;
+    expect(createdShortCode).toHaveLength(MARKETING_CAMPAIGN_CODE_LENGTH);
     expect(prisma.marketingCampaignAudit.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         event: MarketingCampaignAuditEvent.CREATED,
