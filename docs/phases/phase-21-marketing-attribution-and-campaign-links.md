@@ -138,13 +138,10 @@ Phase 19 не является dependency: у неё только naming/semanti
 
 - Status: `in_progress`
 - Current step: Step 07 completed; Step 06 browser-only gate остаётся до Step 08.
-- Last evidence: Step 07 реализовал backend-owned attribution/CPA read models,
-  typed UTC event filters, immutable first/last snapshot dimensions,
-  global first/repeat primary purchase classification и exact
-  `REFERRAL_BONUS` ledger matching без current partner policy. `/analytics`
-  получил report/CPA tabs и общий filtered XLSX export с двумя листами,
-  русскими headers и cap 10 000 строк. Backend build, 20 marketing suites / 97
-  tests, full backend 71 suites / 571 tests, admin lint/build зелёные; один
-  existing DB-suite skipped без test database. Browser dev/runtime и production
-  reload были недоступны по infra/policy, поэтому visual desktop/mobile и URL
-  navigation остаются явно незакрытым cross-surface evidence перед Step 08.
+- Last evidence: Step 07 и его audit-remediation закрыты; нормативный contract
+  живёт в [Marketing Attribution Runtime](../architecture/marketing-attribution-runtime.md),
+  а подробные code/test evidence — в
+  [Step 07](./phase-21/step-07-attribution-reports-cpa-and-xlsx-export.md).
+  Full backend: 73 suites / 576 tests green, 2 DB-suites skipped без test DB;
+  admin lint/build green. Visual desktop/mobile и URL navigation остаются
+  незакрытым cross-surface evidence Step 08.

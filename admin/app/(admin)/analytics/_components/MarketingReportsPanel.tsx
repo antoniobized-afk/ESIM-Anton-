@@ -1,12 +1,21 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  getMarketingAttributionModelLabel,
+  MARKETING_TOUCH_CHANNEL_LABELS,
+} from '@shared/marketing-attribution-report'
 import Button from '@/components/ui/Button'
 import Spinner from '@/components/ui/Spinner'
 import { useToast } from '@/components/ui/ToastProvider'
 import { marketingAttributionApi } from '@/lib/api'
 import { isUnauthorizedError } from '@/lib/auth'
-import { downloadBlob, getDownloadFilename } from '@/lib/download'
+import {
+  downloadBlob,
+  getDownloadFilename,
+  toDownloadBlob,
+  XLSX_MIME_TYPE,
+} from '@/lib/download'
 import { getBlobErrorMessage, getErrorMessage } from '@/lib/errors'
 import type {
   MarketingAttributionReport,
@@ -17,9 +26,7 @@ import AttributionReportTable from './AttributionReportTable'
 import CpaReportTable from './CpaReportTable'
 import MarketingReportFilters from './MarketingReportFilters'
 import {
-  CHANNEL_LABELS,
   formatMarketingCount,
-  formatMarketingModel,
   formatMarketingMoney,
 } from './marketing-report-formatting'
 
@@ -33,8 +40,6 @@ interface MarketingReportsPanelProps {
   onFiltersChange: (filters: MarketingAttributionReportFilters) => void
 }
 
-const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-
 export default function MarketingReportsPanel({
   kind,
   filters,
@@ -45,28 +50,37 @@ export default function MarketingReportsPanel({
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const requestGenerationRef = useRef(0)
 
   const loadReport = useCallback(async () => {
+    const requestGeneration = ++requestGenerationRef.current
+
     try {
       setLoading(true)
       setError(null)
       if (kind === 'attribution') {
         const response = await marketingAttributionApi.getAttributionReport(filters)
+        if (requestGeneration !== requestGenerationRef.current) return
         setReport({ kind, data: response.data })
       } else {
         const response = await marketingAttributionApi.getCpaReport(filters)
+        if (requestGeneration !== requestGenerationRef.current) return
         setReport({ kind, data: response.data })
       }
     } catch (requestError) {
+      if (requestGeneration !== requestGenerationRef.current) return
       if (isUnauthorizedError(requestError)) return
       setError(getErrorMessage(requestError, 'Не удалось загрузить отчёт'))
     } finally {
-      setLoading(false)
+      if (requestGeneration === requestGenerationRef.current) setLoading(false)
     }
   }, [filters, kind])
 
   useEffect(() => {
     void loadReport()
+    return () => {
+      requestGenerationRef.current += 1
+    }
   }, [loadReport])
 
   const exportReports = async () => {
@@ -78,9 +92,7 @@ export default function MarketingReportsPanel({
         typeof contentDisposition === 'string' ? contentDisposition : undefined,
         `marketing_attribution_${filters.dateFrom}_${filters.dateTo}.xlsx`,
       )
-      const blob = response.data instanceof Blob
-        ? response.data
-        : new Blob([response.data], { type: XLSX_MIME_TYPE })
+      const blob = toDownloadBlob(response.data, XLSX_MIME_TYPE)
       downloadBlob(blob, filename)
       toast.success('XLSX-отчёт сформирован')
     } catch (requestError) {
@@ -118,9 +130,9 @@ export default function MarketingReportsPanel({
           <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
             <div className="font-medium">
               UTC · {visibleReport.data.filters.dateFrom}—{visibleReport.data.filters.dateTo} ·{' '}
-              {formatMarketingModel(visibleReport.data.filters.model)} ·{' '}
+              {getMarketingAttributionModelLabel(visibleReport.data.filters.model)} ·{' '}
               {visibleReport.data.filters.channel
-                ? CHANNEL_LABELS[visibleReport.data.filters.channel]
+                ? MARKETING_TOUCH_CHANNEL_LABELS[visibleReport.data.filters.channel]
                 : 'все каналы'}
             </div>
             <p className="mt-1 text-xs text-blue-700">{visibleReport.data.semantics.note}</p>

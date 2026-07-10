@@ -42,8 +42,9 @@ const cpaRow = {
   firstPurchases: 1n,
   repeatPurchases: 1n,
   revenue: new Prisma.Decimal('1000.00'),
-  rewardsCount: 2n,
-  payout: new Prisma.Decimal('50.00'),
+  payoutMode: 'EXTERNAL' as const,
+  rewardsCount: 1n,
+  payout: new Prisma.Decimal('30.00'),
 };
 
 function makeService() {
@@ -73,6 +74,7 @@ describe('MarketingAttributionReportService', () => {
     expect(sql).toContain('oma."firstCampaignId"');
     expect(sql).not.toContain('registrationLastCampaignId');
     expect(sql).toContain('mt."campaignId" AS "campaignId"');
+    expect(sql).toContain('facts."campaignId" ASC');
     expect(result.rows[0]).toEqual(expect.objectContaining({
       campaign: expect.objectContaining({ id: 'campaign_1', isActive: false }),
       metrics: expect.objectContaining({
@@ -86,7 +88,7 @@ describe('MarketingAttributionReportService', () => {
     expect(result.totals.revenue.toString()).toBe('1299.9');
   });
 
-  it('даёт Telegram facts при null contact field: join не зависит от users/legacy identity', async () => {
+  it('не добавляет users и legacy identity joins в attribution SQL', async () => {
     const { prisma, service } = makeService();
     prisma.$queryRaw.mockResolvedValue([attributionRow]);
 
@@ -96,40 +98,78 @@ describe('MarketingAttributionReportService', () => {
     });
     const sql = queryText(prisma.$queryRaw.mock.calls[0]);
 
-    expect(sql).toContain('ROW_NUMBER() OVER');
-    expect(sql).toContain('o."parentOrderId" IS NULL');
-    expect(sql).toContain('o.status = \'COMPLETED\'');
-    expect(sql).toContain('oma."firstChannel"::text');
     expect(sql).not.toMatch(/JOIN users|user_identities/);
     expect(sql).not.toMatch(/telegramId|authProvider|providerId/);
   });
 
   it('строит CPA только по successful matching ledger и snapshot payout mode', async () => {
     const { prisma, service } = makeService();
-    prisma.$queryRaw
-      .mockResolvedValueOnce([cpaRow])
-      .mockResolvedValueOnce([{
-        campaignId: 'campaign_1',
-        payoutMode: 'EXTERNAL',
-        rewardsCount: 2n,
-        payout: new Prisma.Decimal('50.00'),
-      }]);
+    prisma.$queryRaw.mockResolvedValueOnce([
+      {
+        ...cpaRow,
+        payoutMode: 'BALANCE',
+        payout: new Prisma.Decimal('20.00'),
+      },
+      cpaRow,
+    ]);
 
     const result = await service.getCpaReport(filters);
     const cpaSql = queryText(prisma.$queryRaw.mock.calls[0]);
-    const splitSql = queryText(prisma.$queryRaw.mock.calls[1]);
 
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(cpaSql).not.toContain('reward_totals');
+    expect(cpaSql).toContain('payout_splits AS');
     expect(cpaSql).toContain('t."orderId" = so."orderId"');
     expect(cpaSql).toContain('t."referralLinkId" = mc."referralLinkId"');
     expect(cpaSql).toContain("t.type = 'REFERRAL_BONUS'");
     expect(cpaSql).toContain("t.status = 'SUCCEEDED'");
+    expect(cpaSql).toContain("t.metadata->>'payoutMode'");
+    expect(cpaSql).toContain('ORDER BY mc.name ASC, mc.id ASC, ps."payoutMode" ASC');
     expect(cpaSql).not.toMatch(/bonusPercent|referralBonusPercent/);
-    expect(splitSql).toContain("t.metadata->>'payoutMode'");
     expect(result.rows[0].metrics.actualCpa?.toString()).toBe('25');
+    expect(result.rows[0].metrics.rewardsCount).toBe(2);
     expect(result.rows[0].payoutModeSplit).toEqual([
-      expect.objectContaining({ payoutMode: 'EXTERNAL', rewardsCount: 2 }),
+      expect.objectContaining({ payoutMode: 'BALANCE', rewardsCount: 1 }),
+      expect.objectContaining({ payoutMode: 'EXTERNAL', rewardsCount: 1 }),
     ]);
     expect(result.totals.payout.toString()).toBe('50');
+  });
+
+  it('стабилизирует CPA rows по campaign id при равных payout и name', async () => {
+    const { prisma, service } = makeService();
+    const laterCampaign = {
+      ...cpaRow,
+      campaignId: 'campaign_2',
+      referralLinkId: 'referral_2',
+      referralCode: 'blogger-code-2',
+    };
+    prisma.$queryRaw.mockResolvedValueOnce([
+      { ...laterCampaign, payout: new Prisma.Decimal('10.00') },
+      { ...cpaRow, payout: new Prisma.Decimal('10.00') },
+    ]);
+
+    const result = await service.getCpaReport(filters);
+
+    expect(result.rows.map((row) => row.campaign.id)).toEqual(['campaign_1', 'campaign_2']);
+  });
+
+  it('сохраняет linked campaign без ledger как строку с нулевым payout', async () => {
+    const { prisma, service } = makeService();
+    prisma.$queryRaw.mockResolvedValueOnce([{
+      ...cpaRow,
+      payoutMode: null,
+      rewardsCount: 0n,
+      payout: new Prisma.Decimal(0),
+    }]);
+
+    const result = await service.getCpaReport(filters);
+
+    expect(result.rows[0].metrics).toEqual(expect.objectContaining({
+      rewardsCount: 0,
+      payout: new Prisma.Decimal(0),
+      actualCpa: null,
+    }));
+    expect(result.rows[0].payoutModeSplit).toEqual([]);
   });
 
   it('отклоняет неполную, обратную и слишком широкую пару дат', () => {

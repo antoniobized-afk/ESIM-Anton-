@@ -278,6 +278,9 @@ model Order {
   @@index([createdAt])
   @@index([parentOrderId])
   @@index([completionAccountingStatus, completionAccountingNextRetryAt], map: "orders_completion_accounting_retry_idx")
+  // Raw partial index (см. миграцию 20260710210000_add_marketing_report_scan_indexes):
+  // orders_userId_completedAt_id_idx (userId, completedAt, id)
+  // WHERE status = 'COMPLETED' AND parentOrderId IS NULL — для global first/repeat report scan.
   @@map("orders")
 }
 
@@ -382,6 +385,7 @@ model MarketingTouch {
   lastForOrderAttribution                 OrderMarketingAttribution[] @relation("OrderLastMarketingTouch")
 
   @@index([campaignId, occurredAt])
+  @@index([occurredAt, campaignId])
   @@index([userId, occurredAt])
   @@index([visitorKeyHash, occurredAt])
   @@index([channel, occurredAt])

@@ -1,16 +1,21 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import {
+  MARKETING_ATTRIBUTION_MODEL_LABELS,
+  MARKETING_ATTRIBUTION_MODELS,
+  MARKETING_REPORT_MAX_RANGE_DAYS,
+  MARKETING_TOUCH_CHANNEL_LABELS,
+  MARKETING_TOUCH_CHANNELS,
+  parseUtcDateOnly,
+  type MarketingAttributionModel,
+  type MarketingTouchChannel,
+} from '@shared/marketing-attribution-report'
 import { Download, Filter } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import type {
-  MarketingTouchChannel,
-} from '@/lib/types'
-import type {
-  MarketingAttributionModel,
   MarketingAttributionReportFilters,
 } from '@/lib/marketing-attribution-report.types'
-import { CHANNEL_LABELS } from './marketing-report-formatting'
 
 interface MarketingReportFiltersProps {
   filters: MarketingAttributionReportFilters
@@ -36,9 +41,9 @@ export default function MarketingReportFilters({
   }, [filters])
 
   const apply = () => {
-    const from = new Date(`${draft.dateFrom}T00:00:00.000Z`)
-    const to = new Date(`${draft.dateTo}T00:00:00.000Z`)
-    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    const from = parseUtcDateOnly(draft.dateFrom)
+    const to = parseUtcDateOnly(draft.dateTo)
+    if (!from || !to) {
       setValidationError('Укажите корректные даты периода.')
       return
     }
@@ -47,8 +52,8 @@ export default function MarketingReportFilters({
       return
     }
     const days = Math.floor((to.getTime() - from.getTime()) / 86_400_000) + 1
-    if (days > 366) {
-      setValidationError('Период не может превышать 366 дней.')
+    if (days > MARKETING_REPORT_MAX_RANGE_DAYS) {
+      setValidationError(`Период не может превышать ${MARKETING_REPORT_MAX_RANGE_DAYS} дней.`)
       return
     }
 
@@ -88,8 +93,11 @@ export default function MarketingReportFilters({
               }))}
               className={inputClassName}
             >
-              <option value="LAST_TOUCH">Последнее касание</option>
-              <option value="FIRST_TOUCH">Первое касание</option>
+              {MARKETING_ATTRIBUTION_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {MARKETING_ATTRIBUTION_MODEL_LABELS[model]}
+                </option>
+              ))}
             </select>
           </label>
           <label className="grid gap-1 text-xs font-medium text-slate-500">
@@ -105,8 +113,10 @@ export default function MarketingReportFilters({
               className={inputClassName}
             >
               <option value="">Все каналы</option>
-              {Object.entries(CHANNEL_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+              {MARKETING_TOUCH_CHANNELS.map((channel) => (
+                <option key={channel} value={channel}>
+                  {MARKETING_TOUCH_CHANNEL_LABELS[channel]}
+                </option>
               ))}
             </select>
           </label>

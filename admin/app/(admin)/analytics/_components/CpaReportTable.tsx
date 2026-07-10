@@ -1,3 +1,4 @@
+import { formatMarketingPartner } from '@shared/marketing-attribution-report'
 import {
   Table,
   TableBody,
@@ -13,7 +14,6 @@ import type {
 import {
   formatMarketingCount,
   formatMarketingMoney,
-  formatMarketingPartner,
 } from './marketing-report-formatting'
 
 const PAYOUT_MODE_LABELS: Record<MarketingCpaPayoutMode, string> = {

@@ -1,10 +1,13 @@
 import type {
+  MarketingAttributionModel,
   MarketingTouchChannel,
+} from '@shared/marketing-attribution-report'
+import type {
   NumericLike,
   ReferralPayoutMode,
 } from './types'
 
-export type MarketingAttributionModel = 'FIRST_TOUCH' | 'LAST_TOUCH'
+export type { MarketingAttributionModel } from '@shared/marketing-attribution-report'
 
 export interface MarketingAttributionReportFilters {
   dateFrom: string

@@ -2,6 +2,7 @@ import { Injectable, PayloadTooLargeException } from '@nestjs/common';
 import { Prisma, type EsimProduct } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { applyExcelHeaderStyle } from '@/common/utils/excel';
 import { getProductDataTypeLabel } from '@shared/product-data-type';
 import {
   getProductMarkupPercent,
@@ -126,19 +127,7 @@ export class ProductsExportService {
       .map((product) => this.toExportRow(product, exchangeRate))
       .forEach((row) => worksheet.addRow(row));
 
-    worksheet.autoFilter = {
-      from: { row: 1, column: 1 },
-      to: { row: 1, column: worksheet.columns.length },
-    };
-
-    const header = worksheet.getRow(1);
-    header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    header.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF1F2937' },
-    };
-    header.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    applyExcelHeaderStyle(worksheet);
 
     worksheet.getColumn('description').alignment = { wrapText: true, vertical: 'top' };
     worksheet.getColumn('region').alignment = { wrapText: true, vertical: 'top' };

@@ -12,7 +12,12 @@ import type {
   ProductSortOrder,
 } from '@/lib/types'
 import { getBlobErrorMessage, getErrorMessage } from '@/lib/errors'
-import { downloadBlob, getDownloadFilename } from '@/lib/download'
+import {
+  downloadBlob,
+  getDownloadFilename,
+  toDownloadBlob,
+  XLSX_MIME_TYPE,
+} from '@/lib/download'
 import { useToast } from '@/components/ui/ToastProvider'
 import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, type ProductDataType } from '@shared/product-data-type'
 import { createEmptyProduct, getMarkupPercent, getProviderPriceUSD } from './products.helpers'
@@ -62,8 +67,6 @@ interface ProductQueryFilterSource {
   sortBy: ProductSortField
   sortOrder: ProductSortOrder
 }
-
-const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 const buildProductQueryFilters = (
   filters: ProductQueryFilterSource,
@@ -268,9 +271,7 @@ export function useProducts() {
         typeof contentDisposition === 'string' ? contentDisposition : undefined,
         `products_${new Date().toISOString().slice(0, 10)}.xlsx`,
       )
-      const blob = response.data instanceof Blob
-        ? response.data
-        : new Blob([response.data], { type: XLSX_MIME_TYPE })
+      const blob = toDownloadBlob(response.data, XLSX_MIME_TYPE)
 
       downloadBlob(blob, filename)
       toast.success('Экспорт Excel запущен')

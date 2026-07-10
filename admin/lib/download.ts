@@ -1,3 +1,5 @@
+export const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
 export function getDownloadFilename(
   contentDisposition: string | undefined,
   fallback: string,
@@ -15,6 +17,10 @@ export function getDownloadFilename(
 
   const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
   return plainMatch?.[1] || fallback
+}
+
+export function toDownloadBlob(data: Blob | BlobPart, mimeType: string): Blob {
+  return data instanceof Blob ? data : new Blob([data], { type: mimeType })
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

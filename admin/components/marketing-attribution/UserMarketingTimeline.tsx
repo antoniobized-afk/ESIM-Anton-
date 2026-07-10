@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { MARKETING_TOUCH_CHANNEL_LABELS } from '@shared/marketing-attribution-report'
 import Button from '@/components/ui/Button'
 import Pagination from '@/components/ui/Pagination'
 import Spinner from '@/components/ui/Spinner'
@@ -9,18 +10,11 @@ import { getErrorMessage } from '@/lib/errors'
 import type {
   MarketingRegistrationSnapshot,
   MarketingTimelineTouch,
-  MarketingTouchChannel,
   MarketingUserTimeline,
 } from '@/lib/types'
 
 interface UserMarketingTimelineProps {
   userId: string
-}
-
-const channelLabels: Record<MarketingTouchChannel, string> = {
-  WEB: 'Web',
-  TELEGRAM_BOT: 'Telegram Bot',
-  TELEGRAM_MINI_APP: 'Telegram Mini App',
 }
 
 function formatDate(value: string | null) {
@@ -44,7 +38,7 @@ function TouchSummary({
       {touch ? (
         <div className="mt-2 space-y-1 text-sm">
           <div className="font-medium text-slate-800">{touch.campaign.name || touch.campaign.shortCode || 'Кампания'}</div>
-          <div className="text-slate-600">{channelLabels[touch.channel]} · {formatDate(touch.occurredAt)}</div>
+          <div className="text-slate-600">{MARKETING_TOUCH_CHANNEL_LABELS[touch.channel]} · {formatDate(touch.occurredAt)}</div>
           <div className="break-words text-xs text-slate-500">
             {touch.campaign.utmSource || '—'} / {touch.campaign.utmMedium || '—'} / {touch.campaign.utmCampaign || '—'}
           </div>
@@ -141,7 +135,7 @@ export default function UserMarketingTimeline({ userId }: UserMarketingTimelineP
                   </div>
                 </div>
                 <div className="shrink-0 text-xs text-slate-500">
-                  {channelLabels[touch.channel]} · {formatDate(touch.occurredAt)}
+                  {MARKETING_TOUCH_CHANNEL_LABELS[touch.channel]} · {formatDate(touch.occurredAt)}
                 </div>
               </li>
             ))}

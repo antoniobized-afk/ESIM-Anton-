@@ -1,5 +1,5 @@
 import { MarketingTouchChannel, Prisma } from '@prisma/client';
-import type { MarketingAttributionModel } from './dto/marketing-attribution-report-query.dto';
+import type { MarketingAttributionModel } from '@shared/marketing-attribution-report';
 
 export type ResolvedMarketingAttributionReportFilters = {
   dateFrom: string;
@@ -43,13 +43,7 @@ export type CpaReportDbRow = {
   firstPurchases: bigint | number;
   repeatPurchases: bigint | number;
   revenue: Prisma.Decimal | number | string | null;
-  rewardsCount: bigint | number;
-  payout: Prisma.Decimal | number | string | null;
-};
-
-export type CpaPayoutSplitDbRow = {
-  campaignId: string;
-  payoutMode: 'BALANCE' | 'EXTERNAL' | 'UNKNOWN';
+  payoutMode: 'BALANCE' | 'EXTERNAL' | 'UNKNOWN' | null;
   rewardsCount: bigint | number;
   payout: Prisma.Decimal | number | string | null;
 };
@@ -195,7 +189,8 @@ export function buildAttributionReportQuery(
              mc."utmMedium", mc."utmCampaign", mc."isActive", mc."deactivatedAt"
     ORDER BY CASE WHEN facts."campaignId" IS NULL THEN 1 ELSE 0 END,
              SUM(facts.revenue) DESC,
-             mc.name ASC
+             mc.name ASC,
+             facts."campaignId" ASC
   `;
 }
 
@@ -214,8 +209,13 @@ export function buildCpaReportQuery(
       FROM selected_orders so
       GROUP BY so."campaignId"
     ),
-    reward_totals AS (
+    payout_splits AS (
       SELECT so."campaignId",
+             CASE
+               WHEN t.metadata->>'payoutMode' IN ('BALANCE', 'EXTERNAL')
+                 THEN t.metadata->>'payoutMode'
+               ELSE 'UNKNOWN'
+             END AS "payoutMode",
              COUNT(t.id)::bigint AS "rewardsCount",
              COALESCE(SUM(t.amount), 0)::numeric AS payout
       FROM selected_orders so
@@ -225,7 +225,7 @@ export function buildCpaReportQuery(
        AND t."referralLinkId" = mc."referralLinkId"
        AND t.type = 'REFERRAL_BONUS'
        AND t.status = 'SUCCEEDED'
-      GROUP BY so."campaignId"
+      GROUP BY so."campaignId", "payoutMode"
     )
     SELECT mc.id AS "campaignId",
            mc."shortCode" AS "shortCode",
@@ -243,41 +243,15 @@ export function buildCpaReportQuery(
            COALESCE(ot."firstPurchases", 0)::bigint AS "firstPurchases",
            COALESCE(ot."repeatPurchases", 0)::bigint AS "repeatPurchases",
            COALESCE(ot.revenue, 0)::numeric AS revenue,
-           COALESCE(rt."rewardsCount", 0)::bigint AS "rewardsCount",
-           COALESCE(rt.payout, 0)::numeric AS payout
+           ps."payoutMode" AS "payoutMode",
+           COALESCE(ps."rewardsCount", 0)::bigint AS "rewardsCount",
+           COALESCE(ps.payout, 0)::numeric AS payout
     FROM marketing_campaigns mc
     JOIN referral_links rl ON rl.id = mc."referralLinkId"
     JOIN users partner ON partner.id = rl."userId"
     LEFT JOIN order_totals ot ON ot."campaignId" = mc.id
-    LEFT JOIN reward_totals rt ON rt."campaignId" = mc.id
+    LEFT JOIN payout_splits ps ON ps."campaignId" = mc.id
     WHERE mc."referralLinkId" IS NOT NULL
-    ORDER BY COALESCE(rt.payout, 0) DESC, mc.name ASC
-  `;
-}
-
-export function buildCpaPayoutSplitQuery(
-  filters: ResolvedMarketingAttributionReportFilters,
-): Prisma.Sql {
-  const columns = snapshotColumns(filters);
-
-  return Prisma.sql`
-    WITH ${selectedCpaOrdersCte(filters, columns)}
-    SELECT so."campaignId" AS "campaignId",
-           CASE
-             WHEN t.metadata->>'payoutMode' IN ('BALANCE', 'EXTERNAL')
-               THEN t.metadata->>'payoutMode'
-             ELSE 'UNKNOWN'
-           END AS "payoutMode",
-           COUNT(t.id)::bigint AS "rewardsCount",
-           COALESCE(SUM(t.amount), 0)::numeric AS payout
-    FROM selected_orders so
-    JOIN marketing_campaigns mc ON mc.id = so."campaignId"
-    JOIN transactions t
-      ON t."orderId" = so."orderId"
-     AND t."referralLinkId" = mc."referralLinkId"
-     AND t.type = 'REFERRAL_BONUS'
-     AND t.status = 'SUCCEEDED'
-    GROUP BY so."campaignId", "payoutMode"
-    ORDER BY so."campaignId", "payoutMode"
+    ORDER BY mc.name ASC, mc.id ASC, ps."payoutMode" ASC
   `;
 }

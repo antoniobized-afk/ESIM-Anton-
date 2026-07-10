@@ -1,19 +1,22 @@
 import { MarketingTouchChannel } from '@prisma/client';
 import { IsDateString, IsEnum, IsIn, IsOptional, Matches } from 'class-validator';
+import {
+  MARKETING_ATTRIBUTION_MODELS,
+  MARKETING_REPORT_DATE_PATTERN,
+  type MarketingAttributionModel,
+} from '@shared/marketing-attribution-report';
 
-export const MARKETING_ATTRIBUTION_MODELS = ['FIRST_TOUCH', 'LAST_TOUCH'] as const;
-export type MarketingAttributionModel = (typeof MARKETING_ATTRIBUTION_MODELS)[number];
-
-const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+export { MARKETING_ATTRIBUTION_MODELS } from '@shared/marketing-attribution-report';
+export type { MarketingAttributionModel } from '@shared/marketing-attribution-report';
 
 export class MarketingAttributionReportQueryDto {
   @IsOptional()
-  @Matches(DATE_ONLY_PATTERN, { message: 'dateFrom должен быть в формате YYYY-MM-DD' })
+  @Matches(MARKETING_REPORT_DATE_PATTERN, { message: 'dateFrom должен быть в формате YYYY-MM-DD' })
   @IsDateString({ strict: true })
   dateFrom?: string;
 
   @IsOptional()
-  @Matches(DATE_ONLY_PATTERN, { message: 'dateTo должен быть в формате YYYY-MM-DD' })
+  @Matches(MARKETING_REPORT_DATE_PATTERN, { message: 'dateTo должен быть в формате YYYY-MM-DD' })
   @IsDateString({ strict: true })
   dateTo?: string;
 

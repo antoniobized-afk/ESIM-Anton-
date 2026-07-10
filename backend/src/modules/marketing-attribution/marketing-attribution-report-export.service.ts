@@ -1,5 +1,11 @@
 import { Injectable, PayloadTooLargeException } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
+import { applyExcelHeaderStyle } from '@/common/utils/excel';
+import {
+  formatMarketingPartner,
+  getMarketingAttributionModelLabel,
+  getMarketingTouchChannelLabel,
+} from '@shared/marketing-attribution-report';
 import type { MarketingAttributionReportQueryDto } from './dto/marketing-attribution-report-query.dto';
 import { MarketingAttributionReportService } from './marketing-attribution-report.service';
 
@@ -75,8 +81,10 @@ export class MarketingAttributionReportExportService {
     report.rows.forEach((row) => worksheet.addRow({
       dateFrom: this.dateCell(report.filters.dateFrom),
       dateTo: this.dateCell(report.filters.dateTo),
-      model: report.filters.model === 'FIRST_TOUCH' ? 'Первое касание' : 'Последнее касание',
-      channel: report.filters.channel ?? 'Все каналы',
+      model: getMarketingAttributionModelLabel(report.filters.model),
+      channel: report.filters.channel
+        ? getMarketingTouchChannelLabel(report.filters.channel)
+        : 'Все каналы',
       shortCode: row.campaign?.shortCode ?? '',
       name: row.campaign?.name ?? 'Прямой трафик',
       utmSource: row.campaign?.utmSource ?? '',
@@ -108,7 +116,8 @@ export class MarketingAttributionReportExportService {
       { header: 'Канал', key: 'channel', width: 22 },
       { header: 'Код кампании', key: 'shortCode', width: 18 },
       { header: 'Кампания', key: 'name', width: 30 },
-      { header: 'Referral link', key: 'referralCode', width: 20 },
+      { header: 'Referral link', key: 'referralLabel', width: 26 },
+      { header: 'Referral code', key: 'referralCode', width: 20 },
       { header: 'Партнёр', key: 'partner', width: 26 },
       { header: 'Первые покупки', key: 'firstPurchases', width: 17 },
       { header: 'Повторные покупки', key: 'repeatPurchases', width: 19 },
@@ -126,12 +135,15 @@ export class MarketingAttributionReportExportService {
     report.rows.forEach((row) => worksheet.addRow({
       dateFrom: this.dateCell(report.filters.dateFrom),
       dateTo: this.dateCell(report.filters.dateTo),
-      model: report.filters.model === 'FIRST_TOUCH' ? 'Первое касание' : 'Последнее касание',
-      channel: report.filters.channel ?? 'Все каналы',
+      model: getMarketingAttributionModelLabel(report.filters.model),
+      channel: report.filters.channel
+        ? getMarketingTouchChannelLabel(report.filters.channel)
+        : 'Все каналы',
       shortCode: row.campaign.shortCode,
       name: row.campaign.name,
+      referralLabel: row.referralLink.label || row.referralLink.code,
       referralCode: row.referralLink.code,
-      partner: this.partnerLabel(row.partner),
+      partner: formatMarketingPartner(row.partner),
       firstPurchases: row.metrics.firstPurchases,
       repeatPurchases: row.metrics.repeatPurchases,
       purchases: row.metrics.purchases,
@@ -157,14 +169,7 @@ export class MarketingAttributionReportExportService {
     dateColumns: string[],
     moneyColumns: string[],
   ) {
-    worksheet.autoFilter = {
-      from: { row: 1, column: 1 },
-      to: { row: 1, column: worksheet.columns.length },
-    };
-    const header = worksheet.getRow(1);
-    header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F2937' } };
-    header.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    applyExcelHeaderStyle(worksheet);
     dateColumns.forEach((key) => { worksheet.getColumn(key).numFmt = 'yyyy-mm-dd'; });
     moneyColumns.forEach((key) => { worksheet.getColumn(key).numFmt = '#,##0.00'; });
   }
@@ -175,16 +180,6 @@ export class MarketingAttributionReportExportService {
   ) {
     const split = splits.find((item) => item.payoutMode === payoutMode);
     return split ? Number(split.payout) : 0;
-  }
-
-  private partnerLabel(partner: {
-    firstName: string | null;
-    lastName: string | null;
-    username: string | null;
-    referralCode: string;
-  }) {
-    const name = [partner.firstName, partner.lastName].filter(Boolean).join(' ').trim();
-    return name || (partner.username ? `@${partner.username}` : partner.referralCode);
   }
 
   private dateCell(value: string) {

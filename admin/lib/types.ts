@@ -3,9 +3,11 @@ import type {
   ProductDataTypeSelector,
   ProductDataTypeValue,
 } from '@shared/product-data-type'
+import type { MarketingTouchChannel } from '@shared/marketing-attribution-report'
 import type { ProductSortField, ProductSortOrder } from '@shared/product-sorting'
 import type { UserSortField, UserSortOrder } from '@shared/user-sorting'
 
+export type { MarketingTouchChannel } from '@shared/marketing-attribution-report'
 export type { ProductSortField, ProductSortOrder } from '@shared/product-sorting'
 export type { UserSortField, UserSortOrder } from '@shared/user-sorting'
 
@@ -666,7 +668,6 @@ export interface UpdateReferralLinkDto {
 
 // ── Marketing Attribution ──────────────────────────────────────────
 
-export type MarketingTouchChannel = 'WEB' | 'TELEGRAM_BOT' | 'TELEGRAM_MINI_APP'
 export type MarketingRegistrationStatus = 'PENDING' | 'DIRECT' | 'ATTRIBUTED'
 
 export interface MarketingCampaignReference {

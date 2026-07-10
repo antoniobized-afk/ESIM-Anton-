@@ -38,11 +38,12 @@ describe('MarketingAttributionReportsController', () => {
       response as unknown as Parameters<MarketingAttributionReportsController['exportExcel']>[1],
     );
 
-    expect(response.set).toHaveBeenCalledWith(expect.objectContaining({
+    expect(response.set).toHaveBeenCalledWith({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': 'attachment; filename="marketing_attribution_2026-07-01_2026-07-10_last_touch.xlsx"; filename*=UTF-8\'\'marketing_attribution_2026-07-01_2026-07-10_last_touch.xlsx',
       'Content-Length': '4',
       'Access-Control-Expose-Headers': 'Content-Disposition',
-    }));
+    });
     expect(file).toBeInstanceOf(StreamableFile);
   });
 });

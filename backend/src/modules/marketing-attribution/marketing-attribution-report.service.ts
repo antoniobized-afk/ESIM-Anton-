@@ -2,20 +2,27 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
 import {
+  getDefaultMarketingReportDateRange,
+  MARKETING_ATTRIBUTION_DEFAULT_MODEL,
+  MARKETING_REPORT_MAX_RANGE_DAYS,
+  parseUtcDateOnly,
+} from '@shared/marketing-attribution-report';
+import {
   MarketingAttributionReportQueryDto,
 } from './dto/marketing-attribution-report-query.dto';
 import {
   type AttributionReportDbRow,
   buildAttributionReportQuery,
-  buildCpaPayoutSplitQuery,
   buildCpaReportQuery,
-  type CpaPayoutSplitDbRow,
   type CpaReportDbRow,
   type ResolvedMarketingAttributionReportFilters,
 } from './marketing-attribution-report.queries';
 
-const MAX_REPORT_RANGE_DAYS = 366;
-const DEFAULT_REPORT_DAYS = 30;
+type CpaPayoutSplit = {
+  payoutMode: Exclude<CpaReportDbRow['payoutMode'], null>;
+  rewardsCount: number;
+  payout: Prisma.Decimal;
+};
 
 const REPORT_SEMANTICS = {
   timezone: 'UTC',
@@ -64,12 +71,10 @@ export class MarketingAttributionReportService {
 
   async getCpaReport(query: MarketingAttributionReportQueryDto = {}) {
     const filters = this.resolveFilters(query);
-    const [rows, splitRows] = await Promise.all([
-      this.prisma.$queryRaw<CpaReportDbRow[]>(buildCpaReportQuery(filters)),
-      this.prisma.$queryRaw<CpaPayoutSplitDbRow[]>(buildCpaPayoutSplitQuery(filters)),
-    ]);
-    const splitsByCampaign = this.groupPayoutSplits(splitRows);
-    const mappedRows = rows.map((row) => this.mapCpaRow(row, splitsByCampaign.get(row.campaignId) ?? []));
+    const rows = await this.prisma.$queryRaw<CpaReportDbRow[]>(buildCpaReportQuery(filters));
+    const mappedRows = this.groupCpaRows(rows)
+      .map(({ row, payoutModeSplit }) => this.mapCpaRow(row, payoutModeSplit))
+      .sort((left, right) => this.compareCpaRows(left, right));
 
     return {
       filters: this.publicFilters(filters),
@@ -106,7 +111,7 @@ export class MarketingAttributionReportService {
       throw new BadRequestException('dateFrom и dateTo должны передаваться вместе');
     }
 
-    const defaultDates = this.defaultDateRange();
+    const defaultDates = getDefaultMarketingReportDateRange();
     const dateFrom = query.dateFrom ?? defaultDates.dateFrom;
     const dateTo = query.dateTo ?? defaultDates.dateTo;
     const from = this.dateAtUtcStart(dateFrom);
@@ -117,9 +122,9 @@ export class MarketingAttributionReportService {
     }
 
     const rangeDays = Math.floor((to.getTime() - from.getTime()) / 86_400_000) + 1;
-    if (rangeDays > MAX_REPORT_RANGE_DAYS) {
+    if (rangeDays > MARKETING_REPORT_MAX_RANGE_DAYS) {
       throw new BadRequestException(
-        `Период отчёта не может превышать ${MAX_REPORT_RANGE_DAYS} дней`,
+        `Период отчёта не может превышать ${MARKETING_REPORT_MAX_RANGE_DAYS} дней`,
       );
     }
 
@@ -132,7 +137,7 @@ export class MarketingAttributionReportService {
       from,
       toExclusive,
       channel: query.channel ?? null,
-      model: query.model ?? 'LAST_TOUCH',
+      model: query.model ?? MARKETING_ATTRIBUTION_DEFAULT_MODEL,
     };
   }
 
@@ -175,16 +180,18 @@ export class MarketingAttributionReportService {
 
   private mapCpaRow(
     row: CpaReportDbRow,
-    payoutModeSplit: Array<{
-      payoutMode: CpaPayoutSplitDbRow['payoutMode'];
-      rewardsCount: number;
-      payout: Prisma.Decimal;
-    }>,
+    payoutModeSplit: CpaPayoutSplit[],
   ) {
     const firstPurchases = this.count(row.firstPurchases);
     const repeatPurchases = this.count(row.repeatPurchases);
-    const rewardsCount = this.count(row.rewardsCount);
-    const payout = this.money(row.payout);
+    const rewardsCount = payoutModeSplit.reduce(
+      (total, split) => total + split.rewardsCount,
+      0,
+    );
+    const payout = payoutModeSplit.reduce(
+      (total, split) => total.add(split.payout),
+      new Prisma.Decimal(0),
+    ).toDecimalPlaces(2);
 
     return {
       campaign: {
@@ -219,47 +226,41 @@ export class MarketingAttributionReportService {
     };
   }
 
-  private groupPayoutSplits(rows: CpaPayoutSplitDbRow[]) {
-    const result = new Map<
-      string,
-      Array<{
-        payoutMode: CpaPayoutSplitDbRow['payoutMode'];
-        rewardsCount: number;
-        payout: Prisma.Decimal;
-      }>
-    >();
+  private groupCpaRows(rows: CpaReportDbRow[]) {
+    const result = new Map<string, { row: CpaReportDbRow; payoutModeSplit: CpaPayoutSplit[] }>();
 
     rows.forEach((row) => {
-      const campaignRows = result.get(row.campaignId) ?? [];
-      campaignRows.push({
-        payoutMode: row.payoutMode,
-        rewardsCount: this.count(row.rewardsCount),
-        payout: this.money(row.payout),
-      });
-      result.set(row.campaignId, campaignRows);
+      const campaign = result.get(row.campaignId) ?? { row, payoutModeSplit: [] };
+      if (row.payoutMode) {
+        campaign.payoutModeSplit.push({
+          payoutMode: row.payoutMode,
+          rewardsCount: this.count(row.rewardsCount),
+          payout: this.money(row.payout),
+        });
+      }
+      result.set(row.campaignId, campaign);
     });
 
-    return result;
+    return [...result.values()];
   }
 
-  private defaultDateRange() {
-    const today = new Date();
-    const dateTo = this.formatUtcDate(today);
-    const from = new Date(`${dateTo}T00:00:00.000Z`);
-    from.setUTCDate(from.getUTCDate() - (DEFAULT_REPORT_DAYS - 1));
-    return { dateFrom: this.formatUtcDate(from), dateTo };
+  private compareCpaRows(
+    left: { campaign: { id: string; name: string }; metrics: { payout: Prisma.Decimal } },
+    right: { campaign: { id: string; name: string }; metrics: { payout: Prisma.Decimal } },
+  ) {
+    const payoutOrder = right.metrics.payout.comparedTo(left.metrics.payout);
+    if (payoutOrder !== 0) return payoutOrder;
+
+    const nameOrder = left.campaign.name.localeCompare(right.campaign.name, 'ru');
+    return nameOrder !== 0 ? nameOrder : left.campaign.id.localeCompare(right.campaign.id);
   }
 
   private dateAtUtcStart(value: string) {
-    const date = new Date(`${value}T00:00:00.000Z`);
-    if (Number.isNaN(date.getTime()) || this.formatUtcDate(date) !== value) {
+    const date = parseUtcDateOnly(value);
+    if (!date) {
       throw new BadRequestException('Дата должна быть существующей датой в формате YYYY-MM-DD');
     }
     return date;
-  }
-
-  private formatUtcDate(value: Date) {
-    return value.toISOString().slice(0, 10);
   }
 
   private count(value: bigint | number) {

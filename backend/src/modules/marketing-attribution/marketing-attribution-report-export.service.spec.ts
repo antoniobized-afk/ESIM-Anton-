@@ -76,9 +76,13 @@ describe('MarketingAttributionReportExportService', () => {
     expect(attribution.getRow(1).getCell(12).value).toBe('Регистрации');
     expect(attribution.getRow(2).getCell(1).value).toBeInstanceOf(Date);
     expect(attribution.getRow(2).getCell(16).value).toBe(1000.5);
-    expect(cpa.getRow(1).getCell(15).value).toBe('Фактический CPA, ₽');
-    expect(cpa.getRow(2).getCell(14).value).toBe(50);
-    expect(cpa.getRow(2).getCell(15).value).toBe(25);
+    expect(cpa.getRow(1).getCell(7).value).toBe('Referral link');
+    expect(cpa.getRow(1).getCell(8).value).toBe('Referral code');
+    expect(cpa.getRow(2).getCell(7).value).toBe('Travel blogger');
+    expect(cpa.getRow(2).getCell(8).value).toBe('blogger-code');
+    expect(cpa.getRow(1).getCell(16).value).toBe('Фактический CPA, ₽');
+    expect(cpa.getRow(2).getCell(15).value).toBe(50);
+    expect(cpa.getRow(2).getCell(16).value).toBe(25);
   });
 
   it('останавливает export при превышении общего row cap без silent truncation', async () => {
