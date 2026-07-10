@@ -67,31 +67,82 @@ describe('MarketingAttributionWebService', () => {
     });
   });
 
-  it('атомарно claim-ит pending WEB touches, очищает HMAC и обновляет current attribution', async () => {
+  it('атомарно claim-ит весь pending WEB batch, но обновляет current attribution только earliest/latest', async () => {
     const { service, prisma, lifecycle } = makeService();
     prisma.$queryRaw.mockResolvedValue([
-      { id: 'touch_1', userId: 'user_1', occurredAt: new Date('2026-07-10T10:00:00.000Z') },
-      { id: 'touch_2', userId: 'user_1', occurredAt: new Date('2026-07-10T10:01:00.000Z') },
+      {
+        claimedTouches: 500,
+        firstTouchId: 'touch_first',
+        firstTouchOccurredAt: new Date('2026-07-10T10:00:00.000Z'),
+        lastTouchId: 'touch_last',
+        lastTouchOccurredAt: new Date('2026-07-10T10:01:00.000Z'),
+      },
     ]);
 
     await expect(service.claimWebTouches('user_1', { visitorToken })).resolves.toEqual({
-      claimedTouches: 2,
+      claimedTouches: 500,
       registrationFinalized: true,
     });
 
     const claimSql = prisma.$queryRaw.mock.calls[0][0].join('');
+    expect(claimSql).toContain('WITH claimed AS');
     expect(claimSql).toContain('UPDATE "marketing_touches"');
     expect(claimSql).toContain('"visitorKeyHash" = NULL');
     expect(claimSql).toContain('"userId" IS NULL');
-    expect(claimSql).toContain('RETURNING "id", "userId", "occurredAt"');
+    expect(claimSql).toContain('RETURNING "id", "occurredAt"');
+    expect(claimSql).toContain('COUNT(*)::int');
+    expect(claimSql).toContain('ORDER BY "occurredAt" ASC, "id" ASC');
+    expect(claimSql).toContain('ORDER BY "occurredAt" DESC, "id" DESC');
+    expect(lifecycle.recordCurrentTouch).toHaveBeenCalledTimes(2);
     expect(lifecycle.recordCurrentTouch).toHaveBeenNthCalledWith(1, prisma, {
       userId: 'user_1',
-      touch: expect.objectContaining({ id: 'touch_1', userId: 'user_1' }),
+      touch: expect.objectContaining({ id: 'touch_first', userId: 'user_1' }),
     });
     expect(lifecycle.recordCurrentTouch).toHaveBeenNthCalledWith(2, prisma, {
       userId: 'user_1',
-      touch: expect.objectContaining({ id: 'touch_2', userId: 'user_1' }),
+      touch: expect.objectContaining({ id: 'touch_last', userId: 'user_1' }),
     });
+    expect(lifecycle.finalizeRegistrationAttributionForNewUser).toHaveBeenCalledWith(
+      prisma,
+      'user_1',
+    );
+  });
+
+  it('не дублирует lifecycle write, когда batch содержит только один touch', async () => {
+    const { service, prisma, lifecycle } = makeService();
+    const occurredAt = new Date('2026-07-10T10:00:00.000Z');
+    prisma.$queryRaw.mockResolvedValue([
+      {
+        claimedTouches: 1,
+        firstTouchId: 'touch_only',
+        firstTouchOccurredAt: occurredAt,
+        lastTouchId: 'touch_only',
+        lastTouchOccurredAt: occurredAt,
+      },
+    ]);
+
+    await expect(service.claimWebTouches('user_1', { visitorToken })).resolves.toEqual({
+      claimedTouches: 1,
+      registrationFinalized: true,
+    });
+
+    expect(lifecycle.recordCurrentTouch).toHaveBeenCalledTimes(1);
+    expect(lifecycle.recordCurrentTouch).toHaveBeenCalledWith(prisma, {
+      userId: 'user_1',
+      touch: expect.objectContaining({ id: 'touch_only', occurredAt, userId: 'user_1' }),
+    });
+  });
+
+  it('сохраняет no-op claim с visitor token, когда pending touches уже отсутствуют', async () => {
+    const { service, prisma, lifecycle } = makeService();
+
+    await expect(service.claimWebTouches('user_1', { visitorToken })).resolves.toEqual({
+      claimedTouches: 0,
+      registrationFinalized: true,
+    });
+
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(lifecycle.recordCurrentTouch).not.toHaveBeenCalled();
     expect(lifecycle.finalizeRegistrationAttributionForNewUser).toHaveBeenCalledWith(
       prisma,
       'user_1',

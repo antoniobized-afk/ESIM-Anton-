@@ -72,6 +72,7 @@ export function AuthProvider({ children }: { children: any }) {
   const [isTelegramReady, setIsTelegramReady] = useState(false)
   const [authError, setAuthError] = useState<'telegram-auth-required' | null>(null)
   const marketingClaimAttemptedRef = useRef(false)
+  const marketingClaimRequestedRef = useRef(false)
 
   useEffect(() => {
     const updateTelegramReady = () => {
@@ -223,6 +224,7 @@ export function AuthProvider({ children }: { children: any }) {
 
   const login = (newToken: string, newUser: AuthUser) => {
     marketingClaimAttemptedRef.current = false
+    marketingClaimRequestedRef.current = true
     setToken(newToken)
     setUser(newUser)
     saveToken(newToken)
@@ -233,17 +235,25 @@ export function AuthProvider({ children }: { children: any }) {
     clearToken()
     clearMarketingAttributionStorage()
     marketingClaimAttemptedRef.current = false
+    marketingClaimRequestedRef.current = false
     setToken(null)
     setUser(null)
   }
 
   const claimMarketingAttribution = useCallback(async () => {
-    if (!user || marketingClaimAttemptedRef.current) return
+    if (
+      !user ||
+      !marketingClaimRequestedRef.current ||
+      marketingClaimAttemptedRef.current
+    ) {
+      return
+    }
 
     marketingClaimAttemptedRef.current = true
     const visitorToken = getMarketingVisitorToken()
     try {
       await marketingAttributionApi.claimWebTouches(visitorToken)
+      marketingClaimRequestedRef.current = false
       // Opaque visitor token остаётся до logout: параллельный capture в другой
       // вкладке уже мог взять его до этого claim и должен завершить association.
     } catch {
@@ -253,13 +263,14 @@ export function AuthProvider({ children }: { children: any }) {
   }, [user])
 
   useEffect(() => {
-    if (!isBootstrapped || !user) return
+    if (!isBootstrapped || !user || !marketingClaimRequestedRef.current) return
     void claimMarketingAttribution()
   }, [claimMarketingAttribution, isBootstrapped, user])
 
   useEffect(() => {
     const handleCaptured = () => {
       marketingClaimAttemptedRef.current = false
+      marketingClaimRequestedRef.current = true
       void claimMarketingAttribution()
     }
 

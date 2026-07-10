@@ -8,7 +8,15 @@ import { ClaimMarketingWebTouchesDto } from './dto/claim-marketing-web-touches.d
 import { MarketingAttributionCaptureService } from './marketing-attribution-capture.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
 
-type ClaimedWebTouch = {
+type ClaimedWebTouchSummary = {
+  claimedTouches: number;
+  firstTouchId: string | null;
+  firstTouchOccurredAt: Date | null;
+  lastTouchId: string | null;
+  lastTouchOccurredAt: Date | null;
+};
+
+type ClaimedCurrentTouch = {
   id: string;
   userId: string;
   occurredAt: Date;
@@ -51,18 +59,42 @@ export class MarketingAttributionWebService {
 
     return this.prisma.$transaction(
       async (tx) => {
-        const claimedTouches = visitorKeyHash
-          ? await tx.$queryRaw<ClaimedWebTouch[]>`
-              UPDATE "marketing_touches"
-              SET "userId" = ${userId}, "visitorKeyHash" = NULL
-              WHERE "channel" = 'WEB'::"MarketingTouchChannel"
-                AND "visitorKeyHash" = ${visitorKeyHash}
-                AND "userId" IS NULL
-              RETURNING "id", "userId", "occurredAt"
-            `
-          : [];
+        const claimSummary = visitorKeyHash
+          ? (await tx.$queryRaw<ClaimedWebTouchSummary[]>`
+              WITH claimed AS (
+                UPDATE "marketing_touches"
+                SET "userId" = ${userId}, "visitorKeyHash" = NULL
+                WHERE "channel" = 'WEB'::"MarketingTouchChannel"
+                  AND "visitorKeyHash" = ${visitorKeyHash}
+                  AND "userId" IS NULL
+                RETURNING "id", "occurredAt"
+              )
+              SELECT
+                (SELECT COUNT(*)::int FROM claimed) AS "claimedTouches",
+                (
+                  SELECT "id" FROM claimed
+                  ORDER BY "occurredAt" ASC, "id" ASC
+                  LIMIT 1
+                ) AS "firstTouchId",
+                (
+                  SELECT "occurredAt" FROM claimed
+                  ORDER BY "occurredAt" ASC, "id" ASC
+                  LIMIT 1
+                ) AS "firstTouchOccurredAt",
+                (
+                  SELECT "id" FROM claimed
+                  ORDER BY "occurredAt" DESC, "id" DESC
+                  LIMIT 1
+                ) AS "lastTouchId",
+                (
+                  SELECT "occurredAt" FROM claimed
+                  ORDER BY "occurredAt" DESC, "id" DESC
+                  LIMIT 1
+                ) AS "lastTouchOccurredAt"
+            `)[0] ?? this.emptyClaimSummary()
+          : this.emptyClaimSummary();
 
-        for (const touch of claimedTouches) {
+        for (const touch of this.currentTouchesFromClaim(userId, claimSummary)) {
           await this.lifecycle.recordCurrentTouch(tx, { userId, touch });
         }
 
@@ -70,7 +102,7 @@ export class MarketingAttributionWebService {
           await this.lifecycle.finalizeRegistrationAttributionForNewUser(tx, userId);
 
         return {
-          claimedTouches: claimedTouches.length,
+          claimedTouches: claimSummary.claimedTouches,
           registrationFinalized,
         };
       },
@@ -90,5 +122,46 @@ export class MarketingAttributionWebService {
     }
 
     return createHmac('sha256', secret).update(visitorToken).digest('hex');
+  }
+
+  private emptyClaimSummary(): ClaimedWebTouchSummary {
+    return {
+      claimedTouches: 0,
+      firstTouchId: null,
+      firstTouchOccurredAt: null,
+      lastTouchId: null,
+      lastTouchOccurredAt: null,
+    };
+  }
+
+  private currentTouchesFromClaim(
+    userId: string,
+    summary: ClaimedWebTouchSummary,
+  ): ClaimedCurrentTouch[] {
+    if (!summary.firstTouchId || !summary.firstTouchOccurredAt) {
+      return [];
+    }
+
+    const firstTouch = {
+      id: summary.firstTouchId,
+      userId,
+      occurredAt: summary.firstTouchOccurredAt,
+    };
+    if (
+      !summary.lastTouchId ||
+      !summary.lastTouchOccurredAt ||
+      summary.lastTouchId === firstTouch.id
+    ) {
+      return [firstTouch];
+    }
+
+    return [
+      firstTouch,
+      {
+        id: summary.lastTouchId,
+        userId,
+        occurredAt: summary.lastTouchOccurredAt,
+      },
+    ];
   }
 }

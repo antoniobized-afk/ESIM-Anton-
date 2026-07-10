@@ -54,13 +54,18 @@ cross-domain cookie assumptions или mutable registration analytics.
   `DIRECT` только при этом marker. Existing user от позднего click получает
   current attribution без synthetic registration snapshot. Telegram исключён:
   его trusted boundary остаётся Step 04.
-- `AuthProvider` вызывает idempotent claim после JWT bootstrap и после
-  campaign-capture event; visitor token сохраняется до logout, launch key
-  изолирован tab session, поэтому in-flight capture в параллельной вкладке не
-  теряет association key. Referral one-shot не переписан и `/ref/[code]` не
-  менялся.
-- Automated evidence: Prisma client generation, 59 Jest suites / 521 tests,
-  `nest build`, targeted backend ESLint, client ESLint и client `tsc` прошли.
+- `AuthProvider` вызывает idempotent claim после fresh web login и после
+  campaign-capture event, но не на bootstrap восстановленной сессии; visitor
+  token сохраняется до logout, launch key изолирован tab session, поэтому
+  in-flight capture в параллельной вкладке не теряет association key. Claim
+  одной CTE-мутацией привязывает весь pending batch, а lifecycle получает только
+  deterministic earliest/latest representatives без N+1 writes. Referral
+  one-shot не переписан и `/ref/[code]` не менялся.
+- Automated evidence: Prisma client generation, 59 Jest suites / 523 tests,
+  `nest build`, targeted backend ESLint, client ESLint/build и
+  `tsc --noEmit --ignoreDeprecations 5.0` прошли. Обычный `tsc --noEmit`
+  остаётся blocked существующим `ignoreDeprecations: "6.0"` при текущем
+  TypeScript 5.9.3 до анализа исходников.
 - До closure остаются migration apply/preflight и ручной browser smoke:
   anonymous campaign → new email/OAuth account, existing account, retry/reload
   и parallel claim на запущенной конфигурации с HMAC secret.
