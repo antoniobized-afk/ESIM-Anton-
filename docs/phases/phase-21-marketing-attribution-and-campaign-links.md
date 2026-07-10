@@ -99,9 +99,11 @@ Phase 19 не является dependency: у неё только naming/semanti
 Одна сессия выполняет один step и обновляет его evidence + phase snapshot.
 
 - Step 02 открывает data contract.
-- Steps 03, 04 и 05 после Step 02 затрагивают разные entry/runtime paths; их
-  можно выполнять отдельными сессиями, но каждый обязан потреблять один
-  marketing owner.
+- Steps 03, 04 и 05 после Step 02 затрагивают разные entry/runtime paths и
+  могут выполняться отдельными сессиями. Step 03 — единственный владелец
+  post-JWT web claim в `AuthProvider`; Step 04 не меняет этот файл и передаёт
+  Mini App launch через уже проверяемый backend auth flow. Каждый step
+  потребляет один marketing owner.
 - Step 06 требует stable campaign API; Step 07 требует факты из Steps 03–05.
 - Step 08 закрывает phase только после всех consumer/manual flows.
 

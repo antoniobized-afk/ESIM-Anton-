@@ -43,7 +43,7 @@ cross-domain cookie assumptions или mutable registration analytics.
 
 ## Файлы
 
-- `client/app/r/[code]/**`
+- `client/app/r/[shortCode]/**`
 - `client/components/AuthProvider.tsx`
 - `client/lib/{api,auth,security}.ts`
 - `backend/src/modules/marketing-attribution/**`

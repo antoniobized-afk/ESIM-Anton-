@@ -121,8 +121,11 @@ authenticated claim связывает pending touches с canonical `User`; clai
 
 - `https://t.me/<bot>?start=ma_<code>`: bot получает `/start`, передаёт
   trusted service-token event в backend;
-- `https://t.me/<bot>?startapp=ma_<code>`: Mini App получает `start_param`,
-  а backend берёт его только из HMAC-validated Telegram `initData`.
+- `https://t.me/<bot>?startapp=ma_<code>`: клиент передаёт existing raw
+  `initData` в WebApp auth request; backend после HMAC и `auth_date` freshness
+  извлекает из него `start_param` и передаёт marketing owner verified intent.
+  Для campaign namespace `ma_` raw `initDataUnsafe`/query parameter не является
+  отдельным входом capture; existing `ref_` parser сохраняет свой flow.
 
 `ref_` остаётся namespace referral flow. Mini App `startapp` не считается
 fallback-дублем bot `/start`; оба flow имеют свои event keys и не должны

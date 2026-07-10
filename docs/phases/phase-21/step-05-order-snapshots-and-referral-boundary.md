@@ -10,7 +10,14 @@
 ## Что нужно сделать
 
 - Добавить marketing snapshot hook во все primary order creation paths inside
-  existing local transaction; провести consumer audit `OrdersService` flows.
+  existing local transaction. Полный inventory до кода: `OrdersService.create`
+  создаёт primary PENDING order для card и бесплатного checkout (free затем
+  проходит `fulfill-free` без нового order); `OrdersService.createWithBalance`
+  создаёт primary PAID order. `createTopupOrder` имеет balance/card ветки, но
+  всегда создаёт top-up с `parentOrderId` и явно исключён. `markOrderCompleted`,
+  fulfilment и completion-accounting только используют уже созданный snapshot,
+  не создают второй. Новые direct `order.create` или новый checkout endpoint
+  требуют обновить этот inventory в том же PR.
 - Top-up paths explicitly skip primary-order snapshot/report semantics.
 - При trusted campaign association with `referralLinkId` делегировать
   registration в `ReferralsService`, never write user referral fields directly.
@@ -38,7 +45,9 @@
 
 ## Evidence
 
-- Pending implementation.
+- Pre-implementation inventory проверен: в `OrdersService` четыре
+  `order.create`; два primary пути перечислены выше, два top-up пути исключены.
+  Реализация и runtime evidence pending.
 
 ## Файлы
 
@@ -50,7 +59,8 @@
 
 ## Тестирование / Верификация
 
-- Primary card/balance/free paths create one snapshot; top-up does not.
+- Primary card/balance/free paths create one snapshot; top-up does not;
+  completion/retry reads the same snapshot rather than creating another.
 - Campaign referral registration respects self/legacy/first-completed-order
   guard and cannot generate direct ledger write.
 - Manual partner promo still wins; repeated completion/accounting remains one

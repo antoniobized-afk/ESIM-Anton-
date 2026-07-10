@@ -16,15 +16,19 @@ collision с `ref_` и двойного capture между bot/Mini App paths.
   current session user уже есть.
 - Добавить bot-only capture endpoint под `ServiceTokenGuard`, который сверяет
   canonical Telegram/user relation and produces idempotent event.
-- Передать Mini App `start_param` в marketing owner только после HMAC-validated
-  `initData`; добавить `auth_date` freshness guard в existing WebApp auth path.
+- Existing Mini App auth request already передаёт raw `initData`; извлечь из
+  него `start_param` только внутри backend WebApp verification, после HMAC и
+  `auth_date` freshness. В `AuthProvider` не добавлять отдельную передачу raw
+  `start_param`: auth flow передаёт marketing owner уже verified launch intent.
 - Сохранить `ref_` referral parser и existing bot/user identity behavior.
 
 ## Результат шага
 
 - `start=ma_…` и `startapp=ma_…` independently capture one trusted touch.
 - Replay/duplicate update не создаёт duplicate touch/referral side effect.
-- Client-provided `initDataUnsafe.start_param` не является source of truth.
+- Для `ma_` client-provided `initDataUnsafe.start_param` не является source of
+  truth; `startapp=ma_…` из validated `initData` действительно доходит до
+  capture. Existing `ref_` parser сохраняет свой отдельный flow.
 - Existing `ref_` link и bot signup не регрессируют.
 
 ## Зависимости
@@ -42,17 +46,19 @@ collision с `ref_` и двойного capture между bot/Mini App paths.
 ## Файлы
 
 - `bot/src/{index,api,commands}/**`
-- `client/components/AuthProvider.tsx`
-- `client/lib/auth.ts`
 - `backend/src/modules/{auth,users}/**`
 - `backend/src/modules/marketing-attribution/**`
 
 ## Тестирование / Верификация
 
 - Bot start for a new/existing user; same update retry; `ref_` regression.
-- Valid/invalid/expired WebApp `initData`, correct `startapp` capture and no
-  trust in raw client start param.
+- Valid/invalid/expired WebApp `initData`; `startapp=ma_…` must be extracted
+  server-side and create capture, while `initDataUnsafe`/query-only imitation
+  must not. The test fixture includes a signed `start_param` to prove delivery,
+  not only parser behavior.
 - Service-token endpoint rejects absent/wrong token and mismatched Telegram user.
-- `pnpm --filter bot build`, affected backend/client gates.
+- `pnpm --filter bot build` и affected backend gates; Mini App delivery
+  подтверждается signed `initData` fixture и manual smoke, без изменения client
+  implementation в этом step.
 - Lookup: `INV-DTO-1`, `INV-TYPE-1`, `INV-AUTH-1`, `INV-SEC-1`,
   `INV-CLIENT-2`, `INV-VER-2..4`.
