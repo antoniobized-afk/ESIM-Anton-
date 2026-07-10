@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ReferralsModule } from '../referrals/referrals.module';
 import { MarketingAttributionCaptureService } from './marketing-attribution-capture.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
 import { MarketingAttributionWebController } from './marketing-attribution-web.controller';
@@ -10,6 +11,7 @@ import { MarketingCampaignsController } from './marketing-campaigns.controller';
 import { MarketingCampaignsService } from './marketing-campaigns.service';
 
 @Module({
+  imports: [ReferralsModule],
   controllers: [
     MarketingCampaignsController,
     MarketingAttributionWebController,

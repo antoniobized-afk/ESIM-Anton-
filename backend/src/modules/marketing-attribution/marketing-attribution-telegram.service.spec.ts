@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
-import { AuthIdentityProvider, MarketingTouch, MarketingTouchChannel } from '@prisma/client';
+import { MarketingTouch, MarketingTouchChannel } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { MarketingAttributionCaptureService } from './marketing-attribution-capture.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
 import { MarketingAttributionTelegramService } from './marketing-attribution-telegram.service';
@@ -17,23 +18,9 @@ const touch: MarketingTouch = {
   createdAt: occurredAt,
 };
 
-function makeService({
-  identityUserId = 'user_1',
-  telegramId = 123456789n,
-}: {
-  identityUserId?: string | null;
-  telegramId?: bigint | null;
-} = {}) {
+function makeService() {
   const prisma = {
     $transaction: jest.fn().mockImplementation(async (callback: (tx: unknown) => unknown) => callback(prisma)),
-    user: {
-      findUnique: jest.fn().mockResolvedValue({ telegramId }),
-    },
-    userIdentity: {
-      findUnique: jest.fn().mockResolvedValue(
-        identityUserId ? { userId: identityUserId } : null,
-      ),
-    },
   };
   const capture = {
     captureTrustedTouchInTransaction: jest.fn().mockResolvedValue(touch),
@@ -41,22 +28,28 @@ function makeService({
   const lifecycle = {
     finalizeRegistrationAttributionForNewUser: jest.fn().mockResolvedValue(true),
   };
+  const referrals = {
+    assertCanonicalTelegramUser: jest.fn().mockResolvedValue(undefined),
+    registerReferralLink: jest.fn().mockResolvedValue(null),
+  };
 
   return {
     prisma,
     capture,
     lifecycle,
+    referrals,
     service: new MarketingAttributionTelegramService(
       prisma as unknown as PrismaService,
       capture as unknown as MarketingAttributionCaptureService,
       lifecycle as unknown as MarketingAttributionLifecycleService,
+      referrals as unknown as ReferralsService,
     ),
   };
 }
 
 describe('MarketingAttributionTelegramService', () => {
   it('связывает bot ma_ launch только с canonical Telegram user и финализирует registration', async () => {
-    const { service, prisma, capture, lifecycle } = makeService();
+    const { service, prisma, capture, lifecycle, referrals } = makeService();
 
     await expect(
       service.captureBotTouch({
@@ -67,14 +60,9 @@ describe('MarketingAttributionTelegramService', () => {
       }),
     ).resolves.toEqual({ accepted: true, registrationFinalized: true });
 
-    expect(prisma.userIdentity.findUnique).toHaveBeenCalledWith({
-      where: {
-        provider_providerSubject: {
-          provider: AuthIdentityProvider.TELEGRAM,
-          providerSubject: '123456789',
-        },
-      },
-      select: { userId: true },
+    expect(referrals.assertCanonicalTelegramUser).toHaveBeenCalledWith(prisma, {
+      userId: 'user_1',
+      telegramId: 123456789n,
     });
     expect(capture.captureTrustedTouchInTransaction).toHaveBeenCalledWith(
       prisma,
@@ -92,7 +80,10 @@ describe('MarketingAttributionTelegramService', () => {
   });
 
   it('не пишет touch при несовпадении Telegram identity', async () => {
-    const { service, capture, lifecycle } = makeService({ telegramId: 987654321n });
+    const { service, capture, lifecycle, referrals } = makeService();
+    referrals.assertCanonicalTelegramUser.mockRejectedValue(
+      new ForbiddenException('Telegram identity не принадлежит указанному пользователю'),
+    );
 
     await expect(
       service.captureBotTouch({
@@ -108,7 +99,10 @@ describe('MarketingAttributionTelegramService', () => {
   });
 
   it('не пишет touch, если verified Telegram identity принадлежит другому user', async () => {
-    const { service, capture, lifecycle } = makeService({ identityUserId: 'user_2' });
+    const { service, capture, lifecycle, referrals } = makeService();
+    referrals.assertCanonicalTelegramUser.mockRejectedValue(
+      new ForbiddenException('Telegram identity не принадлежит указанному пользователю'),
+    );
 
     await expect(
       service.captureMiniAppTouch({
@@ -142,7 +136,7 @@ describe('MarketingAttributionTelegramService', () => {
   });
 
   it('использует отдельный Mini App event domain после validated initData', async () => {
-    const { service, capture, lifecycle } = makeService({ telegramId: null });
+    const { service, capture, lifecycle } = makeService();
 
     await expect(
       service.captureMiniAppTouch({
@@ -164,5 +158,36 @@ describe('MarketingAttributionTelegramService', () => {
       expect.anything(),
       'user_1',
     );
+  });
+
+  it('делегирует linked campaign referral только после canonical Telegram assertion и touch capture', async () => {
+    const { service, prisma, capture, referrals } = makeService();
+    capture.captureTrustedTouchInTransaction.mockResolvedValue({
+      ...touch,
+      campaignReferralLinkId: 'referral_link_1',
+    });
+
+    await service.captureBotTouch({
+      userId: 'user_1',
+      telegramId: '123456789',
+      startParam: 'ma_Campaign123',
+      sourceEventKey: 'telegram-bot:101',
+    });
+
+    expect(referrals.assertCanonicalTelegramUser).toHaveBeenCalledWith(prisma, {
+      userId: 'user_1',
+      telegramId: 123456789n,
+    });
+    expect(referrals.registerReferralLink).toHaveBeenCalledWith(
+      'user_1',
+      'referral_link_1',
+      prisma,
+    );
+    expect(
+      referrals.assertCanonicalTelegramUser.mock.invocationCallOrder[0],
+    ).toBeLessThan(capture.captureTrustedTouchInTransaction.mock.invocationCallOrder[0]);
+    expect(
+      capture.captureTrustedTouchInTransaction.mock.invocationCallOrder[0],
+    ).toBeLessThan(referrals.registerReferralLink.mock.invocationCallOrder[0]);
   });
 });

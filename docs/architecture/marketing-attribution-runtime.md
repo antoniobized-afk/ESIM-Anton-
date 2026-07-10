@@ -179,6 +179,10 @@ Bot flow принимает `ma_` раньше решения find-or-create и 
 проверяются до write. Значения из `initDataUnsafe`, URL query или client state
 не являются source of truth.
 
+Marketing и referral используют одну проверку в `ReferralsService`; она не
+допускает копию legacy-сравнения `User.telegramId` и применяет contact field
+только как дополнительный drift-check к canonical `UserIdentity`.
+
 После успешного Mini App login auth передаёт marketing owner только verified
 launch intent: canonical `userId`, Telegram provider subject, bounded
 `start_param` и opaque source-event key. Marketing owner durable upsert-ит

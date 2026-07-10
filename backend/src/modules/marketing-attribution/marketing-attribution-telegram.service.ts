@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
-import { AuthIdentityProvider, MarketingTouchChannel } from '@prisma/client';
+import { MarketingTouchChannel } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { CaptureMarketingTelegramBotTouchDto } from './dto/capture-marketing-telegram-bot-touch.dto';
 import { MarketingAttributionCaptureService } from './marketing-attribution-capture.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
@@ -27,6 +28,7 @@ export class MarketingAttributionTelegramService {
     private readonly prisma: PrismaService,
     private readonly capture: MarketingAttributionCaptureService,
     private readonly lifecycle: MarketingAttributionLifecycleService,
+    private readonly referrals: ReferralsService,
   ) {}
 
   async captureBotTouch(dto: CaptureMarketingTelegramBotTouchDto) {
@@ -55,7 +57,10 @@ export class MarketingAttributionTelegramService {
 
     return this.prisma.$transaction(
       async (tx) => {
-        await this.assertCanonicalTelegramUser(tx, input.userId, input.telegramId);
+        await this.referrals.assertCanonicalTelegramUser(tx, {
+          userId: input.userId,
+          telegramId: input.telegramId,
+        });
 
         const touch = campaignCode
           ? await this.capture.captureTrustedTouchInTransaction(tx, {
@@ -65,6 +70,13 @@ export class MarketingAttributionTelegramService {
               userId: input.userId,
             })
           : null;
+        if (touch?.campaignReferralLinkId) {
+          await this.referrals.registerReferralLink(
+            input.userId,
+            touch.campaignReferralLinkId,
+            tx,
+          );
+        }
         const registrationFinalized =
           await this.lifecycle.finalizeRegistrationAttributionForNewUser(tx, input.userId);
 
@@ -78,35 +90,6 @@ export class MarketingAttributionTelegramService {
         timeout: TELEGRAM_CAPTURE_TRANSACTION_TIMEOUT_MS,
       },
     );
-  }
-
-  private async assertCanonicalTelegramUser(
-    tx: MarketingAttributionTransaction,
-    userId: string,
-    telegramId: bigint,
-  ) {
-    const [user, identity] = await Promise.all([
-      tx.user.findUnique({
-        where: { id: userId },
-        select: { telegramId: true },
-      }),
-      tx.userIdentity.findUnique({
-        where: {
-          provider_providerSubject: {
-            provider: AuthIdentityProvider.TELEGRAM,
-            providerSubject: telegramId.toString(),
-          },
-        },
-        select: { userId: true },
-      }),
-    ]);
-
-    if (
-      identity?.userId !== userId ||
-      (user?.telegramId !== null && user?.telegramId !== telegramId)
-    ) {
-      throw new ForbiddenException('Telegram identity не принадлежит указанному пользователю');
-    }
   }
 
   private campaignCodeFromStartParam(startParam?: string) {

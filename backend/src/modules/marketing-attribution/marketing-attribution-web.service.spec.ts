@@ -1,5 +1,6 @@
 import { InternalServerErrorException } from '@nestjs/common';
 import { createHmac } from 'crypto';
+import { ReferralsService } from '../referrals/referrals.service';
 import { MarketingAttributionWebService } from './marketing-attribution-web.service';
 
 const visitorToken = 'a'.repeat(64);
@@ -25,6 +26,9 @@ function makeService() {
     recordCurrentTouch: jest.fn().mockResolvedValue(undefined),
     finalizeRegistrationAttributionForNewUser: jest.fn().mockResolvedValue(true),
   };
+  const referrals = {
+    registerReferralLink: jest.fn().mockResolvedValue(null),
+  };
   const config = {
     get: jest.fn().mockReturnValue('marketing-test-secret'),
   };
@@ -34,11 +38,13 @@ function makeService() {
       prisma as any,
       capture as any,
       lifecycle as any,
+      referrals as unknown as ReferralsService,
       config as any,
     ),
     prisma,
     capture,
     lifecycle,
+    referrals,
     config,
   };
 }
@@ -68,7 +74,7 @@ describe('MarketingAttributionWebService', () => {
   });
 
   it('атомарно claim-ит весь pending WEB batch, но обновляет current attribution только earliest/latest', async () => {
-    const { service, prisma, lifecycle } = makeService();
+    const { service, prisma, lifecycle, referrals } = makeService();
     prisma.$queryRaw.mockResolvedValue([
       {
         claimedTouches: 500,
@@ -76,6 +82,7 @@ describe('MarketingAttributionWebService', () => {
         firstTouchOccurredAt: new Date('2026-07-10T10:00:00.000Z'),
         lastTouchId: 'touch_last',
         lastTouchOccurredAt: new Date('2026-07-10T10:01:00.000Z'),
+        lastReferralLinkId: null,
       },
     ]);
 
@@ -89,7 +96,7 @@ describe('MarketingAttributionWebService', () => {
     expect(claimSql).toContain('UPDATE "marketing_touches"');
     expect(claimSql).toContain('"visitorKeyHash" = NULL');
     expect(claimSql).toContain('"userId" IS NULL');
-    expect(claimSql).toContain('RETURNING "id", "occurredAt"');
+    expect(claimSql).toContain('RETURNING "id", "occurredAt", "campaignId"');
     expect(claimSql).toContain('COUNT(*)::int');
     expect(claimSql).toContain('ORDER BY "occurredAt" ASC, "id" ASC');
     expect(claimSql).toContain('ORDER BY "occurredAt" DESC, "id" DESC');
@@ -106,6 +113,7 @@ describe('MarketingAttributionWebService', () => {
       prisma,
       'user_1',
     );
+    expect(referrals.registerReferralLink).not.toHaveBeenCalled();
   });
 
   it('не дублирует lifecycle write, когда batch содержит только один touch', async () => {
@@ -118,6 +126,7 @@ describe('MarketingAttributionWebService', () => {
         firstTouchOccurredAt: occurredAt,
         lastTouchId: 'touch_only',
         lastTouchOccurredAt: occurredAt,
+        lastReferralLinkId: null,
       },
     ]);
 
@@ -131,6 +140,28 @@ describe('MarketingAttributionWebService', () => {
       userId: 'user_1',
       touch: expect.objectContaining({ id: 'touch_only', occurredAt, userId: 'user_1' }),
     });
+  });
+
+  it('делегирует referral link последнего trusted campaign touch существующему referral owner', async () => {
+    const { service, prisma, referrals } = makeService();
+    prisma.$queryRaw.mockResolvedValue([
+      {
+        claimedTouches: 2,
+        firstTouchId: 'touch_first',
+        firstTouchOccurredAt: new Date('2026-07-10T10:00:00.000Z'),
+        lastTouchId: 'touch_last',
+        lastTouchOccurredAt: new Date('2026-07-10T10:01:00.000Z'),
+        lastReferralLinkId: 'referral_link_1',
+      },
+    ]);
+
+    await service.claimWebTouches('user_1', { visitorToken });
+
+    expect(referrals.registerReferralLink).toHaveBeenCalledWith(
+      'user_1',
+      'referral_link_1',
+      prisma,
+    );
   });
 
   it('сохраняет no-op claim с visitor token, когда pending touches уже отсутствуют', async () => {

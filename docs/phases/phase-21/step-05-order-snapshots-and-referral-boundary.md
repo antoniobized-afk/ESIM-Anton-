@@ -52,13 +52,31 @@
 
 ## Статус
 
-`planned`
+`completed`
 
 ## Evidence
 
 - Pre-implementation inventory проверен: в `OrdersService` четыре
   `order.create`; два primary пути перечислены выше, два top-up пути исключены.
-  Реализация и runtime evidence pending.
+- `OrdersService.create` (card/free checkout) и `createWithBalance` создают
+  immutable marketing snapshot в своей existing local transaction сразу после
+  primary order. Оба top-up path остаются без hook; completion/fulfillment не
+  переписывают snapshot.
+- `MarketingAttributionLifecycleService` использует atomic
+  `createMany(skipDuplicates)` и readback по unique `orderId`, а не пустой
+  `upsert.update`. Targeted concurrent proof вызывает один `orderId` дважды,
+  сохраняет одну строку и не допускает rewrite first/last snapshot.
+- Trusted web claim передаёт `referralLinkId` последнего accepted touch из той
+  же CTE без N+1 read; Telegram bot/Mini App делегируют linked campaign после
+  canonical identity assertion. Marketing не пишет referral fields и не
+  создаёт reward ledger.
+- `ReferralsService` стал общим owner Telegram assertion:
+  `UserIdentity(TELEGRAM, providerSubject)` обязателен, `User.telegramId = null`
+  допустим при valid identity, contact drift или другая canonical identity
+  отклоняются. Partner/legacy update содержит atomic `orders.none(COMPLETED,
+  primary)` guard вместе с existing pre-check.
+- Targeted 8 suites / 112 tests, final backend build и full backend 64 suites /
+  551 tests прошли.
 
 ## Файлы
 

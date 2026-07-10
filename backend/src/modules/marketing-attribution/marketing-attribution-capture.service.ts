@@ -10,7 +10,7 @@ import {
 } from './marketing-attribution.types';
 
 type MarketingTouchWithCampaignCode = Prisma.MarketingTouchGetPayload<{
-  include: { campaign: { select: { shortCode: true } } };
+  include: { campaign: { select: { shortCode: true; referralLinkId: true } } };
 }>;
 
 const CAPTURE_TRANSACTION_MAX_WAIT_MS = 10_000;
@@ -97,7 +97,7 @@ export class MarketingAttributionCaptureService {
   ) {
     return tx.marketingTouch.findUnique({
       where: { sourceEventKey },
-      include: { campaign: { select: { shortCode: true } } },
+      include: { campaign: { select: { shortCode: true, referralLinkId: true } } },
     });
   }
 
@@ -116,8 +116,10 @@ export class MarketingAttributionCaptureService {
     }
 
     const { campaign, ...result } = touch;
-    void campaign;
-    return result;
+    return {
+      ...result,
+      campaignReferralLinkId: campaign.referralLinkId,
+    };
   }
 
   private assertSameEvent(

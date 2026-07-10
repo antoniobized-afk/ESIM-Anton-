@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +13,12 @@ import {
 } from '@prisma/client';
 import { SystemSettingsService } from '../system-settings/system-settings.service';
 import { PartnerRewardsService, PartnerRewardSettings } from './partner-rewards.service';
+import {
+  ReferralRegistrationClient,
+  ReferralRegistrationService,
+  TelegramIdentityAssertion,
+  isReferralLinkActive,
+} from './referral-registration.service';
 
 type ReferralLinkCreateInput = {
   code?: string;
@@ -50,6 +55,7 @@ export class ReferralsService {
     private systemSettingsService: SystemSettingsService,
     private configService: ConfigService,
     private partnerRewardsService: PartnerRewardsService,
+    private registrationService: ReferralRegistrationService,
   ) { }
 
   private normalizeLookupCode(code: string) {
@@ -92,18 +98,6 @@ export class ReferralsService {
     }
 
     return new Prisma.Decimal(bonusPercent);
-  }
-
-  private isReferralLinkActive(link: { isActive: boolean; expiresAt: Date | null }) {
-    if (!link.isActive) {
-      return false;
-    }
-
-    if (link.expiresAt && link.expiresAt <= new Date()) {
-      return false;
-    }
-
-    return true;
   }
 
   private async assertReferralLinkCodeAvailable(
@@ -453,8 +447,8 @@ export class ReferralsService {
     }
 
     return {
-      isValid: this.isReferralLinkActive(link),
-      promoCode: this.isReferralLinkActive(link) ? link.promoCode?.code ?? null : null,
+      isValid: isReferralLinkActive(link),
+      promoCode: isReferralLinkActive(link) ? link.promoCode?.code ?? null : null,
     };
   }
 
@@ -465,115 +459,29 @@ export class ReferralsService {
     userId: string,
     referralCode: string,
     expectedTelegramId?: bigint,
+    client: ReferralRegistrationClient = this.prisma,
   ) {
-    const normalizedPartnerCode = this.normalizeLookupCode(referralCode);
-    const normalizedLegacyUserCode = this.normalizeLegacyReferralCode(referralCode);
+    return this.registrationService.registerReferral(
+      userId,
+      referralCode,
+      expectedTelegramId,
+      client,
+    );
+  }
 
-    const currentUser = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { referredById: true, referralLinkId: true, telegramId: true },
-    });
+  async registerReferralLink(
+    userId: string,
+    referralLinkId: string,
+    client: ReferralRegistrationClient = this.prisma,
+  ) {
+    return this.registrationService.registerReferralLink(userId, referralLinkId, client);
+  }
 
-    if (!currentUser) {
-      return null;
-    }
-
-    if (
-      expectedTelegramId !== undefined &&
-      currentUser.telegramId !== expectedTelegramId
-    ) {
-      throw new ForbiddenException('Telegram identity mismatch');
-    }
-
-    if (currentUser.referredById && !currentUser.referralLinkId) {
-      return null;
-    }
-
-    const existingCompletedPrimaryOrder = await this.prisma.order.findFirst({
-      where: {
-        userId,
-        status: 'COMPLETED',
-        parentOrderId: null,
-      },
-      select: { id: true },
-    });
-
-    if (existingCompletedPrimaryOrder) {
-      return null;
-    }
-
-    const partnerLink = await this.prisma.referralLink.findUnique({
-      where: { code: normalizedPartnerCode },
-      include: {
-        user: {
-          select: { id: true, referralCode: true },
-        },
-      },
-    });
-
-    if (partnerLink) {
-      if (!this.isReferralLinkActive(partnerLink)) {
-        return null;
-      }
-
-      if (partnerLink.userId === userId) {
-        return null;
-      }
-
-      if (
-        currentUser.referredById === partnerLink.userId &&
-        currentUser.referralLinkId === partnerLink.id
-      ) {
-        return partnerLink.user;
-      }
-
-      const result = await this.prisma.user.updateMany({
-        where: {
-          id: userId,
-          OR: [
-            { referredById: null },
-            { referralLinkId: { not: null } },
-          ],
-        },
-        data: {
-          referredById: partnerLink.userId,
-          referralLinkId: partnerLink.id,
-        },
-      });
-
-      if (result.count === 0) {
-        return null;
-      }
-
-      return partnerLink.user;
-    }
-
-    if (currentUser.referredById) {
-      return null;
-    }
-
-    const referrer = await this.prisma.user.findUnique({
-      where: { referralCode: normalizedLegacyUserCode },
-      select: { id: true, referralCode: true },
-    });
-
-    if (!referrer || referrer.id === userId) {
-      return null;
-    }
-
-    const result = await this.prisma.user.updateMany({
-      where: { id: userId, referredById: null },
-      data: {
-        referredById: referrer.id,
-        referralLinkId: null,
-      },
-    });
-
-    if (result.count === 0) {
-      return null;
-    }
-
-    return referrer;
+  async assertCanonicalTelegramUser(
+    client: ReferralRegistrationClient,
+    input: TelegramIdentityAssertion,
+  ) {
+    return this.registrationService.assertCanonicalTelegramUser(client, input);
   }
 
   /**

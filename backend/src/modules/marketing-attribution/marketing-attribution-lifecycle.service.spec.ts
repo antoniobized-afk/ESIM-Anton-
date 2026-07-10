@@ -54,7 +54,8 @@ function makeTransaction() {
       findUnique: jest.fn().mockResolvedValue({ userId: 'user_1', parentOrderId: null }),
     },
     orderMarketingAttribution: {
-      upsert: jest.fn().mockResolvedValue({ id: 'snapshot_1', orderId: 'order_1' }),
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findUnique: jest.fn().mockResolvedValue({ id: 'snapshot_1', orderId: 'order_1' }),
     },
   };
 
@@ -230,7 +231,7 @@ describe('MarketingAttributionLifecycleService', () => {
     );
   });
 
-  it('создаёт order snapshot через unique order upsert и не создаёт его для top-up', async () => {
+  it('создаёт immutable order snapshot через conflict-safe insert и не создаёт его для top-up', async () => {
     const { tx } = makeTransaction();
     const service = new MarketingAttributionLifecycleService();
 
@@ -239,16 +240,18 @@ describe('MarketingAttributionLifecycleService', () => {
       userId: 'user_1',
     });
 
-    expect(tx.orderMarketingAttribution.upsert).toHaveBeenCalledWith(
+    expect(tx.orderMarketingAttribution.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { orderId: 'order_1' },
-        update: {},
-        create: expect.objectContaining({
+        data: expect.objectContaining({
           firstTouchId: 'touch_first',
           lastCampaignCode: 'AbCdEfGh1234',
         }),
+        skipDuplicates: true,
       }),
     );
+    expect(tx.orderMarketingAttribution.findUnique).toHaveBeenCalledWith({
+      where: { orderId: 'order_1' },
+    });
 
     tx.order.findUnique.mockResolvedValueOnce({ userId: 'user_1', parentOrderId: 'primary_order_1' });
     await expect(
@@ -257,5 +260,44 @@ describe('MarketingAttributionLifecycleService', () => {
         userId: 'user_1',
       }),
     ).resolves.toBeNull();
+  });
+
+  it('сохраняет один неизменяемый snapshot при двух concurrent at-least-once вызовах', async () => {
+    const { tx } = makeTransaction();
+    const service = new MarketingAttributionLifecycleService();
+    const snapshots = new Map<string, Record<string, unknown>>();
+
+    tx.orderMarketingAttribution.createMany.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => {
+        if (snapshots.has(data.orderId as string)) {
+          return { count: 0 };
+        }
+        snapshots.set(data.orderId as string, { id: 'snapshot_1', ...data });
+        return { count: 1 };
+      },
+    );
+    tx.orderMarketingAttribution.findUnique.mockImplementation(
+      async ({ where }: { where: { orderId: string } }) => snapshots.get(where.orderId) ?? null,
+    );
+
+    const input = { orderId: 'order_1', userId: 'user_1' };
+    await expect(
+      Promise.all([
+        service.createOrderSnapshot(tx as unknown as MarketingAttributionTransaction, input),
+        service.createOrderSnapshot(tx as unknown as MarketingAttributionTransaction, input),
+      ]),
+    ).resolves.toEqual([
+      expect.objectContaining({ id: 'snapshot_1', firstTouchId: 'touch_first' }),
+      expect.objectContaining({ id: 'snapshot_1', firstTouchId: 'touch_first' }),
+    ]);
+
+    expect(tx.orderMarketingAttribution.createMany).toHaveBeenCalledTimes(2);
+    expect(snapshots.size).toBe(1);
+    expect(snapshots.get('order_1')).toEqual(
+      expect.objectContaining({
+        firstTouchId: 'touch_first',
+        lastCampaignCode: 'AbCdEfGh1234',
+      }),
+    );
   });
 });

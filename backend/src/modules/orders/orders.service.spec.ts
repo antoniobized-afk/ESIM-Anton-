@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 import { ORDER_DETAIL_USER_SELECT } from './order-detail-user-read-model';
 import { OrdersService } from './orders.service';
+import { MarketingAttributionLifecycleService } from '../marketing-attribution/marketing-attribution-lifecycle.service';
 
 function makeOrder(overrides: Record<string, unknown> = {}) {
   return {
@@ -163,6 +164,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
       order_id: 'provider-order-1',
       smdp_address: 'smdp.example',
     }),
+    getTopupPackagesByIccid: jest.fn(),
   };
 
   const promoCodesService = {
@@ -234,6 +236,10 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     }),
   };
 
+  const marketingAttributionLifecycle = {
+    createOrderSnapshot: jest.fn().mockResolvedValue({ id: 'marketing_snapshot_1' }),
+  };
+
   const service = new OrdersService(
     prisma as any,
     productsService as any,
@@ -246,6 +252,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     systemSettingsService as any,
     loyaltyService as any,
     completionAccountingService as any,
+    marketingAttributionLifecycle as unknown as MarketingAttributionLifecycleService,
   );
 
   return {
@@ -262,6 +269,7 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
     partnerRewardsService,
     loyaltyService,
     completionAccountingService,
+    marketingAttributionLifecycle,
     systemSettingsService,
   };
 }
@@ -647,7 +655,7 @@ describe('OrdersService', () => {
     });
 
     it('использует dynamic loyalty level для скидки при создании заказа', async () => {
-      const { service, prisma, usersService, loyaltyService } = makeService();
+      const { service, prisma, usersService, loyaltyService, marketingAttributionLifecycle } = makeService();
       usersService.findById.mockResolvedValue({
         id: 'user_1',
         balance: 1000,
@@ -678,6 +686,41 @@ describe('OrdersService', () => {
           user: true,
         },
       });
+      expect(marketingAttributionLifecycle.createOrderSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({ order: expect.anything() }),
+        { orderId: 'order_1', userId: 'user_1' },
+      );
+    });
+
+    it('создаёт snapshot в local transaction для primary balance order до внешнего fulfill', async () => {
+      const { service, marketingAttributionLifecycle } = makeService();
+      jest.spyOn(service, 'fulfillOrder').mockResolvedValue(makeOrder());
+
+      await service.createWithBalance('user_1', 'product_1');
+
+      expect(marketingAttributionLifecycle.createOrderSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({ order: expect.anything() }),
+        { orderId: 'order_1', userId: 'user_1' },
+      );
+    });
+
+    it('не создаёт primary marketing snapshot для top-up card order', async () => {
+      const { service, prisma, esimProviderService, systemSettingsService, marketingAttributionLifecycle } = makeService();
+      prisma.order.findUnique.mockResolvedValue({
+        ...makeOrder({ iccid: 'iccid_1', productId: 'product_1' }),
+        user: { id: 'user_1', balance: 1_000 },
+      });
+      esimProviderService.getTopupPackagesByIccid.mockResolvedValue([
+        { packageCode: 'TOPUP_1', price: 10000, supportTopupType: 2 },
+      ]);
+      systemSettingsService.getPricingSettings.mockResolvedValue({
+        defaultMarkupPercent: 0,
+        exchangeRate: 100,
+      });
+
+      await service.createTopupOrder('order_1', 'TOPUP_1', 'user_1', 'card');
+
+      expect(marketingAttributionLifecycle.createOrderSnapshot).not.toHaveBeenCalled();
     });
 
     it('previewPricing использует ту же pricing формулу без создания order и без consume промокода', async () => {

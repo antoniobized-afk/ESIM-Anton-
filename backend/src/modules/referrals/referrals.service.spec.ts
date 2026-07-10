@@ -2,6 +2,8 @@ import { Prisma } from '@prisma/client';
 import { ReferralsService } from './referrals.service';
 import { TransactionStatus, TransactionType } from '@prisma/client';
 import { PartnerRewardsService } from './partner-rewards.service';
+import { ReferralRegistrationService } from './referral-registration.service';
+import { PrismaService } from '@/common/prisma/prisma.service';
 
 function makeService(
   settingsOverride?: Partial<{ bonusPercent: number; minPayout: number; enabled: boolean }>,
@@ -14,6 +16,9 @@ function makeService(
       update: jest.fn().mockResolvedValue(undefined),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       count: jest.fn(),
+    },
+    userIdentity: {
+      findUnique: jest.fn(),
     },
     order: {
       findFirst: jest.fn().mockResolvedValue(null),
@@ -72,12 +77,14 @@ function makeService(
     prisma as any,
     systemSettingsService as any,
   );
+  const registrationService = new ReferralRegistrationService(prisma as unknown as PrismaService);
 
   const service = new ReferralsService(
     prisma as any,
     systemSettingsService as any,
     configService as any,
     partnerRewardsService,
+    registrationService,
   );
 
   return { service, prisma, systemSettingsService, configService, partnerRewardsService };
@@ -183,10 +190,14 @@ describe('ReferralsService', () => {
         .mockResolvedValueOnce({ id: 'referrer_1', referralCode: 'REF123' });
       prisma.referralLink.findUnique.mockResolvedValue(null);
 
-      const result = await service.registerReferral('user_1', 'REF123', BigInt(123456));
+      const result = await service.registerReferral('user_1', 'REF123');
 
       expect(prisma.user.updateMany).toHaveBeenCalledWith({
-        where: { id: 'user_1', referredById: null },
+        where: {
+          id: 'user_1',
+          referredById: null,
+          orders: { none: { status: 'COMPLETED', parentOrderId: null } },
+        },
         data: {
           referredById: 'referrer_1',
           referralLinkId: null,
@@ -210,7 +221,7 @@ describe('ReferralsService', () => {
         user: { id: 'owner_1', referralCode: 'OWNERREF' },
       });
 
-      const result = await service.registerReferral('user_2', 'PARTNER123', BigInt(123456));
+      const result = await service.registerReferral('user_2', 'PARTNER123');
 
       expect(prisma.user.updateMany).toHaveBeenCalledWith({
         where: {
@@ -219,6 +230,7 @@ describe('ReferralsService', () => {
             { referredById: null },
             { referralLinkId: { not: null } },
           ],
+          orders: { none: { status: 'COMPLETED', parentOrderId: null } },
         },
         data: {
           referredById: 'owner_1',
@@ -244,7 +256,7 @@ describe('ReferralsService', () => {
         user: { id: 'new_owner', referralCode: 'NEWOWNER' },
       });
 
-      const result = await service.registerReferral('user_2', 'NEWPARTNER', BigInt(123456));
+      const result = await service.registerReferral('user_2', 'NEWPARTNER');
 
       expect(prisma.order.findFirst).toHaveBeenCalledWith({
         where: {
@@ -261,6 +273,7 @@ describe('ReferralsService', () => {
             { referredById: null },
             { referralLinkId: { not: null } },
           ],
+          orders: { none: { status: 'COMPLETED', parentOrderId: null } },
         },
         data: {
           referredById: 'new_owner',
@@ -278,7 +291,7 @@ describe('ReferralsService', () => {
       });
       prisma.order.findFirst.mockResolvedValueOnce({ id: 'order_1' });
 
-      const result = await service.registerReferral('user_2', 'PARTNER123', BigInt(123456));
+      const result = await service.registerReferral('user_2', 'PARTNER123');
 
       expect(prisma.order.findFirst).toHaveBeenCalledWith({
         where: {
@@ -308,7 +321,7 @@ describe('ReferralsService', () => {
         user: { id: 'owner_1', referralCode: 'OWNERREF' },
       });
 
-      await service.registerReferral('user_2', 'partner123', BigInt(123456));
+      await service.registerReferral('user_2', 'partner123');
 
       expect(prisma.referralLink.findUnique).toHaveBeenCalledWith({
         where: { code: 'PARTNER123' },
@@ -336,7 +349,7 @@ describe('ReferralsService', () => {
         user: { id: 'owner_1', referralCode: 'OWNERREF' },
       });
 
-      const result = await service.registerReferral('user_2', 'PARTNER123', BigInt(123456));
+      const result = await service.registerReferral('user_2', 'PARTNER123');
 
       expect(prisma.user.updateMany).not.toHaveBeenCalled();
       expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
@@ -350,7 +363,7 @@ describe('ReferralsService', () => {
         telegramId: BigInt(123456),
       });
 
-      const result = await service.registerReferral('user_1', 'REF123', BigInt(123456));
+      const result = await service.registerReferral('user_1', 'REF123');
 
       expect(prisma.user.updateMany).not.toHaveBeenCalled();
       expect(result).toBeNull();
@@ -372,7 +385,7 @@ describe('ReferralsService', () => {
         user: { id: 'user_1', referralCode: 'SELFREF' },
       });
 
-      const result = await service.registerReferral('user_1', 'PARTNER123', BigInt(123456));
+      const result = await service.registerReferral('user_1', 'PARTNER123');
 
       expect(prisma.user.updateMany).not.toHaveBeenCalled();
       expect(result).toBeNull();
@@ -394,21 +407,73 @@ describe('ReferralsService', () => {
       });
       prisma.user.updateMany.mockResolvedValueOnce({ count: 0 });
 
-      const result = await service.registerReferral('user_2', 'PARTNER123', BigInt(123456));
+      const result = await service.registerReferral('user_2', 'PARTNER123');
 
       expect(result).toBeNull();
     });
 
-    it('отклоняет bot registration при несовпадении telegram identity', async () => {
+    it('принимает canonical Telegram UserIdentity при null contact field', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValueOnce({
         referredById: null,
-        telegramId: BigInt(111111),
+        referralLinkId: null,
+        telegramId: null,
+      });
+      prisma.userIdentity.findUnique.mockResolvedValueOnce({ userId: 'user_1' });
+      prisma.referralLink.findUnique.mockResolvedValueOnce({
+        id: 'link_1',
+        code: 'PARTNER123',
+        userId: 'owner_1',
+        isActive: true,
+        expiresAt: null,
+        user: { id: 'owner_1', referralCode: 'OWNERREF' },
       });
 
       await expect(
+        service.registerReferral('user_1', 'PARTNER123', BigInt(222222)),
+      ).resolves.toEqual({ id: 'owner_1', referralCode: 'OWNERREF' });
+
+      expect(prisma.userIdentity.findUnique).toHaveBeenCalledWith({
+        where: {
+          provider_providerSubject: {
+            provider: 'TELEGRAM',
+            providerSubject: '222222',
+          },
+        },
+        select: { userId: true },
+      });
+    });
+
+    it('отклоняет bot registration, если canonical Telegram identity принадлежит другому user', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        referredById: null,
+        referralLinkId: null,
+        telegramId: null,
+      });
+      prisma.userIdentity.findUnique.mockResolvedValueOnce({ userId: 'user_2' });
+
+      await expect(
         service.registerReferral('user_1', 'REF123', BigInt(222222)),
-      ).rejects.toThrow('Telegram identity mismatch');
+      ).rejects.toThrow('Telegram identity не принадлежит указанному пользователю');
+
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('отклоняет bot registration при contact drift после canonical identity check', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValueOnce({
+        referredById: null,
+        referralLinkId: null,
+        telegramId: BigInt(111111),
+      });
+      prisma.userIdentity.findUnique.mockResolvedValueOnce({ userId: 'user_1' });
+
+      await expect(
+        service.registerReferral('user_1', 'REF123', BigInt(222222)),
+      ).rejects.toThrow('Telegram identity не принадлежит указанному пользователю');
+
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
     });
   });
 
@@ -842,7 +907,11 @@ describe('ReferralsService', () => {
       const result = await service.registerReferral('user_1', 'REF123');
 
       expect(prisma.user.updateMany).toHaveBeenCalledWith({
-        where: { id: 'user_1', referredById: null },
+        where: {
+          id: 'user_1',
+          referredById: null,
+          orders: { none: { status: 'COMPLETED', parentOrderId: null } },
+        },
         data: {
           referredById: 'referrer_1',
           referralLinkId: null,

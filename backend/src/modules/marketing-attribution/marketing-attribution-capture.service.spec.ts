@@ -19,11 +19,16 @@ const capturedTouch: MarketingTouch = {
   createdAt: occurredAt,
 };
 
+const capturedTouchResult = {
+  ...capturedTouch,
+  campaignReferralLinkId: null,
+};
+
 function withCampaign(
   touch: MarketingTouch = capturedTouch,
   shortCode = campaignCode,
 ) {
-  return { ...touch, campaign: { shortCode } };
+  return { ...touch, campaign: { shortCode, referralLinkId: null } };
 }
 
 function makeService(activeCampaign = true) {
@@ -73,7 +78,7 @@ describe('MarketingAttributionCaptureService', () => {
   it('берёт shared row lock и bounded transaction budget до touch write', async () => {
     const { service, prisma, lifecycle } = makeService();
 
-    await expect(service.captureTrustedTouch(userInput)).resolves.toEqual(capturedTouch);
+    await expect(service.captureTrustedTouch(userInput)).resolves.toEqual(capturedTouchResult);
 
     const lockSql = prisma.$queryRaw.mock.calls[0][0].join('');
     expect(lockSql).toContain('FROM "marketing_campaigns"');
@@ -134,7 +139,7 @@ describe('MarketingAttributionCaptureService', () => {
         occurredAt,
         visitorKeyHash: 'A'.repeat(64),
       }),
-    ).resolves.toEqual(anonymousTouch);
+    ).resolves.toEqual({ ...anonymousTouch, campaignReferralLinkId: null });
 
     expect(prisma.marketingTouch.createMany).toHaveBeenCalledWith({
       data: [
@@ -172,7 +177,7 @@ describe('MarketingAttributionCaptureService', () => {
     const { service, prisma, lifecycle } = makeService(false);
     prisma.marketingTouch.findUnique.mockReset().mockResolvedValue(withCampaign());
 
-    await expect(service.captureTrustedTouch(userInput)).resolves.toEqual(capturedTouch);
+    await expect(service.captureTrustedTouch(userInput)).resolves.toEqual(capturedTouchResult);
 
     expect(prisma.marketingCampaign.findUnique).not.toHaveBeenCalled();
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
@@ -193,7 +198,7 @@ describe('MarketingAttributionCaptureService', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValue(withCampaign());
 
-    await expect(service.captureTrustedTouch(userInput)).resolves.toEqual(capturedTouch);
+    await expect(service.captureTrustedTouch(userInput)).resolves.toEqual(capturedTouchResult);
 
     expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.marketingTouch.findUnique).toHaveBeenCalledTimes(2);
@@ -270,7 +275,7 @@ describe('MarketingAttributionCaptureService', () => {
     const { service, prisma } = makeService();
     prisma.marketingTouch.createMany.mockResolvedValue({ count: 0 });
 
-    await expect(service.captureTrustedTouch(userInput)).resolves.toEqual(capturedTouch);
+    await expect(service.captureTrustedTouch(userInput)).resolves.toEqual(capturedTouchResult);
 
     expect(prisma.marketingTouch.createMany).toHaveBeenCalledWith(
       expect.objectContaining({ skipDuplicates: true }),

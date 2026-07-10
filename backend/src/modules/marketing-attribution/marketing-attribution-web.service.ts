@@ -7,6 +7,7 @@ import { CaptureMarketingWebTouchDto } from './dto/capture-marketing-web-touch.d
 import { ClaimMarketingWebTouchesDto } from './dto/claim-marketing-web-touches.dto';
 import { MarketingAttributionCaptureService } from './marketing-attribution-capture.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
+import { ReferralsService } from '../referrals/referrals.service';
 
 type ClaimedWebTouchSummary = {
   claimedTouches: number;
@@ -14,6 +15,7 @@ type ClaimedWebTouchSummary = {
   firstTouchOccurredAt: Date | null;
   lastTouchId: string | null;
   lastTouchOccurredAt: Date | null;
+  lastReferralLinkId: string | null;
 };
 
 type ClaimedCurrentTouch = {
@@ -31,6 +33,7 @@ export class MarketingAttributionWebService {
     private readonly prisma: PrismaService,
     private readonly capture: MarketingAttributionCaptureService,
     private readonly lifecycle: MarketingAttributionLifecycleService,
+    private readonly referrals: ReferralsService,
     private readonly config: ConfigService,
   ) {}
 
@@ -67,7 +70,7 @@ export class MarketingAttributionWebService {
                 WHERE "channel" = 'WEB'::"MarketingTouchChannel"
                   AND "visitorKeyHash" = ${visitorKeyHash}
                   AND "userId" IS NULL
-                RETURNING "id", "occurredAt"
+                RETURNING "id", "occurredAt", "campaignId"
               )
               SELECT
                 (SELECT COUNT(*)::int FROM claimed) AS "claimedTouches",
@@ -91,11 +94,26 @@ export class MarketingAttributionWebService {
                   ORDER BY "occurredAt" DESC, "id" DESC
                   LIMIT 1
                 ) AS "lastTouchOccurredAt"
+                ,(
+                  SELECT campaign."referralLinkId"
+                  FROM claimed
+                  INNER JOIN "marketing_campaigns" AS campaign
+                    ON campaign."id" = claimed."campaignId"
+                  ORDER BY claimed."occurredAt" DESC, claimed."id" DESC
+                  LIMIT 1
+                ) AS "lastReferralLinkId"
             `)[0] ?? this.emptyClaimSummary()
           : this.emptyClaimSummary();
 
         for (const touch of this.currentTouchesFromClaim(userId, claimSummary)) {
           await this.lifecycle.recordCurrentTouch(tx, { userId, touch });
+        }
+        if (claimSummary.lastReferralLinkId) {
+          await this.referrals.registerReferralLink(
+            userId,
+            claimSummary.lastReferralLinkId,
+            tx,
+          );
         }
 
         const registrationFinalized =
@@ -131,6 +149,7 @@ export class MarketingAttributionWebService {
       firstTouchOccurredAt: null,
       lastTouchId: null,
       lastTouchOccurredAt: null,
+      lastReferralLinkId: null,
     };
   }
 

@@ -17,6 +17,7 @@ import { PushService } from '../notifications/push.service';
 import { SystemSettingsService } from '../system-settings/system-settings.service';
 import { EsimStatus } from '../esim-provider/esim-status';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { MarketingAttributionLifecycleService } from '../marketing-attribution/marketing-attribution-lifecycle.service';
 import {
   OrderCompletionAccountingService,
   type CompletionAccountingAttemptResult,
@@ -187,6 +188,7 @@ export class OrdersService {
     private systemSettingsService: SystemSettingsService,
     private loyaltyService: LoyaltyService,
     private completionAccountingService: OrderCompletionAccountingService,
+    private marketingAttributionLifecycle: MarketingAttributionLifecycleService,
   ) {}
 
   private metadataNumber(value: unknown): number {
@@ -1329,6 +1331,11 @@ export class OrdersService {
         },
       });
 
+      await this.marketingAttributionLifecycle.createOrderSnapshot(tx, {
+        orderId: order.id,
+        userId,
+      });
+
       await this.createBonusSpendHold(userId, order.id, pricing.bonusSpend, tx);
 
       if (pricing.promoCode && pricing.promoCodeSource) {
@@ -2387,6 +2394,11 @@ export class OrdersService {
           status: OrderStatus.PAID,
         },
         include: { product: true, user: true },
+      });
+
+      await this.marketingAttributionLifecycle.createOrderSnapshot(tx, {
+        orderId: newOrder.id,
+        userId,
       });
 
       await tx.transaction.create({

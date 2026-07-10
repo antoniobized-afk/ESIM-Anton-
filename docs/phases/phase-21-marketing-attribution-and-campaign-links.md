@@ -137,8 +137,5 @@ Phase 19 не является dependency: у неё только naming/semanti
 ## Статус / Evidence
 
 - Status: `in_progress`
-- Current step: Step 04
-- Last evidence: Step 04 добавил durable Mini App capture intent с retry без
-  отказа auth; full backend 64 suites / 544 tests и Nest build зелёные. Manual
-  bot/Mini App smoke на configured runtime и remaining bot reliability audit
-  остаются для closure
+- Current step: Step 05
+- Last evidence: Step 05 создал immutable snapshots в обоих primary order path

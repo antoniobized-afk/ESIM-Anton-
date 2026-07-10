@@ -1,4 +1,7 @@
 import 'reflect-metadata';
+import { ConfigModule } from '@nestjs/config';
+import { Test } from '@nestjs/testing';
+import { PrismaModule } from '@/common/prisma/prisma.module';
 import { MarketingAttributionCaptureService } from './marketing-attribution-capture.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
 import { MarketingAttributionTelegramService } from './marketing-attribution-telegram.service';
@@ -6,14 +9,27 @@ import { MarketingAttributionMiniAppCaptureService } from './marketing-attributi
 import { MarketingAttributionWebService } from './marketing-attribution-web.service';
 import { MarketingAttributionModule } from './marketing-attribution.module';
 import { MarketingCampaignsService } from './marketing-campaigns.service';
+import { ReferralsModule } from '../referrals/referrals.module';
 
 describe('MarketingAttributionModule graph', () => {
-  it('не импортирует auth/users/orders и экспортирует доменных owners', () => {
+  it('компилирует транзитивный Nest module graph без dependency cycle', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        PrismaModule,
+        MarketingAttributionModule,
+      ],
+    }).compile();
+
+    await moduleRef.close();
+  });
+
+  it('импортирует только referrals owner, не создавая dependency на auth/users/orders', () => {
     const imports = Reflect.getMetadata('imports', MarketingAttributionModule) ?? [];
     const providers = Reflect.getMetadata('providers', MarketingAttributionModule) ?? [];
     const exports = Reflect.getMetadata('exports', MarketingAttributionModule) ?? [];
 
-    expect(imports).toEqual([]);
+    expect(imports).toEqual([ReferralsModule]);
     expect(providers).toEqual(
       expect.arrayContaining([
         MarketingCampaignsService,

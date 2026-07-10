@@ -11,6 +11,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { SystemSettingsModule } from '../system-settings/system-settings.module';
 import { ReferralsModule } from '../referrals/referrals.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
+import { MarketingAttributionModule } from '../marketing-attribution/marketing-attribution.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { LoyaltyModule } from '../loyalty/loyalty.module';
     SystemSettingsModule,
     ReferralsModule,
     LoyaltyModule,
+    MarketingAttributionModule,
     forwardRef(() => NotificationsModule),
   ],
   controllers: [OrdersController],

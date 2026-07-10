@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   MarketingRegistrationAttributionStatus,
   MarketingTouch,
@@ -204,15 +209,23 @@ export class MarketingAttributionLifecycleService {
     const first = this.snapshot(state?.firstTouch);
     const last = this.snapshot(state?.lastTouch);
 
-    return tx.orderMarketingAttribution.upsert({
-      where: { orderId: input.orderId },
-      create: {
+    await tx.orderMarketingAttribution.createMany({
+      data: {
         orderId: input.orderId,
         ...this.orderSnapshotData('first', first),
         ...this.orderSnapshotData('last', last),
       },
-      update: {},
+      skipDuplicates: true,
     });
+
+    const snapshot = await tx.orderMarketingAttribution.findUnique({
+      where: { orderId: input.orderId },
+    });
+    if (!snapshot) {
+      throw new ConflictException('Не удалось получить immutable snapshot заказа');
+    }
+
+    return snapshot;
   }
 
   private loadUserState(tx: MarketingAttributionTransaction, userId: string) {
