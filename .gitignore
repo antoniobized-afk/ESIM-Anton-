@@ -29,6 +29,7 @@ dist/
 # IDE
 archive
 work
+.codex
 .roo
 .agents
 .kilo
