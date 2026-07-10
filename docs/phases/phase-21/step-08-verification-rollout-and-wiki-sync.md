@@ -51,6 +51,10 @@
 - Browser/manual: generated web link, bot start, Mini App startapp, linked
   referral, manual partner promo override, primary order, top-up exclusion,
   report first/last, CPA export and role denial.
+- Identity regression: existing account с explicit `TELEGRAM` identity и
+  `User.telegramId = null` проходит Mini App `startapp` и linked-referral flow;
+  чужая identity или non-null contact drift отклоняются до touch/referral/reward
+  write.
 - `git diff --check`, markdown link check and consumer audit across backend,
   admin, client, bot and shared.
 - Lookup: `INV-VER-1..4`, `INV-DOC-1`, `INV-REUSE-1`, `INV-SRP-1`,

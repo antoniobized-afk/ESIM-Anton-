@@ -1,6 +1,19 @@
 import axios from 'axios';
 import { config } from './config';
 
+type BotUserInput = {
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+};
+
+type TelegramBotMarketingTouchInput = {
+  userId: string;
+  telegramId: string;
+  startParam?: string;
+  sourceEventKey?: string;
+};
+
 const client = axios.create({
   baseURL: `${config.apiUrl}/api`,
   headers: {
@@ -10,7 +23,7 @@ const client = axios.create({
 
 export const api = {
   users: {
-    findOrCreate: async (telegramId: bigint, data: any) => {
+    findOrCreate: async (telegramId: bigint, data: BotUserInput) => {
       const response = await client.post(
         '/users/find-or-create',
         {
@@ -78,6 +91,21 @@ export const api = {
           telegramId: telegramId.toString(),
           referralCode,
         },
+        {
+          headers: {
+            'x-telegram-bot-token': config.botToken,
+          },
+        },
+      );
+      return response.data;
+    },
+  },
+
+  marketingAttribution: {
+    captureTelegramBotTouch: async (input: TelegramBotMarketingTouchInput) => {
+      const response = await client.post(
+        '/marketing-attribution/telegram/bot/capture',
+        input,
         {
           headers: {
             'x-telegram-bot-token': config.botToken,

@@ -3,6 +3,7 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { CaptureMarketingWebTouchDto } from './dto/capture-marketing-web-touch.dto';
 import { ClaimMarketingWebTouchesDto } from './dto/claim-marketing-web-touches.dto';
+import { CaptureMarketingTelegramBotTouchDto } from './dto/capture-marketing-telegram-bot-touch.dto';
 
 describe('Marketing web attribution DTO contract', () => {
   it('принимает только campaign code и opaque browser keys для public capture', async () => {
@@ -20,6 +21,31 @@ describe('Marketing web attribution DTO contract', () => {
     await expect(validate(valid)).resolves.toHaveLength(0);
     expect((await validate(invalid)).map((error) => error.property)).toEqual(
       expect.arrayContaining(['campaignCode', 'visitorToken', 'launchKey']),
+    );
+  });
+
+  it('требует bounded event key только для ma_ bot capture', async () => {
+    const campaign = plainToInstance(CaptureMarketingTelegramBotTouchDto, {
+      userId: 'user_1',
+      telegramId: '123456789',
+      startParam: 'ma_Campaign123',
+      sourceEventKey: 'telegram-bot:101',
+    });
+    const missingKey = plainToInstance(CaptureMarketingTelegramBotTouchDto, {
+      userId: 'user_1',
+      telegramId: '123456789',
+      startParam: 'ma_Campaign123',
+    });
+    const referral = plainToInstance(CaptureMarketingTelegramBotTouchDto, {
+      userId: 'user_1',
+      telegramId: '123456789',
+      startParam: 'ref_partner',
+    });
+
+    await expect(validate(campaign)).resolves.toHaveLength(0);
+    await expect(validate(referral)).resolves.toHaveLength(0);
+    await expect(validate(missingKey)).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ property: 'sourceEventKey' })]),
     );
   });
 

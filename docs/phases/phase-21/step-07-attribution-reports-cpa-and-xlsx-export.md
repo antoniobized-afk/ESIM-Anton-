@@ -13,6 +13,10 @@ percent/labels или смешивания cohort, order и ledger facts.
 - First/last switch выбирает registration/order snapshot dimension, not current
   user state. Clicks читаются из deduplicated touches; registrations — из
   registration snapshot; purchases/revenue — из completed primary order snapshot.
+- Report/read-model queries не используют `User.telegramId`, legacy
+  `authProvider/providerId` или текущий contact state для identity/attribution
+  join: связь строится только по domain facts (`userId`, touches и immutable
+  snapshots).
 - Bloggers/CPA view ограничить campaigns with linked `ReferralLink`; payout и
   split читать из successful `REFERRAL_BONUS` ledger/snapshots.
 - Явно подписать cohort/event-date semantics в API/UI; no synthetic conversion
@@ -53,6 +57,8 @@ percent/labels или смешивания cohort, order и ledger facts.
 
 - Fixtures prove first vs last dimensions, registration snapshot immutability,
   primary/top-up distinction and campaign deactivation history.
+- Fixture с explicit Telegram identity и `User.telegramId = null` даёт те же
+  attribution/report facts, что и account с заполненным contact field.
 - CPA totals match `REFERRAL_BONUS` ledger and payout mode; no amount derived
   from mutable campaign fields.
 - Export validates headers, numeric/date cells, filter parity and row cap.

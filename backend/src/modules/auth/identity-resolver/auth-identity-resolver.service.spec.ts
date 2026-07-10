@@ -73,8 +73,8 @@ describe('AuthIdentityResolverService', () => {
     );
   });
 
-  it('не создаёт web registration eligibility для Telegram account до Step 04', async () => {
-    const { service, marketingLifecycle } = makeService();
+  it('создаёт registration eligibility для нового Telegram Mini App account', async () => {
+    const { service, prisma, marketingLifecycle } = makeService();
 
     await service.resolveOAuthLogin({
       provider: 'telegram',
@@ -82,7 +82,10 @@ describe('AuthIdentityResolverService', () => {
       username: 'mojo_user',
     });
 
-    expect(marketingLifecycle.initializeRegistrationAttributionForNewUser).not.toHaveBeenCalled();
+    expect(marketingLifecycle.initializeRegistrationAttributionForNewUser).toHaveBeenCalledWith(
+      prisma,
+      'user_1',
+    );
   });
 
   it('email login создает EMAIL identity для существующего user.email без смены User.id', async () => {

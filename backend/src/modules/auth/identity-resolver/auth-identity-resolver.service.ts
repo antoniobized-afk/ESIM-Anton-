@@ -349,14 +349,10 @@ export class AuthIdentityResolverService {
         data: this.userCreateData(input),
         select: LOGIN_USER_SELECT,
       });
-      // Telegram registration финализируется только с trusted bot/Mini App
-      // capture в Step 04; email и OAuth web account принадлежат Step 03.
-      if (input.provider !== AuthIdentityProvider.TELEGRAM) {
-        await this.marketingLifecycle.initializeRegistrationAttributionForNewUser(
-          tx,
-          createdUser.id,
-        );
-      }
+      await this.marketingLifecycle.initializeRegistrationAttributionForNewUser(
+        tx,
+        createdUser.id,
+      );
       const identity = await this.createIdentityOrThrowConflict(tx, createdUser.id, input);
       await this.auditService.recordLinked(tx, {
         identityId: identity.id,
@@ -387,6 +383,7 @@ export class AuthIdentityResolverService {
         },
         include: BOT_USER_INCLUDE,
       });
+      await this.marketingLifecycle.initializeRegistrationAttributionForNewUser(tx, user.id);
       const identity = await this.createIdentityOrThrowConflict(tx, user.id, identityInput);
       await this.auditService.recordLinked(tx, {
         identityId: identity.id,

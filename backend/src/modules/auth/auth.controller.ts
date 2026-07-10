@@ -27,6 +27,7 @@ import { EmailCodeService } from './email-code.service';
 import { normalizeRelativeReturnTo } from './identity/auth-redirect-normalizer';
 import { AuthIdentityManagementService } from './identity-management/auth-identity-management.service';
 import { OAuthService } from './oauth.service';
+import { MarketingAttributionTelegramService } from '../marketing-attribution/marketing-attribution-telegram.service';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -39,6 +40,7 @@ export class AuthController {
     private readonly oauthService: OAuthService,
     private readonly identityManagementService: AuthIdentityManagementService,
     private readonly callbackUrlService: AuthCallbackUrlService,
+    private readonly telegramAttribution: MarketingAttributionTelegramService,
   ) {}
 
   // ─── Admin ───────────────────────────────────────────────────
@@ -221,7 +223,14 @@ export class AuthController {
   async telegramWebAppAuth(@Body() dto: TelegramWebAppAuthDto) {
     if (!dto.initData) throw new BadRequestException('initData required');
     const profile = this.oauthService.verifyTelegramWebAppInitData(dto.initData);
-    return this.authService.loginWithOAuth(profile);
+    const login = await this.authService.loginWithOAuth(profile);
+    await this.telegramAttribution.captureMiniAppTouch({
+      userId: login.userId,
+      telegramId: profile.providerId,
+      startParam: profile.telegramWebAppStartParam,
+      sourceEventKey: profile.telegramWebAppEventKey!,
+    });
+    return login;
   }
 
   // ─── /auth/me ─────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import { setupCommands } from './commands';
 import { setupScenes } from './scenes';
 import { api } from './api';
 import { MyContext } from './types';
+import { ensureBotSessionUser, isStartCommand } from './user-session';
 
 console.log(`
 ╔═══════════════════════════════════════╗
@@ -26,21 +27,18 @@ bot.use(session({
 
 bot.use(conversations());
 
-// Регистрируем пользователя при первом контакте
+// `/start` сам разбирает payload до find-or-create: так ma_ launch не
+// превращается в direct registration раньше trusted capture.
 bot.use(async (ctx, next) => {
-  if (ctx.from) {
+  if (!isStartCommand(ctx) && ctx.from) {
     try {
-      // Создаем или находим пользователя
-      const user = await api.users.findOrCreate(
-        BigInt(ctx.from.id),
-        {
-          username: ctx.from.username,
-          firstName: ctx.from.first_name,
-          lastName: ctx.from.last_name,
-        }
-      );
-      
-      ctx.session.userId = user.id;
+      const user = await ensureBotSessionUser(ctx);
+      if (user?.initializedInSession) {
+        await api.marketingAttribution.captureTelegramBotTouch({
+          userId: user.userId,
+          telegramId: String(ctx.from.id),
+        });
+      }
     } catch (error) {
       console.error('Ошибка регистрации пользователя:', error);
     }

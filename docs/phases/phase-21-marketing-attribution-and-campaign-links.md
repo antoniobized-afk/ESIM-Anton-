@@ -106,6 +106,9 @@ Phase 19 не является dependency: у неё только naming/semanti
   потребляет один marketing owner.
 - Step 06 требует stable campaign API; Step 07 требует факты из Steps 03–05.
 - Step 08 закрывает phase только после всех consumer/manual flows.
+- Для всех следующих шагов подтверждение Telegram subject → canonical user опирается
+  на `UserIdentity`; `User.telegramId` остаётся contact/drift field и не может
+  становиться auth/ownership fallback в новом attribution code.
 
 ## Верификация
 
@@ -134,6 +137,6 @@ Phase 19 не является dependency: у неё только naming/semanti
 ## Статус / Evidence
 
 - Status: `in_progress`
-- Current step: Step 03
-- Last evidence: Step 03 code и automated gates completed; migration preflight
-  и browser smoke остаются для closure
+- Current step: Step 04
+- Last evidence: Step 04 code и automated gates completed; manual bot/Mini App
+  smoke на configured runtime остаётся для closure

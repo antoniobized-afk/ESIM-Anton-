@@ -37,16 +37,47 @@ collision с `ref_` и двойного capture между bot/Mini App paths.
 
 ## Статус
 
-`planned`
+`in_progress`
 
 ## Evidence
 
-- Pending implementation.
+- `ma_` остаётся отдельным пространством имён ссылок Telegram, созданных на
+  шаге 02. Capture service получил точку входа в существующей transaction,
+  поэтому bot и Mini App не дублируют логику записи и идемпотентности.
+- Bot разбирает `/start` payload до `find-or-create`; общая middleware не
+  создаёт direct registration раньше `ma_` capture. Session owner устраняет
+  повторный `find-or-create`, а `ref_` продолжает отдельную регистрацию через
+  owner referrals даже при ошибке attribution capture.
+- Добавлен service-token `POST /marketing-attribution/telegram/bot/capture`.
+  Он сверяет canonical `UserIdentity(TELEGRAM, providerSubject)`; не-null
+  legacy `User.telegramId` дополнительно проверяется на drift, но `null` не
+  ломает explicit link. Endpoint принимает bounded idempotency key, создаёт
+  только `TELEGRAM_BOT` touch и в той же transaction финализирует registration
+  snapshot нового пользователя. `ref_` не создаёт marketing touch.
+- `OAuthService` извлекает `start_param` и event key только после HMAC и
+  проверки свежести `auth_date`. `AuthController` передаёт verified launch в
+  marketing owner после canonical Telegram login; `AuthProvider` и
+  `initDataUnsafe` flow не менялись. Mini App использует отдельный
+  `TELEGRAM_MINI_APP` idempotency domain.
+- Automated evidence: focused identity/attribution 4 suites / 47 tests и full
+  backend 62 suites / 534 tests прошли; `pnpm --filter backend exec nest build`
+  также зелёный. Полный `pnpm --filter backend build` локально блокируется
+  Windows `EPERM` при `prisma generate`; обычный `pnpm --filter bot build` —
+  существующим `bot/tsconfig.json` `ignoreDeprecations: "6.0"` при TypeScript
+  5.9.3. Проверка bot `tsc --noEmit --ignoreDeprecations 5.0` остаётся зелёной.
+- До closure нужен manual smoke на настроенном runtime: bot update/retry,
+  подписанный Mini App `initData`, отсутствие/ошибка service token и
+  просроченный `auth_date`.
+- Local backend runtime подтверждает загрузку нового маршрута: `POST
+  /api/marketing-attribution/telegram/bot/capture` возвращает `401` без
+  service token и `403` с неверным token; forged `POST
+  /api/auth/telegram/webapp` возвращает `401`. Эти отрицательные проверки не
+  делают записей и не заменяют положительный Telegram smoke.
 
 ## Файлы
 
-- `bot/src/{index,api,commands}/**`
-- `backend/src/modules/{auth,users}/**`
+- `bot/src/{api,index,user-session,commands}/**`
+- `backend/src/modules/auth/**`
 - `backend/src/modules/marketing-attribution/**`
 
 ## Тестирование / Верификация

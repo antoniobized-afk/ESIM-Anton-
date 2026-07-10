@@ -11,6 +11,8 @@ export interface OAuthProfile {
   email?: string;
   username?: string;
   phone?: string;
+  telegramWebAppStartParam?: string;
+  telegramWebAppEventKey?: string;
 }
 
 @Injectable()
@@ -221,20 +223,65 @@ export class OAuthService {
       throw new UnauthorizedException('Telegram WebApp signature invalid');
     }
 
+    const authDate = Number(params.get('auth_date'));
+    if (
+      !Number.isSafeInteger(authDate) ||
+      authDate <= 0 ||
+      Date.now() / 1000 - authDate > 86400
+    ) {
+      throw new UnauthorizedException('Telegram WebApp auth data expired');
+    }
+
     const userRaw = params.get('user');
     if (!userRaw) throw new UnauthorizedException('user missing in initData');
 
-    let user: any;
-    try { user = JSON.parse(userRaw); } catch {
+    const user = this.parseTelegramWebAppUser(userRaw);
+
+    return {
+      providerId: user.id,
+      provider: 'telegram',
+      firstName: user.firstName,
+      lastName: user.lastName,
+      username: user.username,
+      telegramWebAppStartParam: params.get('start_param') || undefined,
+      telegramWebAppEventKey: `telegram-mini-app:${crypto
+        .createHash('sha256')
+        .update(hash)
+        .digest('base64url')}`,
+    };
+  }
+
+  private parseTelegramWebAppUser(userRaw: string): {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    username?: string;
+  } {
+    let value: unknown;
+    try {
+      value = JSON.parse(userRaw);
+    } catch {
       throw new UnauthorizedException('invalid user JSON in initData');
     }
 
+    if (!value || typeof value !== 'object') {
+      throw new UnauthorizedException('invalid user JSON in initData');
+    }
+
+    const user = value as Record<string, unknown>;
+    const rawId = user.id;
+    const id = typeof rawId === 'string' || typeof rawId === 'number'
+      ? String(rawId)
+      : '';
+    if (!/^\d+$/.test(id)) {
+      throw new UnauthorizedException('Telegram user id is invalid');
+    }
+
     return {
-      providerId: String(user.id),
-      provider: 'telegram',
-      firstName: user.first_name,
-      lastName: user.last_name,
-      username: user.username,
+      id,
+      firstName: typeof user.first_name === 'string' ? user.first_name : undefined,
+      lastName: typeof user.last_name === 'string' ? user.last_name : undefined,
+      username: typeof user.username === 'string' ? user.username : undefined,
     };
   }
 

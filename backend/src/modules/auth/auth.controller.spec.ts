@@ -40,6 +40,9 @@ describe('AuthController', () => {
     getOAuthCallbackUrl: jest.fn(),
     getFrontendUrl: jest.fn(),
   };
+  const telegramAttribution = {
+    captureMiniAppTouch: jest.fn(),
+  };
 
   const controller = new AuthController(
     authService as any,
@@ -47,6 +50,7 @@ describe('AuthController', () => {
     oauthService as any,
     identityManagementService as any,
     callbackUrlService as any,
+    telegramAttribution as any,
   );
 
   beforeEach(() => {
@@ -57,6 +61,10 @@ describe('AuthController', () => {
       'https://api.example.com/api/auth/oauth/google/callback',
     );
     callbackUrlService.getFrontendUrl.mockReturnValue('https://app.example.com');
+    telegramAttribution.captureMiniAppTouch.mockResolvedValue({
+      accepted: true,
+      registrationFinalized: true,
+    });
   });
 
   // ─── Admin ────────────────────────────────────────────────────
@@ -254,6 +262,36 @@ describe('AuthController', () => {
         302,
         'https://app.example.com/profile?identityLink=error&identityError=OAUTH_LINK_STATE_INVALID',
       );
+    });
+  });
+
+  it('передаёт Mini App launch marketing owner-у только после verified initData и login', async () => {
+    oauthService.verifyTelegramWebAppInitData.mockReturnValue({
+      provider: 'telegram',
+      providerId: '123456789',
+      telegramWebAppStartParam: 'ma_Campaign123',
+      telegramWebAppEventKey: 'telegram-mini-app:event_1',
+    });
+    authService.loginWithOAuth.mockResolvedValue({
+      access_token: 'jwt_token',
+      userId: 'user_1',
+    });
+
+    await expect(
+      controller.telegramWebAppAuth({ initData: 'verified-init-data' }),
+    ).resolves.toEqual({
+      access_token: 'jwt_token',
+      userId: 'user_1',
+    });
+
+    expect(authService.loginWithOAuth).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'telegram', providerId: '123456789' }),
+    );
+    expect(telegramAttribution.captureMiniAppTouch).toHaveBeenCalledWith({
+      userId: 'user_1',
+      telegramId: '123456789',
+      startParam: 'ma_Campaign123',
+      sourceEventKey: 'telegram-mini-app:event_1',
     });
   });
 });

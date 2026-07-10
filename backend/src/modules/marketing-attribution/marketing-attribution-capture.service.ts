@@ -26,55 +26,68 @@ export class MarketingAttributionCaptureService {
     this.validateInput(input);
 
     return this.prisma.$transaction(
-      async (tx) => {
-        const existingTouch = await this.findTouchBySourceEventKey(tx, input.sourceEventKey);
-        if (existingTouch) {
-          return this.acceptIdempotentTouch(tx, existingTouch, input);
-        }
-
-        // Captures держат совместимый lock; operator mutation с FOR UPDATE ждёт их commit.
-        const lockedCampaigns = await tx.$queryRaw<{ id: string; isActive: boolean }[]>`
-          SELECT "id", "isActive" FROM "marketing_campaigns"
-          WHERE "shortCode" = ${input.campaignCode} FOR SHARE
-        `;
-
-        const touchAfterLock = await this.findTouchBySourceEventKey(tx, input.sourceEventKey);
-        if (touchAfterLock) {
-          return this.acceptIdempotentTouch(tx, touchAfterLock, input);
-        }
-
-        const lockedCampaign = lockedCampaigns[0];
-        if (!lockedCampaign?.isActive) {
-          return null;
-        }
-
-        await tx.marketingTouch.createMany({
-          data: [
-            {
-              campaignId: lockedCampaign.id,
-              userId: input.userId ?? null,
-              channel: input.channel,
-              sourceEventKey: input.sourceEventKey,
-              visitorKeyHash: input.userId
-                ? null
-                : this.normalizeVisitorKeyHash(input.visitorKeyHash),
-              occurredAt: input.occurredAt ?? new Date(),
-            },
-          ],
-          skipDuplicates: true,
-        });
-
-        const touch = await this.findTouchBySourceEventKey(tx, input.sourceEventKey);
-        if (!touch) {
-          throw new ConflictException('Не удалось получить идемпотентное маркетинговое касание');
-        }
-        return this.acceptIdempotentTouch(tx, touch, input);
-      },
+      (tx) => this.captureTrustedTouchUnchecked(tx, input),
       {
         maxWait: CAPTURE_TRANSACTION_MAX_WAIT_MS,
         timeout: CAPTURE_TRANSACTION_TIMEOUT_MS,
       },
     );
+  }
+
+  async captureTrustedTouchInTransaction(
+    tx: MarketingAttributionTransaction,
+    input: TrustedMarketingTouchInput,
+  ) {
+    this.validateInput(input);
+    return this.captureTrustedTouchUnchecked(tx, input);
+  }
+
+  private async captureTrustedTouchUnchecked(
+    tx: MarketingAttributionTransaction,
+    input: TrustedMarketingTouchInput,
+  ) {
+    const existingTouch = await this.findTouchBySourceEventKey(tx, input.sourceEventKey);
+    if (existingTouch) {
+      return this.acceptIdempotentTouch(tx, existingTouch, input);
+    }
+
+    // Captures держат совместимый lock; operator mutation с FOR UPDATE ждёт их commit.
+    const lockedCampaigns = await tx.$queryRaw<{ id: string; isActive: boolean }[]>`
+      SELECT "id", "isActive" FROM "marketing_campaigns"
+      WHERE "shortCode" = ${input.campaignCode} FOR SHARE
+    `;
+
+    const touchAfterLock = await this.findTouchBySourceEventKey(tx, input.sourceEventKey);
+    if (touchAfterLock) {
+      return this.acceptIdempotentTouch(tx, touchAfterLock, input);
+    }
+
+    const lockedCampaign = lockedCampaigns[0];
+    if (!lockedCampaign?.isActive) {
+      return null;
+    }
+
+    await tx.marketingTouch.createMany({
+      data: [
+        {
+          campaignId: lockedCampaign.id,
+          userId: input.userId ?? null,
+          channel: input.channel,
+          sourceEventKey: input.sourceEventKey,
+          visitorKeyHash: input.userId
+            ? null
+            : this.normalizeVisitorKeyHash(input.visitorKeyHash),
+          occurredAt: input.occurredAt ?? new Date(),
+        },
+      ],
+      skipDuplicates: true,
+    });
+
+    const touch = await this.findTouchBySourceEventKey(tx, input.sourceEventKey);
+    if (!touch) {
+      throw new ConflictException('Не удалось получить идемпотентное маркетинговое касание');
+    }
+    return this.acceptIdempotentTouch(tx, touch, input);
   }
 
   private findTouchBySourceEventKey(

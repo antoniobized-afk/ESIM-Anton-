@@ -26,6 +26,12 @@
 - Top-up paths explicitly skip primary-order snapshot/report semantics.
 - При trusted campaign association with `referralLinkId` делегировать
   registration в `ReferralsService`, never write user referral fields directly.
+- До этой интеграции сделать consumer audit Telegram identity check в
+  `ReferralsService`: подтверждение `telegram subject → userId` строится по
+  `UserIdentity(TELEGRAM, providerSubject)`. Не-null `User.telegramId` — только
+  contact/drift check; `null` не ломает existing explicit Telegram link. Если
+  referral и marketing требуют один и тот же assertion, переиспользовать или
+  выделить общий owner, а не копировать legacy-проверку в новом flow.
 - Preserve current referral re-attribution rule, auto-promo reservation,
   manual partner-promo precedence and `PartnerRewardsService` idempotency.
 - Ensure failed/cancelled/fulfillment/retry paths do not create a new touch,
@@ -72,6 +78,9 @@
   than only mock an empty `upsert.update`.
 - Campaign referral registration respects self/legacy/first-completed-order
   guard and cannot generate direct ledger write.
+- Linked Telegram account with `User.telegramId = null` passes canonical
+  `UserIdentity` assertion; another user’s identity or non-null contact drift
+  is rejected without writing referral/reward state.
 - Manual partner promo still wins; repeated completion/accounting remains one
   reward per order.
 - Lookup: `INV-TX-1`, `INV-PRISMA-1`, `INV-BND-1`, `INV-REUSE-1`,

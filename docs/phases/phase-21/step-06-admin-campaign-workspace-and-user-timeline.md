@@ -18,6 +18,9 @@ timeline без смешивания с PromoCodes, ReferralLinks или mixed u
   backend-returned canonical URL and is not fetched from a third party.
 - Добавить separate admin-only marketing timeline endpoint/view for user detail:
   first/last and touch history; не расширять mixed `GET /users/:id`.
+- Timeline и campaign association строить по canonical `userId` из marketing
+  facts/snapshots. `User.telegramId` допустим только как отображаемый contact
+  field, не как proof login identity или fallback для timeline lookup.
 - Показывать linked promo/partner policy read-only и направлять mutations в
   existing PromoCodes/ReferralLinks owners.
 
@@ -60,6 +63,9 @@ timeline без смешивания с PromoCodes, ReferralLinks или mixed u
 - Campaign mutation/read role matrix on backend and UI mirroring.
 - Generated links/QR equal backend response; inactive campaign has safe state.
 - Timeline route requires admin JWT and does not leak raw visitor/TG data.
+- Explicit Telegram link с `User.telegramId = null` остаётся корректным user
+  timeline; UI не выводит отсутствие contact field как отсутствие Telegram
+  identity.
 - Browser smoke for compact tabs, URL refresh/back-forward and desktop/mobile.
 - Lookup: `INV-CLIENT-1`, `INV-DTO-1`, `INV-AUTH-1`, `INV-SEC-1`,
   `INV-REUSE-1`, `INV-VER-2..4`.

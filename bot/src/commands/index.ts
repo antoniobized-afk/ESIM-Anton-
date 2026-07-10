@@ -3,6 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import { MyContext } from '../types';
 import { config } from '../config';
 import { api } from '../api';
+import { ensureBotSessionUser } from '../user-session';
 
 // URL Mini App
 const MINI_APP_URL = process.env.MINI_APP_URL || 'https://client-production-bc6d.up.railway.app';
@@ -27,22 +28,27 @@ export function setupCommands(bot: Bot<MyContext>) {
     const firstName = escapeMarkdown(ctx.from?.first_name || 'друг');
     const payload = ctx.match; // Получаем payload (например, "ref_12345")
 
-    // Регистрируем пользователя (если новый)
-    let user;
+    // Payload разобран до find-or-create: ma_ не может сначала завершить
+    // регистрацию как direct через общий middleware.
     if (userId) {
       try {
-        // Используем api.users.findOrCreate, который уже вызывается в middleware, 
-        // но здесь нам нужен объект user для регистрации реферала
-        // В middleware он сохраняется в session, но мы можем получить его снова или использовать session
-        // Для надежности вызовем findOrCreate снова (он идемпотентен)
-        user = await api.users.findOrCreate(
-          BigInt(userId),
-          {
-            username: ctx.from?.username,
-            firstName: ctx.from?.first_name,
-            lastName: ctx.from?.last_name,
-          }
-        );
+        const user = await ensureBotSessionUser(ctx);
+        if (!user) throw new Error('Не удалось получить canonical Telegram user');
+
+        const marketingStartParam =
+          typeof payload === 'string' && payload.startsWith('ma_') ? payload : undefined;
+        try {
+          await api.marketingAttribution.captureTelegramBotTouch({
+            userId: user.userId,
+            telegramId: String(userId),
+            startParam: marketingStartParam,
+            sourceEventKey: marketingStartParam
+              ? `telegram-bot:${ctx.update.update_id}`
+              : undefined,
+          });
+        } catch (error) {
+          console.error('Ошибка сохранения marketing attribution:', error);
+        }
 
         // Если есть реферальный код
         if (payload && typeof payload === 'string' && payload.startsWith('ref_')) {
@@ -50,7 +56,7 @@ export function setupCommands(bot: Bot<MyContext>) {
           console.log(`🔗 Обработка реферальной ссылки: ${referralCode} для пользователя ${userId}`);
 
           try {
-            await api.referrals.register(user.id, BigInt(userId), referralCode);
+            await api.referrals.register(user.userId, BigInt(userId), referralCode);
             console.log('✅ Реферал успешно зарегистрирован');
           } catch (error) {
             console.error('❌ Ошибка регистрации реферала:', error);
