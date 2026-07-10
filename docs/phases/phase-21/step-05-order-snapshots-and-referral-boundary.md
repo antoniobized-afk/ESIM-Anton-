@@ -64,8 +64,11 @@
   переписывают snapshot.
 - `MarketingAttributionLifecycleService` использует atomic
   `createMany(skipDuplicates)` и readback по unique `orderId`, а не пустой
-  `upsert.update`. Targeted concurrent proof вызывает один `orderId` дважды,
-  сохраняет одну строку и не допускает rewrite first/last snapshot.
+  `upsert.update`. DB-backed regression на отдельной локальной PostgreSQL test
+  DB синхронизирует две независимые Prisma transaction перед native insert,
+  получает один snapshot id/одну строку и после изменения current attribution
+  доказывает отсутствие rewrite при повторной доставке. Test запускается только
+  с explicit `TEST_DATABASE_URL` и отклоняет non-local/non-test database.
 - Trusted web claim передаёт `referralLinkId` последнего accepted touch из той
   же CTE без N+1 read; Telegram bot/Mini App делегируют linked campaign после
   canonical identity assertion. Marketing не пишет referral fields и не
@@ -75,8 +78,14 @@
   допустим при valid identity, contact drift или другая canonical identity
   отклоняются. Partner/legacy update содержит atomic `orders.none(COMPLETED,
   primary)` guard вместе с existing pre-check.
-- Targeted 8 suites / 112 tests, final backend build и full backend 64 suites /
-  551 tests прошли.
+- Транзитивный `Test.createTestingModule(...).compile()` закрывает DI-regression:
+  `ReferralsModule` больше не тянет неиспользуемый `UsersModule`, поэтому цепочка
+  `MarketingAttribution -> Referrals -> Users -> Auth -> MarketingAttribution`
+  не возникает и `forwardRef()`-shim не нужен.
+- Full backend с подключённой isolated test DB: 65 suites / 552 tests прошли;
+  `prisma generate --no-engine` + `nest build` зелёные. Обычный engine generate
+  локально отдельно блокируется Windows `EPERM` при rename уже загруженного
+  `query_engine-windows.dll.node`; это infra lock по `INV-VER-3`, не code defect.
 
 ## Файлы
 

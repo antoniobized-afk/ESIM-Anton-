@@ -138,4 +138,10 @@ Phase 19 не является dependency: у неё только naming/semanti
 
 - Status: `in_progress`
 - Current step: Step 05
-- Last evidence: Step 05 создал immutable snapshots в обоих primary order path
+- Last evidence: Step 05 создал immutable snapshots в обоих primary order path,
+  сохранил top-up вне marketing/CPA semantics и делегировал linked campaign в
+  existing referral owner после trusted association. Snapshot write conflict-safe
+  по `orderId`; Telegram assertion опирается на `UserIdentity`, а не на nullable
+  contact field. Transitive Nest graph compile и DB-backed concurrent snapshot
+  proof зелёные; full backend с isolated test DB прошёл 65 suites / 552 tests.
+  Manual cross-surface smoke и phase-wide rollout остаются Step 08.

@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { SharedAuthModule } from '@/common/auth/auth.shared-module';
 import { PrismaModule } from '@/common/prisma/prisma.module';
 import { MarketingAttributionCaptureService } from './marketing-attribution-capture.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
@@ -17,6 +18,7 @@ describe('MarketingAttributionModule graph', () => {
       imports: [
         ConfigModule.forRoot({ isGlobal: true }),
         PrismaModule,
+        SharedAuthModule,
         MarketingAttributionModule,
       ],
     }).compile();
