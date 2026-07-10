@@ -29,7 +29,7 @@ function withCampaign(
 function makeService(activeCampaign = true) {
   const prisma = {
     $transaction: jest.fn().mockImplementation(async (callback: (tx: unknown) => unknown) => callback(prisma)),
-    $queryRaw: jest.fn().mockResolvedValue([{ id: 'campaign_1' }]),
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'campaign_1', isActive: activeCampaign }]),
     marketingCampaign: {
       findUnique: jest.fn().mockResolvedValue({ id: 'campaign_1' }),
       findFirst: jest.fn().mockResolvedValue(activeCampaign ? { id: 'campaign_1' } : null),
@@ -77,23 +77,26 @@ describe('MarketingAttributionCaptureService', () => {
 
     const lockSql = prisma.$queryRaw.mock.calls[0][0].join('');
     expect(lockSql).toContain('FROM "marketing_campaigns"');
+    expect(lockSql).toContain('"isActive"');
+    expect(lockSql).toContain('"shortCode"');
     expect(lockSql).toContain('FOR SHARE');
     expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), {
       maxWait: 10_000,
       timeout: 60_000,
     });
     expect(prisma.marketingTouch.findUnique.mock.invocationCallOrder[0]).toBeLessThan(
-      prisma.marketingCampaign.findUnique.mock.invocationCallOrder[0],
+      prisma.$queryRaw.mock.invocationCallOrder[0],
     );
     expect(prisma.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
       prisma.marketingTouch.findUnique.mock.invocationCallOrder[1],
     );
     expect(prisma.marketingTouch.findUnique.mock.invocationCallOrder[1]).toBeLessThan(
-      prisma.marketingCampaign.findFirst.mock.invocationCallOrder[0],
-    );
-    expect(prisma.marketingCampaign.findFirst.mock.invocationCallOrder[0]).toBeLessThan(
       prisma.marketingTouch.createMany.mock.invocationCallOrder[0],
     );
+    expect(prisma.marketingCampaign.findFirst).not.toHaveBeenCalled();
+    expect(prisma.marketingCampaign.findUnique).not.toHaveBeenCalled();
+    expect(prisma.marketingTouch.findUnique).toHaveBeenCalledTimes(3);
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
     expect(prisma.marketingTouch.createMany).toHaveBeenCalledWith({
       data: [
         expect.objectContaining({
@@ -104,7 +107,10 @@ describe('MarketingAttributionCaptureService', () => {
       ],
       skipDuplicates: true,
     });
-    expect(lifecycle.recordCurrentTouch).toHaveBeenCalled();
+    expect(lifecycle.recordCurrentTouch).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user_1',
+      touch: expect.objectContaining({ id: 'touch_1', occurredAt, userId: 'user_1' }),
+    });
   });
 
   it('канонизирует anonymous touch как visitor-only association', async () => {
@@ -173,7 +179,10 @@ describe('MarketingAttributionCaptureService', () => {
     expect(prisma.marketingTouch.createMany).not.toHaveBeenCalled();
     expect(lifecycle.recordCurrentTouch).toHaveBeenCalledWith(
       expect.anything(),
-      { userId: 'user_1', touchId: 'touch_1' },
+      {
+        userId: 'user_1',
+        touch: expect.objectContaining({ id: 'touch_1', userId: 'user_1' }),
+      },
     );
   });
 
@@ -277,6 +286,8 @@ describe('MarketingAttributionCaptureService', () => {
     expect(prisma.$queryRaw).toHaveBeenCalled();
     expect(prisma.marketingTouch.findUnique).toHaveBeenCalledTimes(2);
     expect(prisma.marketingTouch.createMany).not.toHaveBeenCalled();
+    expect(prisma.marketingCampaign.findFirst).not.toHaveBeenCalled();
+    expect(prisma.marketingCampaign.findUnique).not.toHaveBeenCalled();
     expect(lifecycle.recordCurrentTouch).not.toHaveBeenCalled();
   });
 });

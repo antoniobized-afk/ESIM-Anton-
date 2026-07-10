@@ -104,6 +104,10 @@
 - Follow-up audit заменяет raw Prisma campaign response явной allowlist-моделью:
   read API не раскрывает `referralLink.userId` или `_count`; внутренний touch
   count остаётся только данными freeze guard.
+- Follow-up audit сокращает core hot capture path с семи до пяти round-trip
+  без изменения lock/idempotency границы: shared campaign lock ищет code и
+  возвращает active state, а lifecycle использует уже проверенный accepted
+  touch; conflict-safe `createMany`+readback сохранён.
 - Local migration deploy и `prisma migrate status` прошли; backend build и 56
   Jest suites / 508 tests зелёные. Targeted specs покрывают lifecycle/capture,
   admin guard/role policy, DTO contract, campaign immutability, snapshots,

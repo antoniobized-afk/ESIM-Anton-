@@ -118,9 +118,10 @@ describe('MarketingAttributionLifecycleService', () => {
 
     const result = await service.recordCurrentTouch(tx as unknown as MarketingAttributionTransaction, {
       userId: 'user_1',
-      touchId: 'touch_first',
+      touch: firstTouch,
     });
 
+    expect(tx.marketingTouch.findUnique).not.toHaveBeenCalled();
     expect(tx.userMarketingAttribution.updateMany).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({

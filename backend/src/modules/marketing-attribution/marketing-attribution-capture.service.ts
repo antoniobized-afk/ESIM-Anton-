@@ -32,36 +32,26 @@ export class MarketingAttributionCaptureService {
           return this.acceptIdempotentTouch(tx, existingTouch, input);
         }
 
-        const campaignCandidate = await tx.marketingCampaign.findUnique({
-          where: { shortCode: input.campaignCode },
-          select: { id: true },
-        });
-
-        if (!campaignCandidate) {
-          return null;
-        }
-
         // Captures держат совместимый lock; operator mutation с FOR UPDATE ждёт их commit.
-        await tx.$queryRaw`SELECT "id" FROM "marketing_campaigns" WHERE "id" = ${campaignCandidate.id} FOR SHARE`;
+        const lockedCampaigns = await tx.$queryRaw<{ id: string; isActive: boolean }[]>`
+          SELECT "id", "isActive" FROM "marketing_campaigns"
+          WHERE "shortCode" = ${input.campaignCode} FOR SHARE
+        `;
 
         const touchAfterLock = await this.findTouchBySourceEventKey(tx, input.sourceEventKey);
         if (touchAfterLock) {
           return this.acceptIdempotentTouch(tx, touchAfterLock, input);
         }
 
-        const campaign = await tx.marketingCampaign.findFirst({
-          where: { id: campaignCandidate.id, isActive: true },
-          select: { id: true },
-        });
-
-        if (!campaign) {
+        const lockedCampaign = lockedCampaigns[0];
+        if (!lockedCampaign?.isActive) {
           return null;
         }
 
         await tx.marketingTouch.createMany({
           data: [
             {
-              campaignId: campaign.id,
+              campaignId: lockedCampaign.id,
               userId: input.userId ?? null,
               channel: input.channel,
               sourceEventKey: input.sourceEventKey,
@@ -107,7 +97,7 @@ export class MarketingAttributionCaptureService {
     if (input.userId) {
       await this.lifecycle.recordCurrentTouch(tx, {
         userId: input.userId,
-        touchId: touch.id,
+        touch,
       });
     }
 

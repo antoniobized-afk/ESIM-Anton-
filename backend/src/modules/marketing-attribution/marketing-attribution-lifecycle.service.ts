@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   MarketingRegistrationAttributionStatus,
+  MarketingTouch,
   Prisma,
 } from '@prisma/client';
 import { MarketingAttributionTransaction } from './marketing-attribution.types';
@@ -26,6 +27,7 @@ type MarketingTouchSnapshot = {
 type RegistrationSnapshotPrefix = 'registrationFirst' | 'registrationLast';
 type OrderSnapshotPrefix = 'first' | 'last';
 type SnapshotPrefix = RegistrationSnapshotPrefix | OrderSnapshotPrefix;
+type CurrentTouch = Pick<MarketingTouch, 'id' | 'userId' | 'occurredAt'>;
 
 @Injectable()
 export class MarketingAttributionLifecycleService {
@@ -57,16 +59,9 @@ export class MarketingAttributionLifecycleService {
 
   async recordCurrentTouch(
     tx: MarketingAttributionTransaction,
-    input: { userId: string; touchId: string },
+    input: { userId: string; touch: CurrentTouch },
   ) {
-    const touch = await tx.marketingTouch.findUnique({
-      where: { id: input.touchId },
-      select: { id: true, userId: true, occurredAt: true },
-    });
-
-    if (!touch) {
-      throw new NotFoundException('Маркетинговое касание не найдено');
-    }
+    const { touch } = input;
     if (touch.userId !== input.userId) {
       throw new ForbiddenException('Касание нельзя связать с другим пользователем');
     }
