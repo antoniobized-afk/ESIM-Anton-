@@ -35,9 +35,12 @@ type CampaignWithRelations = Prisma.MarketingCampaignGetPayload<{
     referralLink: {
       select: { id: true; code: true; label: true; userId: true; isActive: true };
     };
-    _count: { select: { touches: true } };
   };
 }>;
+
+type CampaignWithTouchCount = CampaignWithRelations & {
+  _count: { touches: number };
+};
 
 const MANAGE_CAMPAIGN_ROLES = new Set(['MANAGER', 'SUPER_ADMIN']);
 const MAX_SHORT_CODE_ATTEMPTS = 5;
@@ -150,7 +153,7 @@ export class MarketingCampaignsService {
 
       const existing = await tx.marketingCampaign.findUnique({
         where: { id },
-        include: this.campaignInclude(),
+        include: this.campaignGuardInclude(),
       });
 
       if (!existing) {
@@ -197,6 +200,12 @@ export class MarketingCampaignsService {
       referralLink: {
         select: { id: true, code: true, label: true, userId: true, isActive: true },
       },
+    } as const;
+  }
+
+  private campaignGuardInclude() {
+    return {
+      ...this.campaignInclude(),
       _count: { select: { touches: true } },
     } as const;
   }
@@ -340,7 +349,7 @@ export class MarketingCampaignsService {
     }
   }
 
-  private assertMutableFields(existing: CampaignWithRelations, update: CampaignUpdate) {
+  private assertMutableFields(existing: CampaignWithTouchCount, update: CampaignUpdate) {
     if (existing._count.touches === 0) {
       return;
     }

@@ -91,6 +91,38 @@ describe('MarketingCampaignsService', () => {
     expect(config.get).toHaveBeenCalledTimes(2);
   });
 
+  it('запрашивает touch count только для freeze guard перед update', async () => {
+    const { service, prisma } = makeService();
+    prisma.marketingCampaign.findMany.mockResolvedValue([baseCampaign]);
+    prisma.marketingCampaign.count.mockResolvedValue(1);
+
+    await service.getCampaigns();
+    await service.getCampaign('campaign_1');
+    await service.createCampaign(
+      {
+        name: 'Summer launch',
+        utmSource: 'blogger',
+        utmMedium: 'social',
+        utmCampaign: 'summer-2026',
+        targetPath: '/catalog',
+      },
+      { id: 'admin_1', role: 'MANAGER' },
+    );
+    await service.updateCampaign(
+      'campaign_1',
+      { isActive: false },
+      { id: 'admin_1', role: 'MANAGER' },
+    );
+
+    expect(prisma.marketingCampaign.findMany.mock.calls[0][0].include).not.toHaveProperty('_count');
+    expect(prisma.marketingCampaign.findUnique.mock.calls[0][0].include).not.toHaveProperty('_count');
+    expect(prisma.marketingCampaign.create.mock.calls[0][0].include).not.toHaveProperty('_count');
+    expect(prisma.marketingCampaign.findUnique.mock.calls[1][0].include).toEqual(
+      expect.objectContaining({ _count: { select: { touches: true } } }),
+    );
+    expect(prisma.marketingCampaign.update.mock.calls[0][0].include).not.toHaveProperty('_count');
+  });
+
   it('отдаёт curated campaign response без Prisma relation internals', async () => {
     const { service, prisma } = makeService();
     const campaign = {

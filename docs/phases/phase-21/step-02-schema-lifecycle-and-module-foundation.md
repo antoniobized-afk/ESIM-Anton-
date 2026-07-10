@@ -108,8 +108,11 @@
   без изменения lock/idempotency границы: shared campaign lock ищет code и
   возвращает active state, а lifecycle использует уже проверенный accepted
   touch; conflict-safe `createMany`+readback сохранён.
+- Follow-up audit отделяет `_count.touches` freeze guard от lean campaign
+  read/write includes: list, detail, create и update response не считают
+  append-only touches; count запрашивается только перед immutable-field check.
 - Local migration deploy и `prisma migrate status` прошли; backend build и 56
-  Jest suites / 508 tests зелёные. Targeted specs покрывают lifecycle/capture,
+  Jest suites / 509 tests зелёные. Targeted specs покрывают lifecycle/capture,
   admin guard/role policy, DTO contract, campaign immutability, snapshots,
   anonymization и module graph.
 
