@@ -366,6 +366,28 @@ export const referralsApi = {
   },
 };
 
+export const marketingAttributionApi = {
+  async captureWebTouch(input: {
+    campaignCode: string;
+    visitorToken: string;
+    launchKey: string;
+  }): Promise<{ accepted: boolean; targetPath: string | null }> {
+    const { data } = await api.post('/marketing-attribution/web/capture', input);
+    return data;
+  },
+
+  async claimWebTouches(visitorToken: string | null): Promise<{
+    claimedTouches: number;
+    registrationFinalized: boolean;
+  }> {
+    const { data } = await api.post(
+      '/marketing-attribution/web/claim',
+      visitorToken ? { visitorToken } : {},
+    );
+    return data;
+  },
+};
+
 export const promoApi = {
   async validate(code: string): Promise<{ valid: boolean; code: string; discountPercent: number }> {
     const { data } = await api.get('/promo-codes/validate', { params: { code } });

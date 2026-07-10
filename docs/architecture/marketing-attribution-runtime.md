@@ -101,9 +101,14 @@ landing URL или client-supplied UTM tuple. UTM всегда читается 
 
 Registration фиксируется один раз в статусе `DIRECT` или `ATTRIBUTED`:
 first/last touch и campaign/UTM/channel snapshot сохраняются в state отдельно
-от current first/last. Новый touch у существующего пользователя не меняет
-registration metric. Legacy `User.utm*` и старые user/referral fields не
-являются touch history и не используются для synthetic backfill.
+от current first/last. Eligibility для такой финализации создаётся только в
+той же transaction, что и новый email/OAuth account; authenticated claim без
+pending touch честно фиксирует `DIRECT`. Existing account без этого durable
+marker получает только current attribution от позднего campaign click и не
+приобретает synthetic registration metric. Telegram account получает свой
+trusted registration flow только в bot/Mini App boundary. Legacy `User.utm*`
+и старые user/referral fields не являются touch history и не используются для
+synthetic backfill.
 
 Перед финализацией registration snapshot берёт `FOR UPDATE` на строке
 `UserMarketingAttribution`, затем перечитывает current first/last. Поэтому
@@ -145,10 +150,14 @@ Public capture принимает только active campaign code и bounded o
 idempotency/visitor identifiers. Из raw browser input он не получает campaign
 metadata, referral policy или UTM.
 
-Web flow хранит opaque visitor token в first-party storage, передаёт в backend
-только его HMAC и idempotency key, а после JWT claim привязывает pending touch
-к canonical user. Claim идемпотентен и не может отвязать или присоединить touch
-к другому user.
+Web flow хранит opaque visitor token в first-party storage и передаёт его
+только на bounded capture/claim transport boundary; backend вычисляет HMAC и
+persist-ит только HMAC вместе с opaque idempotency key. Visitor token остаётся
+в браузере до logout, а launch key изолирован в tab session: successful claim
+не может лишить уже начатый capture в другой вкладке его association key. После
+JWT claim одной атомарной мутацией привязывает pending touch к canonical user и
+очищает HMAC. Claim идемпотентен и не может отвязать или присоединить touch к
+другому user.
 
 Bot flow принимает `ma_` раньше решения find-or-create и создаёт trusted event
 только через service-token boundary с проверкой canonical Telegram/user

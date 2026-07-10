@@ -395,6 +395,8 @@ model UserMarketingAttribution {
   lastTouchId                    String?
   lastTouchOccurredAt            DateTime?
   registrationStatus             MarketingRegistrationAttributionStatus @default(PENDING)
+  /// Заполняется только в transaction создания eligible email/OAuth account.
+  registrationEligibleAt         DateTime?
   registrationFinalizedAt        DateTime?
   registrationFirstTouchId       String?
   registrationLastTouchId        String?

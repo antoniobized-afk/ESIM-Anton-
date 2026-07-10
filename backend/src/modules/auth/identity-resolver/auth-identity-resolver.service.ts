@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { AuthIdentityProvider, Prisma } from '@prisma/client';
 import { PrismaService } from '@/common/prisma/prisma.service';
+import { MarketingAttributionLifecycleService } from '@/modules/marketing-attribution/marketing-attribution-lifecycle.service';
 import { OAuthProfile } from '../oauth.service';
 import {
   normalizeEmail,
@@ -41,6 +42,7 @@ export class AuthIdentityResolverService {
     private readonly prisma: PrismaService,
     private readonly profileMapper: OAuthIdentityProfileMapper,
     private readonly auditService: AuthIdentityAuditService,
+    private readonly marketingLifecycle: MarketingAttributionLifecycleService,
   ) {}
 
   async resolveEmailLogin(email: string): Promise<AuthIdentityLoginResult> {
@@ -347,6 +349,14 @@ export class AuthIdentityResolverService {
         data: this.userCreateData(input),
         select: LOGIN_USER_SELECT,
       });
+      // Telegram registration финализируется только с trusted bot/Mini App
+      // capture в Step 04; email и OAuth web account принадлежат Step 03.
+      if (input.provider !== AuthIdentityProvider.TELEGRAM) {
+        await this.marketingLifecycle.initializeRegistrationAttributionForNewUser(
+          tx,
+          createdUser.id,
+        );
+      }
       const identity = await this.createIdentityOrThrowConflict(tx, createdUser.id, input);
       await this.auditService.recordLinked(tx, {
         identityId: identity.id,

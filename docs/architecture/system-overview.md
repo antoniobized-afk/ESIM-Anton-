@@ -75,3 +75,8 @@
 - Auth уже не только Telegram: live code подтверждает email OTP, OAuth
   Google/Yandex/VK, Telegram Login Widget и Telegram WebApp auth. Phone сейчас
   является profile/contact field, а не подтвержденным login flow.
+- Web campaign attribution остаётся backend-owned: public capture принимает
+  только opaque browser keys, persist-ит лишь их HMAC, а post-JWT claim
+  связывает pending touches с canonical `user.id`; registration snapshot
+  доступен только account, созданному в том же email/OAuth flow. Детали и
+  Telegram boundary — в `marketing-attribution-runtime.md`.

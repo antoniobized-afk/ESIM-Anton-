@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { MarketingAttributionCaptureService } from './marketing-attribution-capture.service';
 import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
+import { MarketingAttributionWebService } from './marketing-attribution-web.service';
 import { MarketingAttributionModule } from './marketing-attribution.module';
 import { MarketingCampaignsService } from './marketing-campaigns.service';
 
@@ -16,6 +17,7 @@ describe('MarketingAttributionModule graph', () => {
         MarketingCampaignsService,
         MarketingAttributionCaptureService,
         MarketingAttributionLifecycleService,
+        MarketingAttributionWebService,
       ]),
     );
     expect(exports).toEqual(
@@ -23,6 +25,7 @@ describe('MarketingAttributionModule graph', () => {
         MarketingCampaignsService,
         MarketingAttributionCaptureService,
         MarketingAttributionLifecycleService,
+        MarketingAttributionWebService,
       ]),
     );
   });

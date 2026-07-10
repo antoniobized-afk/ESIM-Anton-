@@ -31,6 +31,18 @@ type CurrentTouch = Pick<MarketingTouch, 'id' | 'userId' | 'occurredAt'>;
 
 @Injectable()
 export class MarketingAttributionLifecycleService {
+  async initializeRegistrationAttributionForNewUser(
+    tx: MarketingAttributionTransaction,
+    userId: string,
+  ) {
+    return tx.userMarketingAttribution.create({
+      data: {
+        userId,
+        registrationEligibleAt: new Date(),
+      },
+    });
+  }
+
   async ensureRegistrationState(tx: MarketingAttributionTransaction, userId: string) {
     const existingState = await tx.userMarketingAttribution.findUnique({
       where: { userId },
@@ -104,6 +116,30 @@ export class MarketingAttributionLifecycleService {
   async finalizeRegistrationAttribution(tx: MarketingAttributionTransaction, userId: string) {
     await this.ensureRegistrationState(tx, userId);
 
+    return this.finalizeRegistrationSnapshot(tx, userId);
+  }
+
+  async finalizeRegistrationAttributionForNewUser(
+    tx: MarketingAttributionTransaction,
+    userId: string,
+  ) {
+    const state = await tx.userMarketingAttribution.findUnique({
+      where: { userId },
+      select: { id: true, registrationEligibleAt: true },
+    });
+    if (!state?.registrationEligibleAt) {
+      return false;
+    }
+
+    await this.finalizeRegistrationSnapshot(tx, userId);
+    return true;
+  }
+
+  private async finalizeRegistrationSnapshot(
+    tx: MarketingAttributionTransaction,
+    userId: string,
+  ) {
+
     // Блокирует current first/last CAS до записи immutable registration snapshot.
     await tx.$queryRaw`SELECT "id" FROM "user_marketing_attribution" WHERE "userId" = ${userId} FOR UPDATE`;
 
@@ -129,6 +165,7 @@ export class MarketingAttributionLifecycleService {
       data: {
         registrationStatus: status,
         registrationFinalizedAt: new Date(),
+        registrationEligibleAt: null,
         ...this.registrationSnapshotData('registrationFirst', first),
         ...this.registrationSnapshotData('registrationLast', last),
       },

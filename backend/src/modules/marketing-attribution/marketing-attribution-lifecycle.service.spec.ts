@@ -85,6 +85,42 @@ describe('MarketingAttributionLifecycleService', () => {
     );
   });
 
+  it('помечает eligibility только в transaction создания нового аккаунта', async () => {
+    const { tx } = makeTransaction();
+    const service = new MarketingAttributionLifecycleService();
+
+    await service.initializeRegistrationAttributionForNewUser(
+      tx as unknown as MarketingAttributionTransaction,
+      'user_1',
+    );
+
+    expect(tx.userMarketingAttribution.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'user_1',
+        registrationEligibleAt: expect.any(Date),
+      }),
+    });
+  });
+
+  it('не финализирует registration snapshot для существующего пользователя без eligibility', async () => {
+    const { tx } = makeTransaction();
+    const service = new MarketingAttributionLifecycleService();
+    tx.userMarketingAttribution.findUnique.mockResolvedValue({
+      id: 'state_1',
+      registrationEligibleAt: null,
+    });
+
+    await expect(
+      service.finalizeRegistrationAttributionForNewUser(
+        tx as unknown as MarketingAttributionTransaction,
+        'user_1',
+      ),
+    ).resolves.toBe(false);
+
+    expect(tx.$queryRaw).not.toHaveBeenCalled();
+    expect(tx.userMarketingAttribution.updateMany).not.toHaveBeenCalled();
+  });
+
   it('после user lock переиспользует state, созданный конкурентной transaction', async () => {
     const { state, tx } = makeTransaction();
     const service = new MarketingAttributionLifecycleService();

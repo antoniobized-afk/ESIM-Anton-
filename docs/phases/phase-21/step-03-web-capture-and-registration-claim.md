@@ -36,11 +36,34 @@ cross-domain cookie assumptions или mutable registration analytics.
 
 ## Статус
 
-`planned`
+`in_progress`
 
 ## Evidence
 
-- Pending implementation.
+- Реализованы thin route `client/app/r/[shortCode]`, first-party opaque
+  visitor/launch storage и bounded public `POST /marketing-attribution/web/capture`.
+  Browser не передаёт UTM/referral policy; backend строит HMAC visitor key и
+  сохраняет только HMAC + opaque idempotency key.
+- `POST /marketing-attribution/web/claim` защищён `JwtUserGuard`: одной
+  SQL-мутацией назначает canonical `userId` всем pending WEB touches, очищает
+  visitor HMAC, затем в той же transaction обновляет current first/last.
+  Cross-user association и anonymous replay claimed source-event key остаются
+  conflict-safe в owner capture service.
+- Новый email/OAuth account получает durable `registrationEligibleAt` в той же
+  transaction, что создание `User`; claim финализирует `ATTRIBUTED` или
+  `DIRECT` только при этом marker. Existing user от позднего click получает
+  current attribution без synthetic registration snapshot. Telegram исключён:
+  его trusted boundary остаётся Step 04.
+- `AuthProvider` вызывает idempotent claim после JWT bootstrap и после
+  campaign-capture event; visitor token сохраняется до logout, launch key
+  изолирован tab session, поэтому in-flight capture в параллельной вкладке не
+  теряет association key. Referral one-shot не переписан и `/ref/[code]` не
+  менялся.
+- Automated evidence: Prisma client generation, 59 Jest suites / 521 tests,
+  `nest build`, targeted backend ESLint, client ESLint и client `tsc` прошли.
+- До closure остаются migration apply/preflight и ручной browser smoke:
+  anonymous campaign → new email/OAuth account, existing account, retry/reload
+  и parallel claim на запущенной конфигурации с HMAC secret.
 
 ## Файлы
 

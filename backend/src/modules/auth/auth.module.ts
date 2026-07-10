@@ -16,10 +16,12 @@ import { AuthIdentityResolverService } from './identity-resolver/auth-identity-r
 import { OAuthIdentityProfileMapper } from './identity-resolver/oauth-identity-profile.mapper';
 import { AuthIdentityLinkStateService } from './identity-management/auth-identity-link-state.service';
 import { AuthIdentityManagementService } from './identity-management/auth-identity-management.service';
+import { MarketingAttributionModule } from '../marketing-attribution/marketing-attribution.module';
 
 @Module({
   imports: [
     ConfigModule,
+    MarketingAttributionModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({

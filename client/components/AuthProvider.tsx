@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useRef } from 'react'
+import { createContext, useCallback, useContext, useState, useEffect, useRef } from 'react'
 import {
   AuthUser,
   getToken,
@@ -12,7 +12,12 @@ import {
   hasTelegramLaunchParams,
   getTelegramStartParam,
 } from '@/lib/auth'
-import { api, referralsApi } from '@/lib/api'
+import { api, marketingAttributionApi, referralsApi } from '@/lib/api'
+import {
+  clearMarketingAttributionStorage,
+  getMarketingVisitorToken,
+  MARKETING_ATTRIBUTION_CAPTURED_EVENT,
+} from '@/lib/marketing-attribution'
 
 interface AuthContextValue {
   user: AuthUser | null
@@ -66,6 +71,7 @@ export function AuthProvider({ children }: { children: any }) {
   const [isTelegram, setIsTelegram] = useState(false)
   const [isTelegramReady, setIsTelegramReady] = useState(false)
   const [authError, setAuthError] = useState<'telegram-auth-required' | null>(null)
+  const marketingClaimAttemptedRef = useRef(false)
 
   useEffect(() => {
     const updateTelegramReady = () => {
@@ -182,6 +188,20 @@ export function AuthProvider({ children }: { children: any }) {
     init()
   }, [])
 
+  const refreshUser = useCallback(async () => {
+    const currentToken = token || getToken()
+    if (!currentToken) return
+    try {
+      const { data } = await api.get('/auth/me', {
+        headers: { Authorization: `Bearer ${currentToken}` }
+      })
+      setUser(data)
+      setStoredUser(data)
+    } catch (e) {
+      console.error('Failed to refresh user:', e)
+    }
+  }, [token])
+
   // One-shot: отправить pending referral code / Telegram start_param после авторизации
   const referralAttemptedRef = useRef(false)
   useEffect(() => {
@@ -199,9 +219,10 @@ export function AuthProvider({ children }: { children: any }) {
         // При transient ошибке сохраняем код для retry после следующего auth/bootstrap pass.
         referralAttemptedRef.current = false
       })
-  }, [isBootstrapped, user])
+  }, [isBootstrapped, refreshUser, user])
 
   const login = (newToken: string, newUser: AuthUser) => {
+    marketingClaimAttemptedRef.current = false
     setToken(newToken)
     setUser(newUser)
     saveToken(newToken)
@@ -210,23 +231,41 @@ export function AuthProvider({ children }: { children: any }) {
 
   const logout = () => {
     clearToken()
+    clearMarketingAttributionStorage()
+    marketingClaimAttemptedRef.current = false
     setToken(null)
     setUser(null)
   }
 
-  const refreshUser = async () => {
-    const currentToken = token || getToken()
-    if (!currentToken) return
+  const claimMarketingAttribution = useCallback(async () => {
+    if (!user || marketingClaimAttemptedRef.current) return
+
+    marketingClaimAttemptedRef.current = true
+    const visitorToken = getMarketingVisitorToken()
     try {
-      const { data } = await api.get('/auth/me', {
-        headers: { Authorization: `Bearer ${currentToken}` }
-      })
-      setUser(data)
-      setStoredUser(data)
-    } catch (e) {
-      console.error('Failed to refresh user:', e)
+      await marketingAttributionApi.claimWebTouches(visitorToken)
+      // Opaque visitor token остаётся до logout: параллельный capture в другой
+      // вкладке уже мог взять его до этого claim и должен завершить association.
+    } catch {
+      // Pending token остаётся только для следующего authenticated bootstrap/event retry.
+      marketingClaimAttemptedRef.current = false
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    if (!isBootstrapped || !user) return
+    void claimMarketingAttribution()
+  }, [claimMarketingAttribution, isBootstrapped, user])
+
+  useEffect(() => {
+    const handleCaptured = () => {
+      marketingClaimAttemptedRef.current = false
+      void claimMarketingAttribution()
+    }
+
+    window.addEventListener(MARKETING_ATTRIBUTION_CAPTURED_EVENT, handleCaptured)
+    return () => window.removeEventListener(MARKETING_ATTRIBUTION_CAPTURED_EVENT, handleCaptured)
+  }, [claimMarketingAttribution])
 
   return (
     <AuthContext.Provider value={{ user, token, isLoading, isBootstrapped, isTelegram, isTelegramReady, authError, login, logout, refreshUser }}>

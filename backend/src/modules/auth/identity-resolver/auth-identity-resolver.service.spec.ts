@@ -35,13 +35,18 @@ function makeService() {
     },
     $transaction: jest.fn().mockImplementation(async (callback: any) => callback(prisma)),
   };
+  const marketingLifecycle = {
+    initializeRegistrationAttributionForNewUser: jest.fn().mockResolvedValue({ id: 'state_1' }),
+  };
 
   return {
     prisma,
+    marketingLifecycle,
     service: new AuthIdentityResolverService(
       prisma as any,
       new OAuthIdentityProfileMapper(),
       new AuthIdentityAuditService(),
+      marketingLifecycle as any,
     ),
   };
 }
@@ -55,6 +60,30 @@ function uniqueConstraintError() {
 
 describe('AuthIdentityResolverService', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  it('создаёт registration eligibility вместе с новым email аккаунтом', async () => {
+    const { service, prisma, marketingLifecycle } = makeService();
+
+    await service.resolveEmailLogin('new@example.com');
+
+    expect(prisma.user.create).toHaveBeenCalled();
+    expect(marketingLifecycle.initializeRegistrationAttributionForNewUser).toHaveBeenCalledWith(
+      prisma,
+      'user_1',
+    );
+  });
+
+  it('не создаёт web registration eligibility для Telegram account до Step 04', async () => {
+    const { service, marketingLifecycle } = makeService();
+
+    await service.resolveOAuthLogin({
+      provider: 'telegram',
+      providerId: '123456789',
+      username: 'mojo_user',
+    });
+
+    expect(marketingLifecycle.initializeRegistrationAttributionForNewUser).not.toHaveBeenCalled();
+  });
 
   it('email login создает EMAIL identity для существующего user.email без смены User.id', async () => {
     const { service, prisma } = makeService();

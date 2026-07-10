@@ -135,4 +135,5 @@ Phase 19 не является dependency: у неё только naming/semanti
 
 - Status: `in_progress`
 - Current step: Step 03
-- Last evidence: Step 02 completed
+- Last evidence: Step 03 code и automated gates completed; migration preflight
+  и browser smoke остаются для closure
