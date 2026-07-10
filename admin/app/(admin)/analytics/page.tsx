@@ -1,8 +1,11 @@
+import { Suspense } from 'react'
+import Spinner from '@/components/ui/Spinner'
+import MarketingAttributionWorkspace from './_components/MarketingAttributionWorkspace'
+
 export default function AnalyticsPage() {
   return (
-    <div className="glass-card glass-card--static p-8 text-center text-slate-600">
-      <h2 className="text-2xl font-bold text-slate-900">Аналитика</h2>
-      <p className="mt-2">В разработке. Функциональность будет добавлена в следующих фазах.</p>
-    </div>
+    <Suspense fallback={<div className="glass-card p-8"><Spinner centered /></div>}>
+      <MarketingAttributionWorkspace />
+    </Suspense>
   )
 }

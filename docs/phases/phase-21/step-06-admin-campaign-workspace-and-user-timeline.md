@@ -43,11 +43,35 @@ timeline без смешивания с PromoCodes, ReferralLinks или mixed u
 
 ## Статус
 
-`planned`
+`partial`
 
 ## Evidence
 
-- Pending implementation.
+- `/analytics` заменён на компактный workspace «Источники трафика» с
+  каноническим URL-state (`tab`, `status`, `page`), campaign constructor/list,
+  backend-returned web/bot/Mini App links, локальным QR и безопасным inactive
+  state. SUPPORT получает read-only UI; mutation controls доступны только
+  MANAGER/SUPER_ADMIN и остаются защищены backend owner.
+- Optional referral picker читает существующие active `ReferralLink`
+  постранично. Reward/promo policy показывается read-only, а изменение
+  направляется в существующий `/referral-links` owner; новый financial contract
+  не создан.
+- Добавлен отдельный admin route
+  `GET /marketing-attribution/users/:userId/timeline`. Read owner делает один
+  bounded Prisma projection по canonical `User.id` с вложенной пагинацией и
+  `_count`; response не выбирает `telegramId`, `sourceEventKey`, visitor HMAC
+  или raw Telegram data. User modal показывает current first/last,
+  registration snapshots и factual touch history.
+- QR dependency audit: `qrcode@1.5.4` и `@types/qrcode@1.5.6`, лицензия MIT;
+  QR строится локально только из canonical URL backend response.
+- Gates: `pnpm --filter backend build`; marketing contour — 16 suites / 84
+  tests; full backend — 67 suites / 558 tests; `pnpm --filter admin lint`;
+  `pnpm --filter admin build`. Consumer audit выполнен по
+  `backend/admin/client/bot/shared`: новый timeline contract имеет только admin
+  consumer, существующие web/client capture consumers не изменены.
+- Browser smoke не выполнен из-за infra: in-app browser backend отсутствует
+  в текущей сессии. Visual desktop/mobile и refresh/back-forward proof остаётся
+  единственным gate до `completed`; product/build result при этом green.
 
 ## Файлы
 

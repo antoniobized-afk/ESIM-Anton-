@@ -663,3 +663,87 @@ export interface UpdateReferralLinkDto {
   isActive?: boolean
   expiresAt?: string | null
 }
+
+// ── Marketing Attribution ──────────────────────────────────────────
+
+export type MarketingTouchChannel = 'WEB' | 'TELEGRAM_BOT' | 'TELEGRAM_MINI_APP'
+export type MarketingRegistrationStatus = 'PENDING' | 'DIRECT' | 'ATTRIBUTED'
+
+export interface MarketingCampaignReference {
+  id: string
+  shortCode: string | null
+  name: string | null
+  utmSource: string | null
+  utmMedium: string | null
+  utmCampaign: string | null
+  utmContent: string | null
+  utmTerm: string | null
+}
+
+export interface MarketingCampaign {
+  id: string
+  shortCode: string
+  name: string
+  utmSource: string
+  utmMedium: string
+  utmCampaign: string
+  utmContent: string | null
+  utmTerm: string | null
+  targetPath: string
+  referralLinkId: string | null
+  referralLink: {
+    id: string
+    code: string
+    label: string | null
+    isActive: boolean
+  } | null
+  isActive: boolean
+  deactivatedAt: string | null
+  createdAt: string
+  updatedAt: string
+  links: {
+    web: string
+    telegramBot: string
+    telegramMiniApp: string
+  }
+}
+
+export interface CreateMarketingCampaignDto {
+  name: string
+  utmSource: string
+  utmMedium: string
+  utmCampaign: string
+  utmContent?: string | null
+  utmTerm?: string | null
+  targetPath: string
+  referralLinkId?: string | null
+}
+
+export interface MarketingTimelineTouch {
+  id: string
+  channel: MarketingTouchChannel
+  occurredAt: string
+  campaign: MarketingCampaignReference
+}
+
+export interface MarketingRegistrationSnapshot {
+  occurredAt: string
+  channel: MarketingTouchChannel
+  campaign: MarketingCampaignReference
+}
+
+export interface MarketingUserTimeline {
+  userId: string
+  current: {
+    first: MarketingTimelineTouch | null
+    last: MarketingTimelineTouch | null
+  }
+  registration: {
+    status: MarketingRegistrationStatus
+    eligibleAt: string | null
+    finalizedAt: string | null
+    first: MarketingRegistrationSnapshot | null
+    last: MarketingRegistrationSnapshot | null
+  } | null
+  touches: PaginatedResponse<MarketingTimelineTouch>
+}

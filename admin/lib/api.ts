@@ -14,6 +14,7 @@ import type {
   AuthLoginResponse,
   AutoUpdateExchangeRateResponse,
   CreateLoyaltyLevelDto,
+  CreateMarketingCampaignDto,
   CreateProductDto,
   CreatePromoCodeDto,
   CreateReferralLinkDto,
@@ -21,6 +22,8 @@ import type {
   ExchangeRateInfo,
   ExchangeRateUpdateResponse,
   LoyaltyLevel,
+  MarketingCampaign,
+  MarketingUserTimeline,
   OrdersQueryParams,
   PaginatedResponse,
   PaymentsQueryParams,
@@ -190,6 +193,17 @@ export const referralLinksApi = {
     api.patch<AdminReferralLink>(`/referrals/links/${id}`, data),
   getStats: (id: string) =>
     api.get<AdminReferralLinkStats>(`/referrals/links/${id}/stats`),
+}
+
+export const marketingAttributionApi = {
+  getCampaigns: (params?: { page?: number; limit?: number; isActive?: boolean }) =>
+    api.get<PaginatedResponse<MarketingCampaign>>('/marketing-attribution/campaigns', { params }),
+  createCampaign: (data: CreateMarketingCampaignDto) =>
+    api.post<MarketingCampaign>('/marketing-attribution/campaigns', data),
+  updateCampaign: (id: string, data: { isActive: boolean }) =>
+    api.patch<MarketingCampaign>(`/marketing-attribution/campaigns/${id}`, data),
+  getUserTimeline: (userId: string, params?: { page?: number; limit?: number }) =>
+    api.get<MarketingUserTimeline>(`/marketing-attribution/users/${userId}/timeline`, { params }),
 }
 
 export const loyaltyApi = {

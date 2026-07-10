@@ -27,7 +27,7 @@ const navigation = [
   { href: '/promo', label: 'Промокоды', icon: Ticket },
   { href: '/referral-links', label: 'Партнёрские ссылки', icon: Link2 },
   { href: '/payments', label: 'Платежи', icon: CreditCard },
-  { href: '/analytics', label: 'Аналитика', icon: BarChart3 },
+  { href: '/analytics', label: 'Источники трафика', icon: BarChart3 },
   { href: '/settings', label: 'Настройки', icon: SettingsIcon },
 ]
 

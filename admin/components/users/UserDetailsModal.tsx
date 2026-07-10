@@ -7,6 +7,7 @@ import type { AdminUser } from '@/lib/types'
 import Button from '@/components/ui/Button'
 import Modal from '@/components/ui/Modal'
 import Spinner from '@/components/ui/Spinner'
+import UserMarketingTimeline from '@/components/marketing-attribution/UserMarketingTimeline'
 import IdentityProvidersCell from './IdentityProvidersCell'
 import UserAttributionCell from './UserAttributionCell'
 import { UserBalanceCell, UserValueCell } from './UserValueCell'
@@ -171,6 +172,7 @@ export default function UserDetailsModal({ userId, onClose, onCopyId }: UserDeta
               <DetailRow label="Создан" value={formatUserDateTime(user.createdAt)} />
               <DetailRow label="Обновлен" value={formatUserDateTime(user.updatedAt)} />
             </dl>
+            <UserMarketingTimeline userId={user.id} />
           </section>
         </div>
       ) : null}

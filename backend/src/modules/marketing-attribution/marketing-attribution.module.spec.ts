@@ -10,6 +10,7 @@ import { MarketingAttributionMiniAppCaptureService } from './marketing-attributi
 import { MarketingAttributionWebService } from './marketing-attribution-web.service';
 import { MarketingAttributionModule } from './marketing-attribution.module';
 import { MarketingCampaignsService } from './marketing-campaigns.service';
+import { MarketingUserTimelineService } from './marketing-user-timeline.service';
 import { ReferralsModule } from '../referrals/referrals.module';
 
 describe('MarketingAttributionModule graph', () => {
@@ -35,6 +36,7 @@ describe('MarketingAttributionModule graph', () => {
     expect(providers).toEqual(
       expect.arrayContaining([
         MarketingCampaignsService,
+        MarketingUserTimelineService,
         MarketingAttributionCaptureService,
         MarketingAttributionLifecycleService,
         MarketingAttributionWebService,
