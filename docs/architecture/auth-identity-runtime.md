@@ -97,6 +97,7 @@ Schema drop пока заблокирован live consumers:
   continuity старых аккаунтов. Если email совпал с другим аккаунтом,
   возвращает conflict и не делает silent link.
 - **Telegram (Bot)**: `POST /users/find-or-create` ищет по `telegramId`.
+- **Telegram (WebApp initData)**: `verifyTelegramWebAppInitData` проверяет HMAC и freshness `auth_date` с окном 1 час (`TELEGRAM_WEBAPP_AUTH_DATE_MAX_AGE_SECONDS`); `verifyTelegramWidget` (Login Widget) держит отдельное окно 24 часа.
 - **Client**: Хранит JWT в `localStorage`.
 
 ## Current Gaps

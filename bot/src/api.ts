@@ -16,10 +16,27 @@ type TelegramBotMarketingTouchInput = {
 
 const client = axios.create({
   baseURL: `${config.apiUrl}/api`,
+  timeout: 10_000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+// Только для captureTelegramBotTouch: initializedInSession уже потреблен к
+// моменту вызова, поэтому упавший запрос без retry теряет touch навсегда.
+// Retry только на network error / 429 / 5xx — прочие 4xx terminal.
+const CAPTURE_BOT_TOUCH_RETRY_DELAYS_MS = [500, 2000];
+
+function isRetryableCaptureBotTouchError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  if (status === undefined) return true;
+  return status === 429 || status >= 500;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export const api = {
   users: {
@@ -103,16 +120,29 @@ export const api = {
 
   marketingAttribution: {
     captureTelegramBotTouch: async (input: TelegramBotMarketingTouchInput) => {
-      const response = await client.post(
-        '/marketing-attribution/telegram/bot/capture',
-        input,
-        {
-          headers: {
-            'x-telegram-bot-token': config.botToken,
-          },
-        },
-      );
-      return response.data;
+      let lastError: unknown;
+      for (let attempt = 0; attempt <= CAPTURE_BOT_TOUCH_RETRY_DELAYS_MS.length; attempt++) {
+        try {
+          const response = await client.post(
+            '/marketing-attribution/telegram/bot/capture',
+            input,
+            {
+              headers: {
+                'x-telegram-bot-token': config.botToken,
+              },
+            },
+          );
+          return response.data;
+        } catch (error) {
+          lastError = error;
+          const isLastAttempt = attempt === CAPTURE_BOT_TOUCH_RETRY_DELAYS_MS.length;
+          if (isLastAttempt || !isRetryableCaptureBotTouchError(error)) {
+            throw error;
+          }
+          await sleep(CAPTURE_BOT_TOUCH_RETRY_DELAYS_MS[attempt]);
+        }
+      }
+      throw lastError;
     },
   },
 };

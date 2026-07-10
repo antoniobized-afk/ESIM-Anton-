@@ -19,6 +19,7 @@ const bot = new Bot<MyContext>(config.botToken);
 
 // Middleware
 bot.use(session({
+  getSessionKey: (ctx) => ctx.from?.id.toString(),
   initial: (): any => ({
     userId: null,
     currentScene: null,

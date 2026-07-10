@@ -45,8 +45,11 @@ describe('OAuthService Telegram WebApp verification', () => {
   });
 
   it('отклоняет подписанный, но expired initData до передачи start_param дальше', () => {
+    // 2 часа — старше нового окна свежести WebApp initData (1 час), но моложе
+    // окна Login Widget (24 часа): тест ловит именно регресс окна, а не только
+    // очень старый auth_date.
     const initData = signedWebAppInitData({
-      auth_date: '1',
+      auth_date: String(Math.floor(Date.now() / 1000) - 7200),
       start_param: 'ma_Campaign123',
       user: JSON.stringify({ id: 123456789 }),
     });

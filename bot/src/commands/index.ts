@@ -3,7 +3,7 @@ import { InlineKeyboard } from 'grammy';
 import { MyContext } from '../types';
 import { config } from '../config';
 import { api } from '../api';
-import { ensureBotSessionUser } from '../user-session';
+import { resolveFreshBotSessionUser } from '../user-session';
 
 // URL Mini App
 const MINI_APP_URL = process.env.MINI_APP_URL || 'https://client-production-bc6d.up.railway.app';
@@ -32,7 +32,7 @@ export function setupCommands(bot: Bot<MyContext>) {
     // регистрацию как direct через общий middleware.
     if (userId) {
       try {
-        const user = await ensureBotSessionUser(ctx);
+        const user = await resolveFreshBotSessionUser(ctx);
         if (!user) throw new Error('Не удалось получить canonical Telegram user');
 
         const marketingStartParam =

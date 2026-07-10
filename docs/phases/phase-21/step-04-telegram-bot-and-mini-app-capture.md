@@ -84,6 +84,17 @@ collision с `ref_` и двойного capture между bot/Mini App paths.
   service token и `403` с неверным token; forged `POST
   /api/auth/telegram/webapp` возвращает `401`. Эти отрицательные проверки не
   делают записей и не заменяют положительный Telegram smoke.
+- Закрыты подтверждённые пункты внешнего код-ревью (`docs/audits/audit.md`):
+  service-token capture endpoint переведён на `@SkipThrottle()` (per-IP лимит
+  терял touches при >60/мин с IP бота); bot session стала per-user через
+  `getSessionKey = ctx.from.id`, `/start` всегда резолвит canonical user свежим
+  find-or-create (групповой чат больше не отдаёт чужой `userId` в referral и
+  capture); bot API получил `timeout: 10s` и bounded retry (2 повтора,
+  network/429/5xx) для capture; окно `auth_date` WebApp initData сужено с 24ч
+  до 1ч (`TELEGRAM_WEBAPP_AUTH_DATE_MAX_AGE_SECONDS`, зафиксировано в
+  `auth-identity-runtime.md`), Login Widget окно не менялось. Backend
+  64 suites / 544 tests и `nest build` зелёные; bot type gate
+  `tsc --noEmit --ignoreDeprecations 5.0` зелёный.
 - Аудит на оверинженеринг до prod: срезаны мёртвые `APPLIED` из
   `MarketingTelegramCaptureStatus` (schema + ещё не применённая миграция),
   дубль `finalizeRegistrationAttribution`, `findActiveCampaignByCode` и

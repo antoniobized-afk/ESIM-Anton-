@@ -3,6 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as crypto from 'crypto';
 
+// Telegram WebApp initData живет в URL hash/launch params клиента и не кэшируется —
+// окно свежести уже, чем у Login Widget (см. verifyTelegramWidget, 86400с).
+const TELEGRAM_WEBAPP_AUTH_DATE_MAX_AGE_SECONDS = 3600;
+
 export interface OAuthProfile {
   providerId: string;
   provider: 'google' | 'yandex' | 'vk' | 'telegram';
@@ -227,7 +231,7 @@ export class OAuthService {
     if (
       !Number.isSafeInteger(authDate) ||
       authDate <= 0 ||
-      Date.now() / 1000 - authDate > 86400
+      Date.now() / 1000 - authDate > TELEGRAM_WEBAPP_AUTH_DATE_MAX_AGE_SECONDS
     ) {
       throw new UnauthorizedException('Telegram WebApp auth data expired');
     }
