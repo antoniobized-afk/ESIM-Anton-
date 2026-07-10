@@ -137,12 +137,14 @@ Phase 19 не является dependency: у неё только naming/semanti
 ## Статус / Evidence
 
 - Status: `in_progress`
-- Current step: Step 06
-- Last evidence: Step 06 реализовал admin workspace кампаний и отдельный
-  marketing timeline пользователя по canonical `User.id`: локальный QR,
-  read-only partner boundary, backend role matrix и bounded Prisma read без raw
-  visitor/Telegram data. Backend build, 16 marketing suites / 84 tests, full
-  backend 67 suites / 558 tests, admin lint/build зелёные. Step остаётся
-  `partial` только до browser desktop/mobile + URL navigation smoke: in-app
-  browser backend в текущей сессии недоступен. Step 07 reporting/CPA/export не
-  подменялся.
+- Current step: Step 07 completed; Step 06 browser-only gate остаётся до Step 08.
+- Last evidence: Step 07 реализовал backend-owned attribution/CPA read models,
+  typed UTC event filters, immutable first/last snapshot dimensions,
+  global first/repeat primary purchase classification и exact
+  `REFERRAL_BONUS` ledger matching без current partner policy. `/analytics`
+  получил report/CPA tabs и общий filtered XLSX export с двумя листами,
+  русскими headers и cap 10 000 строк. Backend build, 20 marketing suites / 97
+  tests, full backend 71 suites / 571 tests, admin lint/build зелёные; один
+  existing DB-suite skipped без test database. Browser dev/runtime и production
+  reload были недоступны по infra/policy, поэтому visual desktop/mobile и URL
+  navigation остаются явно незакрытым cross-surface evidence перед Step 08.

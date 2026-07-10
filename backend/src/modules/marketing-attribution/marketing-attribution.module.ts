@@ -11,6 +11,9 @@ import { MarketingCampaignsController } from './marketing-campaigns.controller';
 import { MarketingCampaignsService } from './marketing-campaigns.service';
 import { MarketingUserTimelineController } from './marketing-user-timeline.controller';
 import { MarketingUserTimelineService } from './marketing-user-timeline.service';
+import { MarketingAttributionReportsController } from './marketing-attribution-reports.controller';
+import { MarketingAttributionReportExportService } from './marketing-attribution-report-export.service';
+import { MarketingAttributionReportService } from './marketing-attribution-report.service';
 
 @Module({
   imports: [ReferralsModule],
@@ -19,6 +22,7 @@ import { MarketingUserTimelineService } from './marketing-user-timeline.service'
     MarketingAttributionWebController,
     MarketingAttributionTelegramController,
     MarketingUserTimelineController,
+    MarketingAttributionReportsController,
   ],
   providers: [
     MarketingCampaignsService,
@@ -28,6 +32,8 @@ import { MarketingUserTimelineService } from './marketing-user-timeline.service'
     MarketingAttributionTelegramService,
     MarketingAttributionMiniAppCaptureService,
     MarketingUserTimelineService,
+    MarketingAttributionReportService,
+    MarketingAttributionReportExportService,
   ],
   exports: [
     MarketingCampaignsService,

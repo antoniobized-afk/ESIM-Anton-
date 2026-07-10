@@ -12,6 +12,7 @@ import type {
   ProductSortOrder,
 } from '@/lib/types'
 import { getBlobErrorMessage, getErrorMessage } from '@/lib/errors'
+import { downloadBlob, getDownloadFilename } from '@/lib/download'
 import { useToast } from '@/components/ui/ToastProvider'
 import { DAILY_PRODUCT_DATA_TYPE_FILTER_VALUE, type ProductDataType } from '@shared/product-data-type'
 import { createEmptyProduct, getMarkupPercent, getProviderPriceUSD } from './products.helpers'
@@ -88,34 +89,6 @@ const buildProductQueryFilters = (
     sortOrder: filters.sortOrder,
     ...(options.includePagination ? { page: filters.page, limit: 50 } : {}),
   }
-}
-
-const getProductsExportFilename = (contentDisposition?: string): string => {
-  const fallback = `products_${new Date().toISOString().slice(0, 10)}.xlsx`
-  if (!contentDisposition) return fallback
-
-  const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i)
-  if (encodedMatch?.[1]) {
-    try {
-      return decodeURIComponent(encodedMatch[1].replace(/"/g, ''))
-    } catch {
-      return fallback
-    }
-  }
-
-  const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
-  return plainMatch?.[1] || fallback
-}
-
-const downloadProductsExport = (blob: Blob, filename: string) => {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
 }
 
 export function useProducts() {
@@ -291,14 +264,15 @@ export function useProducts() {
       setExporting(true)
       const response = await productsApi.exportExcel(exportQueryFilters)
       const contentDisposition = response.headers['content-disposition']
-      const filename = getProductsExportFilename(
+      const filename = getDownloadFilename(
         typeof contentDisposition === 'string' ? contentDisposition : undefined,
+        `products_${new Date().toISOString().slice(0, 10)}.xlsx`,
       )
       const blob = response.data instanceof Blob
         ? response.data
         : new Blob([response.data], { type: XLSX_MIME_TYPE })
 
-      downloadProductsExport(blob, filename)
+      downloadBlob(blob, filename)
       toast.success('Экспорт Excel запущен')
     } catch (error) {
       if (isUnauthorizedError(error)) return

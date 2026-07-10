@@ -2,6 +2,7 @@
 
 import { BarChart3, Link2, Users } from 'lucide-react'
 import MarketingCampaignsPanel from './MarketingCampaignsPanel'
+import MarketingReportsPanel from './MarketingReportsPanel'
 import {
   type MarketingWorkspaceTab,
   useMarketingAttributionUrlState,
@@ -64,15 +65,11 @@ export default function MarketingAttributionWorkspace() {
           onStatusChange={urlState.setStatus}
         />
       ) : (
-        <div className="glass-card glass-card--static p-8 text-center">
-          <h3 className="text-lg font-semibold text-slate-900">
-            {urlState.tab === 'report' ? 'Отчёт по атрибуции' : 'Блогеры и CPA'}
-          </h3>
-          <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
-            Раздел подготовлен в общем workspace. Source-backed метрики и экспорт подключаются
-            после реализации отчётного контура.
-          </p>
-        </div>
+        <MarketingReportsPanel
+          kind={urlState.tab === 'report' ? 'attribution' : 'cpa'}
+          filters={urlState.reportFilters}
+          onFiltersChange={urlState.setReportFilters}
+        />
       )}
     </div>
   )

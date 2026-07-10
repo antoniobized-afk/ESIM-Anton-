@@ -11,6 +11,8 @@ import { MarketingAttributionWebService } from './marketing-attribution-web.serv
 import { MarketingAttributionModule } from './marketing-attribution.module';
 import { MarketingCampaignsService } from './marketing-campaigns.service';
 import { MarketingUserTimelineService } from './marketing-user-timeline.service';
+import { MarketingAttributionReportService } from './marketing-attribution-report.service';
+import { MarketingAttributionReportExportService } from './marketing-attribution-report-export.service';
 import { ReferralsModule } from '../referrals/referrals.module';
 
 describe('MarketingAttributionModule graph', () => {
@@ -42,6 +44,8 @@ describe('MarketingAttributionModule graph', () => {
         MarketingAttributionWebService,
         MarketingAttributionTelegramService,
         MarketingAttributionMiniAppCaptureService,
+        MarketingAttributionReportService,
+        MarketingAttributionReportExportService,
       ]),
     );
     expect(exports).toEqual(

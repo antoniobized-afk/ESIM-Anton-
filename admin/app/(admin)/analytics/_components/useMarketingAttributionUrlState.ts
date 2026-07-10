@@ -2,12 +2,22 @@
 
 import { useCallback, useEffect } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import type {
+  MarketingTouchChannel,
+} from '@/lib/types'
+import type {
+  MarketingAttributionModel,
+  MarketingAttributionReportFilters,
+} from '@/lib/marketing-attribution-report.types'
 
 export type MarketingWorkspaceTab = 'campaigns' | 'report' | 'cpa'
 export type MarketingCampaignStatusFilter = 'all' | 'active' | 'inactive'
 
 const VALID_TABS = new Set<MarketingWorkspaceTab>(['campaigns', 'report', 'cpa'])
 const VALID_STATUSES = new Set<MarketingCampaignStatusFilter>(['all', 'active', 'inactive'])
+const VALID_MODELS = new Set<MarketingAttributionModel>(['FIRST_TOUCH', 'LAST_TOUCH'])
+const VALID_CHANNELS = new Set<MarketingTouchChannel>(['WEB', 'TELEGRAM_BOT', 'TELEGRAM_MINI_APP'])
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 function normalizeTab(value: string | null): MarketingWorkspaceTab {
   return value && VALID_TABS.has(value as MarketingWorkspaceTab)
@@ -27,6 +37,23 @@ function normalizePage(value: string | null) {
   return Number.isSafeInteger(page) && page > 0 ? page : 1
 }
 
+function formatUtcDate(value: Date) {
+  return value.toISOString().slice(0, 10)
+}
+
+function defaultDateRange() {
+  const dateTo = formatUtcDate(new Date())
+  const from = new Date(`${dateTo}T00:00:00.000Z`)
+  from.setUTCDate(from.getUTCDate() - 29)
+  return { dateFrom: formatUtcDate(from), dateTo }
+}
+
+function isValidDate(value: string | null): value is string {
+  if (!value || !DATE_PATTERN.test(value)) return false
+  const date = new Date(`${value}T00:00:00.000Z`)
+  return !Number.isNaN(date.getTime()) && formatUtcDate(date) === value
+}
+
 export function useMarketingAttributionUrlState() {
   const router = useRouter()
   const pathname = usePathname()
@@ -34,6 +61,20 @@ export function useMarketingAttributionUrlState() {
   const tab = normalizeTab(searchParams.get('tab'))
   const status = normalizeStatus(searchParams.get('status'))
   const page = normalizePage(searchParams.get('page'))
+  const defaults = defaultDateRange()
+  const rawDateFrom = searchParams.get('from')
+  const rawDateTo = searchParams.get('to')
+  const hasValidDatePair = isValidDate(rawDateFrom) && isValidDate(rawDateTo)
+  const dateFrom = hasValidDatePair ? rawDateFrom : defaults.dateFrom
+  const dateTo = hasValidDatePair ? rawDateTo : defaults.dateTo
+  const rawModel = searchParams.get('model')
+  const model = rawModel && VALID_MODELS.has(rawModel as MarketingAttributionModel)
+    ? rawModel as MarketingAttributionModel
+    : 'LAST_TOUCH'
+  const rawChannel = searchParams.get('channel')
+  const channel = rawChannel && VALID_CHANNELS.has(rawChannel as MarketingTouchChannel)
+    ? rawChannel as MarketingTouchChannel
+    : undefined
 
   const replaceParams = useCallback((mutate: (params: URLSearchParams) => void) => {
     const next = new URLSearchParams(searchParams.toString())
@@ -49,21 +90,55 @@ export function useMarketingAttributionUrlState() {
     const invalidTab = rawTab !== null && !VALID_TABS.has(rawTab as MarketingWorkspaceTab)
     const invalidStatus = rawStatus !== null && !VALID_STATUSES.has(rawStatus as MarketingCampaignStatusFilter)
     const invalidPage = rawPage !== null && normalizePage(rawPage) === 1 && rawPage !== '1'
+    const invalidDatePair = (rawDateFrom !== null || rawDateTo !== null) && !hasValidDatePair
+    const invalidModel = rawModel !== null && !VALID_MODELS.has(rawModel as MarketingAttributionModel)
+    const invalidChannel = rawChannel !== null && !VALID_CHANNELS.has(rawChannel as MarketingTouchChannel)
     const redundantDefaults = rawTab === 'campaigns' || rawStatus === 'all' || rawPage === '1'
+      || rawModel === 'LAST_TOUCH'
+      || (rawDateFrom === defaults.dateFrom && rawDateTo === defaults.dateTo)
 
-    if (!invalidTab && !invalidStatus && !invalidPage && !redundantDefaults) return
+    if (
+      !invalidTab && !invalidStatus && !invalidPage && !invalidDatePair
+      && !invalidModel && !invalidChannel && !redundantDefaults
+    ) return
 
     replaceParams((next) => {
       if (invalidTab || next.get('tab') === 'campaigns') next.delete('tab')
       if (invalidStatus || next.get('status') === 'all') next.delete('status')
       if (invalidPage || next.get('page') === '1') next.delete('page')
+      if (invalidDatePair || (
+        next.get('from') === defaults.dateFrom && next.get('to') === defaults.dateTo
+      )) {
+        next.delete('from')
+        next.delete('to')
+      }
+      if (invalidModel || next.get('model') === 'LAST_TOUCH') next.delete('model')
+      if (invalidChannel) next.delete('channel')
     })
-  }, [replaceParams, searchParams])
+  }, [
+    defaults.dateFrom,
+    defaults.dateTo,
+    hasValidDatePair,
+    rawChannel,
+    rawDateFrom,
+    rawDateTo,
+    rawModel,
+    replaceParams,
+    searchParams,
+  ])
+
+  const reportFilters: MarketingAttributionReportFilters = {
+    dateFrom,
+    dateTo,
+    model,
+    channel,
+  }
 
   return {
     tab,
     status,
     page,
+    reportFilters,
     setTab: (value: MarketingWorkspaceTab) => replaceParams((next) => {
       if (value === 'campaigns') next.delete('tab')
       else next.set('tab', value)
@@ -77,6 +152,21 @@ export function useMarketingAttributionUrlState() {
     setPage: (value: number) => replaceParams((next) => {
       if (value > 1) next.set('page', String(value))
       else next.delete('page')
+    }),
+    setReportFilters: (value: MarketingAttributionReportFilters) => replaceParams((next) => {
+      const currentDefaults = defaultDateRange()
+      if (value.dateFrom === currentDefaults.dateFrom && value.dateTo === currentDefaults.dateTo) {
+        next.delete('from')
+        next.delete('to')
+      } else {
+        next.set('from', value.dateFrom)
+        next.set('to', value.dateTo)
+      }
+      if (value.model === 'LAST_TOUCH') next.delete('model')
+      else next.set('model', value.model)
+      if (value.channel) next.set('channel', value.channel)
+      else next.delete('channel')
+      next.delete('page')
     }),
   }
 }

@@ -49,6 +49,11 @@ import type {
   AdminUser,
   UsersQueryParams,
 } from './types'
+import type {
+  MarketingAttributionReport,
+  MarketingAttributionReportFilters,
+  MarketingCpaReport,
+} from './marketing-attribution-report.types'
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
 
@@ -204,6 +209,12 @@ export const marketingAttributionApi = {
     api.patch<MarketingCampaign>(`/marketing-attribution/campaigns/${id}`, data),
   getUserTimeline: (userId: string, params?: { page?: number; limit?: number }) =>
     api.get<MarketingUserTimeline>(`/marketing-attribution/users/${userId}/timeline`, { params }),
+  getAttributionReport: (params: MarketingAttributionReportFilters) =>
+    api.get<MarketingAttributionReport>('/marketing-attribution/reports/attribution', { params }),
+  getCpaReport: (params: MarketingAttributionReportFilters) =>
+    api.get<MarketingCpaReport>('/marketing-attribution/reports/cpa', { params }),
+  exportReports: (params: MarketingAttributionReportFilters) =>
+    api.get<Blob>('/marketing-attribution/reports/export', { params, responseType: 'blob' }),
 }
 
 export const loyaltyApi = {
