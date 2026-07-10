@@ -19,6 +19,7 @@ import { OrGuard } from '@/common/auth/or.guard';
 import { CreateOrderQuoteDto } from './dto/create-order-quote.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateTopupOrderDto } from './dto/create-topup-order.dto';
+import { toUserOrderReadModel } from './user-order-read-model';
 import type {
   CheckoutOrder,
   CreateOrderResponse,
@@ -136,7 +137,10 @@ export class OrdersController {
     if (user.type !== 'admin') {
       await this.ordersService.assertOwnership(id, user.id);
     }
-    return this.ordersService.findById(id);
+    const order = await this.ordersService.findById(id);
+    if (!order || user.type === 'admin') return order;
+
+    return toUserOrderReadModel(order);
   }
 
   @Get('user/:userId')
@@ -146,7 +150,10 @@ export class OrdersController {
     if (user.type !== 'admin' && user.id !== userId) {
       throw new ForbiddenException('Доступ к чужим заказам запрещён');
     }
-    return this.ordersService.findByUser(userId);
+    const orders = await this.ordersService.findByUser(userId);
+    return user.type === 'admin'
+      ? orders
+      : orders.map((order) => toUserOrderReadModel(order));
   }
 
   @Get('user/:userId/check-new')
@@ -156,7 +163,13 @@ export class OrdersController {
     if (user.id !== userId) {
       throw new ForbiddenException('Доступ к чужим заказам запрещён');
     }
-    return this.ordersService.checkNewOrders(userId);
+    const result = await this.ordersService.checkNewOrders(userId);
+    return {
+      ...result,
+      latestOrder: result.latestOrder
+        ? toUserOrderReadModel(result.latestOrder)
+        : null,
+    };
   }
 
   /**
@@ -225,7 +238,10 @@ export class OrdersController {
       throw new BadRequestException('Заказ не бесплатный');
     }
     await this.ordersService.markOrderPaid(id);
-    return this.ordersService.fulfillOrder(id);
+    const fulfilledOrder = await this.ordersService.fulfillOrder(id);
+    return user.type === 'admin'
+      ? fulfilledOrder
+      : this.toCheckoutOrder(fulfilledOrder);
   }
 
   /**

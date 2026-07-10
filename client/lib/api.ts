@@ -9,6 +9,7 @@ import type {
   OrderQuoteResponse,
   SavedPaymentCardSummary,
 } from '@shared/contracts/checkout';
+import type { UserOrderReadModel } from '@shared/contracts/user-order';
 import type { ProductDataTypeValue } from '@shared/product-data-type';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
@@ -141,34 +142,7 @@ export interface TopupPackage {
   supportTopUpType?: number;
 }
 
-export interface Order {
-  id: string;
-  userId: string;
-  productId: string;
-  product: Product;
-  status: 'PENDING' | 'PAID' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
-  quantity: number;
-  productPrice: number;
-  discount: number;
-  bonusUsed: number;
-  totalAmount: number;
-  qrCode?: string;
-  iccid?: string;
-  activationCode?: string;
-  createdAt: string;
-  completedAt?: string;
-  // Снимок последнего известного состояния eSIM от провайдера.
-  // Заполняется при выдаче eSIM и обновляется при каждом /usage-запросе.
-  esimStatus?: string | null;
-  smdpAddress?: string | null;
-  activatedAt?: string | null;
-  expiresAt?: string | null;
-  // Для заказов-пополнений: ссылка на родительский заказ и код top-up пакета.
-  // Дочерние topup-заказы не имеют собственной eSIM/iccid — это лишь докупка
-  // трафика к родительской eSIM, поэтому в списке «Мои eSIM» они скрываются.
-  parentOrderId?: string | null;
-  topupPackageCode?: string | null;
-}
+export type Order = UserOrderReadModel;
 
 export type OrderQuote = OrderQuoteResponse;
 
@@ -290,12 +264,9 @@ export const ordersApi = {
    * Без `paymentMethod` (или `'card'`) — поведение прежнее: создаётся PENDING
    * заказ, фронт продолжает через CloudPayments виджет.
    */
-  async create(orderData: CreateOrderRequest): Promise<CreateOrderResponse & { order: Order }> {
-    const { data } = await api.post('/orders', orderData);
-    return {
-      ...data,
-      order: data.order,
-    };
+  async create(orderData: CreateOrderRequest): Promise<CreateOrderResponse> {
+    const { data } = await api.post<CreateOrderResponse>('/orders', orderData);
+    return data;
   },
 
   async quote(orderData: CreateOrderQuoteRequest): Promise<OrderQuoteResponse> {
@@ -355,12 +326,9 @@ export const ordersApi = {
   async topup(
     orderId: string,
     payload: CreateTopupOrderRequest,
-  ): Promise<CreateTopupOrderResponse & { order: Order }> {
-    const { data } = await api.post(`/orders/${orderId}/topup`, payload);
-    return {
-      ...data,
-      order: data.order,
-    };
+  ): Promise<CreateTopupOrderResponse> {
+    const { data } = await api.post<CreateTopupOrderResponse>(`/orders/${orderId}/topup`, payload);
+    return data;
   },
 };
 

@@ -22,6 +22,10 @@ import {
   type CompletionAccountingAttemptResult,
 } from './order-completion-accounting.service';
 import {
+  ORDER_DETAIL_USER_SELECT,
+  toOrderDetailUserReadModel,
+} from './order-detail-user-read-model';
+import {
   CompletionAccountingStatus,
   OrderStatus,
   Prisma,
@@ -516,13 +520,6 @@ export class OrdersService {
         ...data,
       },
       include: {
-        product: true,
-        user: {
-          include: {
-            loyaltyLevel: true,
-            referredBy: true,
-          },
-        },
         transactions: true,
         repeatChargeAttempt: true,
       },
@@ -1395,17 +1392,19 @@ export class OrdersService {
       include: {
         product: true,
         user: {
-          include: {
-            loyaltyLevel: true,
-            referredBy: true,
-          },
+          select: ORDER_DETAIL_USER_SELECT,
         },
         transactions: true,
         repeatChargeAttempt: true,
       },
     });
 
-    return order ? this.decorateOrderWithReconciliation(order) : order;
+    if (!order) return order;
+
+    return this.decorateOrderWithReconciliation({
+      ...order,
+      user: toOrderDetailUserReadModel(order.user),
+    });
   }
 
   async retryFulfillment(orderId: string) {

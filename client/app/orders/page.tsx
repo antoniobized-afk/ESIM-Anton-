@@ -6,23 +6,9 @@ import { useRouter } from 'next/navigation'
 import { Clock, CheckCircle, XCircle, AlertCircle, ChevronRight, ShoppingBag, RefreshCw } from '@/components/icons'
 import BottomNav from '@/components/BottomNav'
 import BackHeader from '@/components/BackHeader'
-import { ordersApi } from '@/lib/api'
+import { ordersApi, type Order } from '@/lib/api'
 import { getFlagUrl } from '@/lib/utils'
 import { useAuth } from '@/components/AuthProvider'
-
-interface Order {
-  id: string
-  productId: string
-  product: {
-    id: string
-    country: string
-    name: string
-    dataAmount: string
-  }
-  status: 'PENDING' | 'PAID' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'CANCELLED'
-  totalAmount: number
-  createdAt: string
-}
 
 export default function OrdersPage() {
   const router = useRouter()
@@ -49,7 +35,7 @@ export default function OrdersPage() {
 
       if (userId) {
         const userOrders = await ordersApi.getMy(userId)
-        setOrders(userOrders as any)
+        setOrders(userOrders)
       }
     } catch (error) {
       console.error('Ошибка загрузки заказов:', error);

@@ -198,6 +198,15 @@ export interface OrderReconciliation {
   ambiguousReason: string | null
 }
 
+export interface AdminOrderUser {
+  id: string
+  telegramId: string | null
+  username: string | null
+  firstName: string | null
+  lastName: string | null
+  email?: string | null
+}
+
 export interface AdminOrder {
   id: string
   userId: string
@@ -229,7 +238,7 @@ export interface AdminOrder {
   expiresAt?: string | null
   parentOrderId?: string | null
   topupPackageCode?: string | null
-  user?: AdminUser
+  user?: AdminOrderUser
   product?: AdminProduct
   reconciliation?: OrderReconciliation
 }

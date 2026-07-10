@@ -36,16 +36,16 @@ interface MyEsim {
   country: string
   dataAmount: string
   orderStatus: 'PAID' | 'PROCESSING' | 'COMPLETED'
-  qrCode?: string
-  activationCode?: string
-  smdpAddress?: string | null
+  qrCode: string | null
+  activationCode: string | null
+  smdpAddress: string | null
   /** Реальный нормализованный статус с провайдера (или из БД-кэша). */
   status: EsimUiStatus
   /** Поддерживает ли тариф top-up — для скрытия кнопки «Пополнить». */
   canTopup: boolean
   /** Снимок даты истечения, нужен для прогрессбара срока. */
-  activatedAt?: string | null
-  expiresAt?: string | null
+  activatedAt: string | null
+  expiresAt: string | null
   /** Реальный расход трафика, обновляется через /usage. */
   usage?: {
     available: boolean

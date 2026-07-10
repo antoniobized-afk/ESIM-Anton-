@@ -53,10 +53,26 @@ User-facing users responses (`GET /users/:id`, bot `find-or-create`,
 blacklist-scrub полей. Проекция отдает только контрактные скаляры + собственный
 `loyaltyLevel`, поэтому legacy slot и чужие связанные записи (`referredBy`,
 `referrals`) структурно не попадают в ответ. Admin surface владеет отдельным
-read model (`users/admin-user-read-model.ts`). Известный остаточный boundary:
-`orders.service.findById` включает `order.user.referredBy` полным объектом и
-отдает его через `GET /orders/:id` — это отдельная ответственность order-модуля,
-подлежит своему шагу, не user-profile owner-у.
+read model (`users/admin-user-read-model.ts`).
+
+`GET /orders/:id` и внутренние order/payment workflows используют отдельную
+order-scoped проекцию `orders/order-detail-user-read-model.ts`. Вложенный
+`order.user` содержит только `id`, contact/display-поля, необходимые текущим
+workflow (`telegramId`, `email`, `username`, `firstName`, `lastName`). Полные
+relation-объекты `referredBy`/`referrals`, referral attribution fields, legacy
+slot `authProvider/providerId`, балансы и прочие поля canonical `User` в order
+detail структурно не выбираются и дополнительно не проходят whitelist-mapper.
+Referral accounting получает `referredById`/`referralLinkId` своей внутренней
+проекцией и не зависит от HTTP order detail. Расширенный admin-профиль
+пользователя остается контрактом users-модуля и не встраивается в ответ заказа.
+
+Owner-facing order routes (`GET /orders/:id`, `GET /orders/user/:userId`,
+`check-new` и ответ `fulfill-free`) не возвращают внутренний Prisma payload.
+Контроллер преобразует их в `UserOrderReadModel`/`CheckoutOrder`: без вложенного
+`user`, `transactions`, `repeatChargeAttempt`, `providerResponse`, provider
+identifiers/costs и accounting diagnostics. Admin-ветка под `JwtAdminGuard`
+сохраняет диагностический order context; client-контракт владеется
+`shared/contracts/user-order.ts`.
 
 Schema drop пока заблокирован live consumers:
 - `AuthIdentityResolverService` еще использует legacy exact-provider lookup

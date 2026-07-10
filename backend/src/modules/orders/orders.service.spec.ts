@@ -8,6 +8,7 @@ import {
   TransactionStatus,
   TransactionType,
 } from '@prisma/client';
+import { ORDER_DETAIL_USER_SELECT } from './order-detail-user-read-model';
 import { OrdersService } from './orders.service';
 
 function makeOrder(overrides: Record<string, unknown> = {}) {
@@ -267,6 +268,38 @@ function makeService(orderOverrides: Record<string, unknown> = {}) {
 
 describe('OrdersService', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  describe('order detail user boundary', () => {
+    it('запрашивает только whitelist-проекцию пользователя без relation и legacy slot', async () => {
+      const { service, prisma } = makeService();
+
+      const result = await service.findById('order_1');
+
+      expect(prisma.order.findUnique).toHaveBeenCalledWith({
+        where: { id: 'order_1' },
+        include: {
+          product: true,
+          user: { select: ORDER_DETAIL_USER_SELECT },
+          transactions: true,
+          repeatChargeAttempt: true,
+        },
+      });
+      expect(ORDER_DETAIL_USER_SELECT).not.toHaveProperty('authProvider');
+      expect(ORDER_DETAIL_USER_SELECT).not.toHaveProperty('providerId');
+      expect(ORDER_DETAIL_USER_SELECT).not.toHaveProperty('referredById');
+      expect(ORDER_DETAIL_USER_SELECT).not.toHaveProperty('referralLinkId');
+      expect(ORDER_DETAIL_USER_SELECT).not.toHaveProperty('referredBy');
+      expect(result?.user).toMatchObject({
+        id: 'user_1',
+        email: 'user@example.com',
+        telegramId: null,
+      });
+      expect(result?.user).not.toHaveProperty('referredById');
+      expect(result?.user).not.toHaveProperty('referralLinkId');
+      expect(result?.user).not.toHaveProperty('loyaltyLevel');
+      expect(result?.user).not.toHaveProperty('totalSpent');
+    });
+  });
 
   describe('fulfillOrder Phase 4 wiring', () => {
     it('завершает successful purchase короткой транзакцией и запускает completion accounting отдельно', async () => {
