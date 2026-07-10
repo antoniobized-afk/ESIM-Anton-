@@ -1,7 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   MarketingRegistrationAttributionStatus,
-  MarketingTouch,
   Prisma,
 } from '@prisma/client';
 import { MarketingAttributionTransaction } from './marketing-attribution.types';
@@ -9,6 +8,24 @@ import { MarketingAttributionTransaction } from './marketing-attribution.types';
 type TouchWithCampaign = Prisma.MarketingTouchGetPayload<{
   include: { campaign: true };
 }>;
+
+type MarketingTouchSnapshot = {
+  touchId: string;
+  campaignId: string;
+  campaignCode: string;
+  campaignName: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmContent: string | null;
+  utmTerm: string | null;
+  channel: TouchWithCampaign['channel'];
+  occurredAt: Date;
+};
+
+type RegistrationSnapshotPrefix = 'registrationFirst' | 'registrationLast';
+type OrderSnapshotPrefix = 'first' | 'last';
+type SnapshotPrefix = RegistrationSnapshotPrefix | OrderSnapshotPrefix;
 
 @Injectable()
 export class MarketingAttributionLifecycleService {
@@ -117,8 +134,8 @@ export class MarketingAttributionLifecycleService {
       data: {
         registrationStatus: status,
         registrationFinalizedAt: new Date(),
-        ...this.registrationFirstData(first),
-        ...this.registrationLastData(last),
+        ...this.registrationSnapshotData('registrationFirst', first),
+        ...this.registrationSnapshotData('registrationLast', last),
       },
     });
 
@@ -149,8 +166,8 @@ export class MarketingAttributionLifecycleService {
       where: { orderId: input.orderId },
       create: {
         orderId: input.orderId,
-        ...this.orderFirstData(first),
-        ...this.orderLastData(last),
+        ...this.orderSnapshotData('first', first),
+        ...this.orderSnapshotData('last', last),
       },
       update: {},
     });
@@ -166,8 +183,8 @@ export class MarketingAttributionLifecycleService {
     });
   }
 
-  private snapshot(touch: TouchWithCampaign | MarketingTouch | null | undefined) {
-    if (!touch || !('campaign' in touch)) {
+  private snapshot(touch: TouchWithCampaign | null | undefined): MarketingTouchSnapshot | null {
+    if (!touch) {
       return null;
     }
 
@@ -186,67 +203,30 @@ export class MarketingAttributionLifecycleService {
     };
   }
 
-  private registrationFirstData(snapshot: ReturnType<MarketingAttributionLifecycleService['snapshot']>) {
-    return {
-      registrationFirstTouchId: snapshot?.touchId ?? null,
-      registrationFirstCampaignId: snapshot?.campaignId ?? null,
-      registrationFirstCampaignCode: snapshot?.campaignCode ?? null,
-      registrationFirstCampaignName: snapshot?.campaignName ?? null,
-      registrationFirstUtmSource: snapshot?.utmSource ?? null,
-      registrationFirstUtmMedium: snapshot?.utmMedium ?? null,
-      registrationFirstUtmCampaign: snapshot?.utmCampaign ?? null,
-      registrationFirstUtmContent: snapshot?.utmContent ?? null,
-      registrationFirstUtmTerm: snapshot?.utmTerm ?? null,
-      registrationFirstChannel: snapshot?.channel ?? null,
-      registrationFirstOccurredAt: snapshot?.occurredAt ?? null,
-    };
+  private registrationSnapshotData(
+    prefix: RegistrationSnapshotPrefix,
+    snapshot: MarketingTouchSnapshot | null,
+  ) {
+    return this.snapshotData(prefix, snapshot) as Prisma.UserMarketingAttributionUpdateManyMutationInput;
   }
 
-  private registrationLastData(snapshot: ReturnType<MarketingAttributionLifecycleService['snapshot']>) {
-    return {
-      registrationLastTouchId: snapshot?.touchId ?? null,
-      registrationLastCampaignId: snapshot?.campaignId ?? null,
-      registrationLastCampaignCode: snapshot?.campaignCode ?? null,
-      registrationLastCampaignName: snapshot?.campaignName ?? null,
-      registrationLastUtmSource: snapshot?.utmSource ?? null,
-      registrationLastUtmMedium: snapshot?.utmMedium ?? null,
-      registrationLastUtmCampaign: snapshot?.utmCampaign ?? null,
-      registrationLastUtmContent: snapshot?.utmContent ?? null,
-      registrationLastUtmTerm: snapshot?.utmTerm ?? null,
-      registrationLastChannel: snapshot?.channel ?? null,
-      registrationLastOccurredAt: snapshot?.occurredAt ?? null,
-    };
+  private orderSnapshotData(prefix: OrderSnapshotPrefix, snapshot: MarketingTouchSnapshot | null) {
+    return this.snapshotData(prefix, snapshot) as Partial<Prisma.OrderMarketingAttributionUncheckedCreateInput>;
   }
 
-  private orderFirstData(snapshot: ReturnType<MarketingAttributionLifecycleService['snapshot']>) {
+  private snapshotData(prefix: SnapshotPrefix, snapshot: MarketingTouchSnapshot | null) {
     return {
-      firstTouchId: snapshot?.touchId ?? null,
-      firstCampaignId: snapshot?.campaignId ?? null,
-      firstCampaignCode: snapshot?.campaignCode ?? null,
-      firstCampaignName: snapshot?.campaignName ?? null,
-      firstUtmSource: snapshot?.utmSource ?? null,
-      firstUtmMedium: snapshot?.utmMedium ?? null,
-      firstUtmCampaign: snapshot?.utmCampaign ?? null,
-      firstUtmContent: snapshot?.utmContent ?? null,
-      firstUtmTerm: snapshot?.utmTerm ?? null,
-      firstChannel: snapshot?.channel ?? null,
-      firstOccurredAt: snapshot?.occurredAt ?? null,
-    };
-  }
-
-  private orderLastData(snapshot: ReturnType<MarketingAttributionLifecycleService['snapshot']>) {
-    return {
-      lastTouchId: snapshot?.touchId ?? null,
-      lastCampaignId: snapshot?.campaignId ?? null,
-      lastCampaignCode: snapshot?.campaignCode ?? null,
-      lastCampaignName: snapshot?.campaignName ?? null,
-      lastUtmSource: snapshot?.utmSource ?? null,
-      lastUtmMedium: snapshot?.utmMedium ?? null,
-      lastUtmCampaign: snapshot?.utmCampaign ?? null,
-      lastUtmContent: snapshot?.utmContent ?? null,
-      lastUtmTerm: snapshot?.utmTerm ?? null,
-      lastChannel: snapshot?.channel ?? null,
-      lastOccurredAt: snapshot?.occurredAt ?? null,
+      [`${prefix}TouchId`]: snapshot?.touchId ?? null,
+      [`${prefix}CampaignId`]: snapshot?.campaignId ?? null,
+      [`${prefix}CampaignCode`]: snapshot?.campaignCode ?? null,
+      [`${prefix}CampaignName`]: snapshot?.campaignName ?? null,
+      [`${prefix}UtmSource`]: snapshot?.utmSource ?? null,
+      [`${prefix}UtmMedium`]: snapshot?.utmMedium ?? null,
+      [`${prefix}UtmCampaign`]: snapshot?.utmCampaign ?? null,
+      [`${prefix}UtmContent`]: snapshot?.utmContent ?? null,
+      [`${prefix}UtmTerm`]: snapshot?.utmTerm ?? null,
+      [`${prefix}Channel`]: snapshot?.channel ?? null,
+      [`${prefix}OccurredAt`]: snapshot?.occurredAt ?? null,
     };
   }
 }
