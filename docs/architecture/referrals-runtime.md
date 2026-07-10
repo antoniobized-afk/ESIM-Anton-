@@ -94,3 +94,11 @@ ReferralLink {
 3. **Legacy Referral**: Если нет ни того ни другого, но есть старый `referredById`, бонус идет пригласившему по дефолтному % из настроек.
 
 Top-up заказы (`parentOrderId != null`) не создают реферальных начислений (non-commissionable).
+
+## Planned Marketing Attribution Boundary
+
+[Phase 21 Marketing Attribution](./marketing-attribution-runtime.md) может
+связать campaign с existing `ReferralLink`, но не меняет owner этого link,
+его promo/reward policy или current re-attribution rule. Marketing service
+делегирует trusted registration в `ReferralsService`; он не пишет
+`User.referralLinkId` напрямую и не создаёт `REFERRAL_BONUS`.

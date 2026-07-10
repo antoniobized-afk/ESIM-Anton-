@@ -12,6 +12,7 @@
 | 8  | API Security Infrastructure (Helmet, CORS, DTO, Rate Limiting) | ⬜ Не начата         | [phase-8-api-security-infrastructure.md](./phase-8-api-security-infrastructure.md) |
 | 12 | Client PWA & Telegram Mini App Refactoring                   | ⬜ Не начата         | [phase-12-client-refactoring.md](./phase-12-client-refactoring.md)       |
 | 19 | Telegram Broadcast Campaigns                                 | 🔄 Планирование     | [phase-19-telegram-broadcasts.md](./phase-19-telegram-broadcasts.md)     |
+| 21 | Marketing Attribution & Campaign Links                       | 🔄 Планирование     | [phase-21-marketing-attribution-and-campaign-links.md](./phase-21-marketing-attribution-and-campaign-links.md) |
 
 **Легенда:** ⬜ Не начата · 🔄 В работе / планирование · ✅ Завершена в [архиве](./COMPLETED_PHASES.md)
 

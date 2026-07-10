@@ -24,6 +24,7 @@
 - [referrals-runtime.md](./referrals-runtime.md) — актуальный runtime-контракт referral flow после referral follow-up.
 - [auth-identity-runtime.md](./auth-identity-runtime.md) — текущий auth/account contract и целевая граница `User` vs `UserIdentity` для Phase 18.
 - [telegram-broadcast-runtime.md](./telegram-broadcast-runtime.md) — planned runtime-контракт Telegram broadcast campaigns для Phase 19: contact boundary, queue semantics, rate limits и error taxonomy.
+- [marketing-attribution-runtime.md](./marketing-attribution-runtime.md) — target runtime-контракт Phase 21: campaign links, trusted touches, first/last snapshots и граница с referral/promo/CPA.
 
 ## Правило source of truth
 
