@@ -66,16 +66,10 @@
   seam добавлены без production hook; at-least-once conflict-safe persistence и
   runtime proof принадлежат Step 05. User deletion очищает user relation и
   visitor HMAC у marketing facts вместо cascade delete.
-- Первичное one-to-one state сериализуется `FOR NO KEY UPDATE` lock на canonical user row:
-  после lock transaction повторно читает state и либо создаёт его, либо берёт результат
-  конкурентного capture. Он совместим с FK `KEY SHARE` touch, но исключает parallel initialization
-  и user deletion; `P2002` в aborted transaction не обрабатывается.
-- Campaign capture и operator mutation берут один campaign row lock;
-  active/freeze checks выполняются после lock, поэтому concurrent touch
-  не может обойти deactivation или freeze immutable campaign fields.
-- Source-event retry разрешается до active-campaign lookup и возвращает только
-  identity-equivalent touch; payload mismatch даёт conflict, а parallel insert
-  завершается через `skipDuplicates` + strict readback без aborted transaction.
+- Runtime-контракты locks/freeze/idempotency зафиксированы в wiki как единственном
+  доме: [Marketing campaign](../../architecture/marketing-attribution-runtime.md#marketing-campaign),
+  [Marketing touch](../../architecture/marketing-attribution-runtime.md#marketing-touch),
+  [User и registration attribution](../../architecture/marketing-attribution-runtime.md#user-и-registration-attribution).
 - Migration `20260710130009_enforce_marketing_touch_single_association`,
   typed/runtime XOR и DB CHECK запрещают touch одновременно хранить `userId` и
   visitor HMAC; capture создаёт ровно одну association, а deletion-safe оба
@@ -86,27 +80,27 @@
   возвращают `400` до lookup/transaction, а отвязка остаётся только явным
   `null`; PATCH больше не может молча disconnect существующую referral link.
 - Follow-up audit также отклоняет `isActive: null` в DTO и service до campaign
-  row lock: optional boolean можно только опустить, но нельзя передать как
+  mutation: optional boolean можно только опустить, но нельзя передать как
   `null`, поэтому PATCH не достигает Prisma с невалидным NOT NULL значением.
-- Follow-up audit снимает hot-campaign serialization: capture использует
-  совместимый `FOR SHARE`, а operator `FOR UPDATE` сохраняет границу
-  deactivation/freeze; Prisma transaction явно получает `maxWait: 10s` и
-  `timeout: 60s` вместо дефолтного бюджета.
-- Follow-up audit сериализует finalization registration snapshot с current-touch
-  CAS: lifecycle берёт `FOR UPDATE` на `UserMarketingAttribution`, перечитывает
-  first/last под этим lock и исключает immutable snapshot устаревшего state.
-- Follow-up audit закрывает claimed-touch replay leak: anonymous retry после
-  trusted claim получает conflict и не возвращает canonical `userId`, потому
-  что очищенный visitor HMAC уже не может доказать ту же association.
+- Follow-up audit снимает hot-campaign serialization без ослабления
+  deactivation/freeze; runtime-механика принадлежит
+  [Marketing campaign](../../architecture/marketing-attribution-runtime.md#marketing-campaign).
+- Follow-up audit исключает immutable registration snapshot устаревшего state;
+  runtime-механика принадлежит
+  [User и registration attribution](../../architecture/marketing-attribution-runtime.md#user-и-registration-attribution).
+- Follow-up audit закрывает claimed-touch replay leak без раскрытия canonical
+  `userId`; runtime-механика принадлежит
+  [Marketing touch](../../architecture/marketing-attribution-runtime.md#marketing-touch).
 - Follow-up audit преобразует stale или удалённый `userId` при первичной
-  инициализации state в доменный `404`: пустой canonical user lock не доходит
-  до Prisma FK `P2003` и не возвращает raw `500`.
+  инициализации state в доменный `404` вместо raw Prisma FK failure; runtime
+  precondition принадлежит
+  [User и registration attribution](../../architecture/marketing-attribution-runtime.md#user-и-registration-attribution).
 - Follow-up audit преобразует исчерпанную коллизию generated `shortCode` в
   доменный `409`: после всех retry попыток raw unique violation `P2002` не
   выходит через admin API.
 - Follow-up audit выравнивает update с create: link config валидируется до
-  row lock, mutation и audit, поэтому invalid config fail-fast не удерживает
-  campaign transaction и не создаёт rollback-only работу.
+  mutation и audit, поэтому invalid config fail-fast не создаёт rollback-only
+  работу.
 - Follow-up audit заменяет raw Prisma campaign response явной allowlist-моделью:
   read API не раскрывает `referralLink.userId` или `_count`; внутренний touch
   count остаётся только данными freeze guard.
