@@ -1,0 +1,29 @@
+import 'reflect-metadata';
+import { MarketingAttributionCaptureService } from './marketing-attribution-capture.service';
+import { MarketingAttributionLifecycleService } from './marketing-attribution-lifecycle.service';
+import { MarketingAttributionModule } from './marketing-attribution.module';
+import { MarketingCampaignsService } from './marketing-campaigns.service';
+
+describe('MarketingAttributionModule graph', () => {
+  it('не импортирует auth/users/orders и экспортирует доменных owners', () => {
+    const imports = Reflect.getMetadata('imports', MarketingAttributionModule) ?? [];
+    const providers = Reflect.getMetadata('providers', MarketingAttributionModule) ?? [];
+    const exports = Reflect.getMetadata('exports', MarketingAttributionModule) ?? [];
+
+    expect(imports).toEqual([]);
+    expect(providers).toEqual(
+      expect.arrayContaining([
+        MarketingCampaignsService,
+        MarketingAttributionCaptureService,
+        MarketingAttributionLifecycleService,
+      ]),
+    );
+    expect(exports).toEqual(
+      expect.arrayContaining([
+        MarketingCampaignsService,
+        MarketingAttributionCaptureService,
+        MarketingAttributionLifecycleService,
+      ]),
+    );
+  });
+});

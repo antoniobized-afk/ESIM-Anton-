@@ -133,9 +133,6 @@ Phase 19 не является dependency: у неё только naming/semanti
 
 ## Статус / Evidence
 
-- Status: `planned`
-- Current step: Step 02
-- Last evidence: Step 01 completed after docs/wiki/live-code audit across
-  referral, promo, orders, auth, client, bot, admin and Phase 19 boundaries.
-- Links: [Step 01](./phase-21/step-01-runtime-audit-and-contract-lock.md),
-  [runtime contract](../architecture/marketing-attribution-runtime.md).
+- Status: `in_progress`
+- Current step: Step 03
+- Last evidence: Step 02 completed

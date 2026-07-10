@@ -43,6 +43,8 @@ model User {
   cloudPaymentsCardTokens CloudPaymentsCardToken[]
   identities              UserIdentity[]
   identityAudits          UserIdentityAudit[]
+  marketingAttribution    UserMarketingAttribution? @relation("UserMarketingAttributionUser")
+  marketingTouches        MarketingTouch[]          @relation("MarketingTouchUser")
   loyaltyLevel            LoyaltyLevel?            @relation(fields: [loyaltyLevelId], references: [id])
   referredBy              User?                    @relation("Referrals", fields: [referredById], references: [id])
   referrals               User[]                   @relation("Referrals")
@@ -268,6 +270,7 @@ model Order {
   repeatChargeAttempt  RepeatChargeAttempt?
   promoCodeRedemption  PromoCodeRedemption?
   transactions         Transaction[]
+  marketingAttribution OrderMarketingAttribution?
 
   @@index([userId])
   @@index([status])
@@ -323,10 +326,165 @@ model ReferralLink {
   promoCode     PromoCode?          @relation(fields: [promoCodeId], references: [id])
   referredUsers User[]              @relation("ReferredViaLink")
   transactions  Transaction[]       @relation("ReferralLinkTransactions")
+  marketingCampaigns MarketingCampaign[] @relation("MarketingCampaignReferralLink")
 
   @@index([userId])
   @@index([promoCodeId])
   @@map("referral_links")
+}
+
+model MarketingCampaign {
+  id                String   @id @default(cuid())
+  shortCode         String   @unique
+  name              String
+  utmSource         String
+  utmMedium         String
+  utmCampaign       String
+  utmContent        String?
+  utmTerm           String?
+  targetPath        String
+  referralLinkId    String?
+  isActive          Boolean  @default(true)
+  deactivatedAt     DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  referralLink      ReferralLink?                  @relation("MarketingCampaignReferralLink", fields: [referralLinkId], references: [id], onDelete: Restrict)
+  touches           MarketingTouch[]
+  audits            MarketingCampaignAudit[]
+  registrationFirst UserMarketingAttribution[]     @relation("RegistrationFirstMarketingCampaign")
+  registrationLast  UserMarketingAttribution[]     @relation("RegistrationLastMarketingCampaign")
+  orderFirst        OrderMarketingAttribution[]    @relation("OrderFirstMarketingCampaign")
+  orderLast         OrderMarketingAttribution[]    @relation("OrderLastMarketingCampaign")
+
+  @@index([isActive, createdAt])
+  @@index([referralLinkId])
+  @@map("marketing_campaigns")
+}
+
+model MarketingTouch {
+  id                                      String                @id @default(cuid())
+  campaignId                              String
+  userId                                  String?
+  channel                                 MarketingTouchChannel
+  sourceEventKey                          String                @unique
+  /// DB CHECK forbids userId + visitorKeyHash together; both null remains valid after anonymization.
+  visitorKeyHash                          String?
+  occurredAt                              DateTime
+  createdAt                               DateTime              @default(now())
+  campaign                                MarketingCampaign     @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  user                                    User?                 @relation("MarketingTouchUser", fields: [userId], references: [id], onDelete: SetNull)
+  currentFirstForUserAttribution          UserMarketingAttribution[] @relation("UserCurrentFirstMarketingTouch")
+  currentLastForUserAttribution           UserMarketingAttribution[] @relation("UserCurrentLastMarketingTouch")
+  registrationFirstForUserAttribution     UserMarketingAttribution[] @relation("RegistrationFirstMarketingTouch")
+  registrationLastForUserAttribution      UserMarketingAttribution[] @relation("RegistrationLastMarketingTouch")
+  firstForOrderAttribution                OrderMarketingAttribution[] @relation("OrderFirstMarketingTouch")
+  lastForOrderAttribution                 OrderMarketingAttribution[] @relation("OrderLastMarketingTouch")
+
+  @@index([campaignId, occurredAt])
+  @@index([userId, occurredAt])
+  @@index([visitorKeyHash, occurredAt])
+  @@index([channel, occurredAt])
+  @@map("marketing_touches")
+}
+
+model UserMarketingAttribution {
+  id                             String                                  @id @default(cuid())
+  userId                         String?                                 @unique
+  firstTouchId                   String?
+  firstTouchOccurredAt           DateTime?
+  lastTouchId                    String?
+  lastTouchOccurredAt            DateTime?
+  registrationStatus             MarketingRegistrationAttributionStatus @default(PENDING)
+  registrationFinalizedAt        DateTime?
+  registrationFirstTouchId       String?
+  registrationLastTouchId        String?
+  registrationFirstCampaignId    String?
+  registrationFirstCampaignCode  String?
+  registrationFirstCampaignName  String?
+  registrationFirstUtmSource     String?
+  registrationFirstUtmMedium     String?
+  registrationFirstUtmCampaign   String?
+  registrationFirstUtmContent    String?
+  registrationFirstUtmTerm       String?
+  registrationFirstChannel       MarketingTouchChannel?
+  registrationFirstOccurredAt    DateTime?
+  registrationLastCampaignId     String?
+  registrationLastCampaignCode   String?
+  registrationLastCampaignName   String?
+  registrationLastUtmSource      String?
+  registrationLastUtmMedium      String?
+  registrationLastUtmCampaign    String?
+  registrationLastUtmContent     String?
+  registrationLastUtmTerm        String?
+  registrationLastChannel        MarketingTouchChannel?
+  registrationLastOccurredAt     DateTime?
+  createdAt                      DateTime                                @default(now())
+  updatedAt                      DateTime                                @updatedAt
+  user                           User?                                   @relation("UserMarketingAttributionUser", fields: [userId], references: [id], onDelete: SetNull)
+  firstTouch                     MarketingTouch?                         @relation("UserCurrentFirstMarketingTouch", fields: [firstTouchId], references: [id], onDelete: Restrict)
+  lastTouch                      MarketingTouch?                         @relation("UserCurrentLastMarketingTouch", fields: [lastTouchId], references: [id], onDelete: Restrict)
+  registrationFirstTouch         MarketingTouch?                         @relation("RegistrationFirstMarketingTouch", fields: [registrationFirstTouchId], references: [id], onDelete: Restrict)
+  registrationLastTouch          MarketingTouch?                         @relation("RegistrationLastMarketingTouch", fields: [registrationLastTouchId], references: [id], onDelete: Restrict)
+  registrationFirstCampaign      MarketingCampaign?                      @relation("RegistrationFirstMarketingCampaign", fields: [registrationFirstCampaignId], references: [id], onDelete: Restrict)
+  registrationLastCampaign       MarketingCampaign?                      @relation("RegistrationLastMarketingCampaign", fields: [registrationLastCampaignId], references: [id], onDelete: Restrict)
+
+  @@index([registrationStatus, registrationFinalizedAt])
+  @@index([registrationFirstCampaignId])
+  @@index([registrationLastCampaignId])
+  @@map("user_marketing_attribution")
+}
+
+model OrderMarketingAttribution {
+  id                    String                @id @default(cuid())
+  orderId               String                @unique
+  firstTouchId          String?
+  lastTouchId           String?
+  firstCampaignId       String?
+  firstCampaignCode     String?
+  firstCampaignName     String?
+  firstUtmSource        String?
+  firstUtmMedium        String?
+  firstUtmCampaign      String?
+  firstUtmContent       String?
+  firstUtmTerm          String?
+  firstChannel          MarketingTouchChannel?
+  firstOccurredAt       DateTime?
+  lastCampaignId        String?
+  lastCampaignCode      String?
+  lastCampaignName      String?
+  lastUtmSource         String?
+  lastUtmMedium         String?
+  lastUtmCampaign       String?
+  lastUtmContent        String?
+  lastUtmTerm           String?
+  lastChannel           MarketingTouchChannel?
+  lastOccurredAt        DateTime?
+  createdAt             DateTime              @default(now())
+  order                 Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  firstTouch            MarketingTouch?       @relation("OrderFirstMarketingTouch", fields: [firstTouchId], references: [id], onDelete: Restrict)
+  lastTouch             MarketingTouch?       @relation("OrderLastMarketingTouch", fields: [lastTouchId], references: [id], onDelete: Restrict)
+  firstCampaign         MarketingCampaign?    @relation("OrderFirstMarketingCampaign", fields: [firstCampaignId], references: [id], onDelete: Restrict)
+  lastCampaign          MarketingCampaign?    @relation("OrderLastMarketingCampaign", fields: [lastCampaignId], references: [id], onDelete: Restrict)
+
+  @@index([firstCampaignId])
+  @@index([lastCampaignId])
+  @@map("order_marketing_attribution")
+}
+
+model MarketingCampaignAudit {
+  id        String                      @id @default(cuid())
+  campaignId String
+  event     MarketingCampaignAuditEvent
+  actorId   String
+  actorRole AdminRole
+  before    Json?
+  after     Json?
+  createdAt DateTime                    @default(now())
+  campaign  MarketingCampaign           @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+
+  @@index([campaignId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("marketing_campaign_audits")
 }
 
 model RepeatChargeAttempt {
@@ -547,6 +705,25 @@ enum UserIdentityAuditActorType {
   USER
   ADMIN
   SUPPORT
+}
+
+enum MarketingTouchChannel {
+  WEB
+  TELEGRAM_BOT
+  TELEGRAM_MINI_APP
+}
+
+enum MarketingRegistrationAttributionStatus {
+  PENDING
+  DIRECT
+  ATTRIBUTED
+}
+
+enum MarketingCampaignAuditEvent {
+  CREATED
+  UPDATED
+  ACTIVATED
+  DEACTIVATED
 }
 
 enum AdminRole {

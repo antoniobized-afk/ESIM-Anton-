@@ -18,6 +18,11 @@
   fulfilment и completion-accounting только используют уже созданный snapshot,
   не создают второй. Новые direct `order.create` или новый checkout endpoint
   требуют обновить этот inventory в том же PR.
+- До подключения hook сделать `createOrderSnapshot` conflict-safe для
+  at-least-once delivery: пустой Prisma `upsert.update: {}` недопустим, потому
+  что не доказывает native atomic conflict path. Выбрать один явный write seam
+  с atomic conflict handling и readback, затем покрыть два concurrent вызова
+  одного `orderId` без `P2002` и без второй строки/snapshot rewrite.
 - Top-up paths explicitly skip primary-order snapshot/report semantics.
 - При trusted campaign association with `referralLinkId` делегировать
   registration в `ReferralsService`, never write user referral fields directly.
@@ -61,6 +66,10 @@
 
 - Primary card/balance/free paths create one snapshot; top-up does not;
   completion/retry reads the same snapshot rather than creating another.
+- Two concurrent at-least-once calls for one primary `orderId` complete without
+  `P2002`, return/read one immutable snapshot and do not rewrite its first/last
+  fields; test must exercise the chosen conflict-safe persistence seam rather
+  than only mock an empty `upsert.update`.
 - Campaign referral registration respects self/legacy/first-completed-order
   guard and cannot generate direct ledger write.
 - Manual partner promo still wins; repeated completion/accounting remains one

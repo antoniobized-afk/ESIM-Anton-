@@ -24,6 +24,9 @@
 - `auth` — admin login, email OTP, OAuth, Telegram auth, `/auth/me`, customer identity resolver, link/unlink API
 - `esim-provider` — eSIM Access integration, webhook handling
 - `loyalty` — `/loyalty/me`, CRUD уровней, пересчёт уровня после purchase
+- `marketing-attribution` — campaign links, append-only trusted touches,
+  user/order attribution snapshots, campaign audit и future campaign reports;
+  не владеет скидками, referral registration или partner rewards.
 - `notifications` — email, web push. (Включает подмодуль `traffic-monitor` для мониторинга трафика/валидности)
 - `orders` — заказ, free fulfill, usage, top-up flow, balance purchase flow
 - `payments` — Robokassa flow + CloudPayments (сохранение карт, рекуррентные списания)

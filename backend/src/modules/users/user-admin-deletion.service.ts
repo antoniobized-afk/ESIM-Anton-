@@ -38,6 +38,8 @@ type DeleteResult = {
   deletedIdentityAuditCount: number;
   deletedPushSubscriptionCount: number;
   deletedNotificationCount: number;
+  anonymizedMarketingTouchCount: number;
+  unlinkedMarketingAttributionCount: number;
 };
 
 type CountKey = keyof UserDeleteCandidate['_count'];
@@ -91,6 +93,14 @@ export class UserAdminDeletionService {
       const deletedIdentities = await tx.userIdentity.deleteMany({ where: { userId } });
       const deletedPushSubscriptions = await tx.pushSubscription.deleteMany({ where: { userId } });
       const deletedNotifications = await tx.notification.deleteMany({ where: { userId } });
+      const anonymizedMarketingTouches = await tx.marketingTouch.updateMany({
+        where: { userId },
+        data: { userId: null, visitorKeyHash: null },
+      });
+      const unlinkedMarketingAttribution = await tx.userMarketingAttribution.updateMany({
+        where: { userId },
+        data: { userId: null },
+      });
 
       await tx.user.delete({ where: { id: userId } });
 
@@ -101,6 +111,8 @@ export class UserAdminDeletionService {
         deletedIdentityAuditCount: deletedIdentityAudits.count,
         deletedPushSubscriptionCount: deletedPushSubscriptions.count,
         deletedNotificationCount: deletedNotifications.count,
+        anonymizedMarketingTouchCount: anonymizedMarketingTouches.count,
+        unlinkedMarketingAttributionCount: unlinkedMarketingAttribution.count,
       };
     });
   }

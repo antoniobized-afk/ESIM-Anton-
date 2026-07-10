@@ -21,6 +21,7 @@ import { TelegramModule } from './modules/telegram/telegram.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { TrafficMonitorModule } from './modules/notifications/traffic-monitor.module';
 import { PromoCodesModule } from './modules/promo-codes/promo-codes.module';
+import { MarketingAttributionModule } from './modules/marketing-attribution/marketing-attribution.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { PromoCodesModule } from './modules/promo-codes/promo-codes.module';
     NotificationsModule,
     TrafficMonitorModule,
     PromoCodesModule,
+    MarketingAttributionModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

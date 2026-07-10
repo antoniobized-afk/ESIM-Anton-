@@ -2,205 +2,215 @@
 
 > [Корневой документ wiki](../README.md)
 
-> Целевой runtime-контракт для [Phase 21](../phases/phase-21-marketing-attribution-and-campaign-links.md).
-> До реализации source of truth для текущего поведения остаются Prisma schema и
-> существующие `referrals`, `promo-codes`, `orders`, `auth`, `users`, `client`
-> и `bot` owners. Этот документ не утверждает, что target-сущности уже есть в
-> production.
+> Durable runtime-контракт контура marketing attribution. [Phase 21](../phases/phase-21-marketing-attribution-and-campaign-links.md) владеет scope, порядком работ, статусом и evidence; этот документ не ведёт журнал реализации.
 
-## Зачем нужен отдельный контур
+## Граница контура
 
-Текущие `User.utmSource`, `utmMedium`, `utmCampaign` — legacy-поля для
-одноразового display bucket. Они не содержат `content`/`term`, истории
-касания, trusted web capture, first/last attribution или order snapshot.
-`ReferralLink` и `PromoCode` уже решают другую задачу: acquisition/reward и
-checkout discount соответственно.
+`marketing-attribution` владеет campaign links, trusted touches, current
+attribution state пользователя, immutable snapshots регистрации и заказа,
+campaign audit, attribution read models и export.
 
-Новый backend module `marketing-attribution` владеет campaign links,
-маркетинговыми касаниями, immutable registration/order snapshots, admin
-reporting и export. Он не становится владельцем скидок, выплат или рассылок.
+Контур не владеет скидкой, регистрацией реферала, reward ledger, checkout,
+платёжным статусом или outbound-рассылкой:
 
-## Namespaces и ownership
+- `referrals` — единственный owner `ReferralLink`, его registration policy и
+  mutable-until-first-completed-primary-order правила;
+- `promo-codes` — единственный owner скидки, reservation и reward-policy
+  snapshots;
+- `PartnerRewardsService` — единственная точка записи `REFERRAL_BONUS`;
+- `orders` создаёт snapshot в своей транзакции, но не содержит локальных
+  campaign rules;
+- `auth` проверяет identity и Telegram WebApp `initData`;
+- `admin`, `client` и `bot` — клиенты backend API, а не владельцы attribution
+  business logic;
+- Phase 19 резервирует `TelegramBroadcastCampaign` для outbound-рассылок.
+  В marketing attribution допустимо только имя `MarketingCampaign`.
 
-- `MarketingCampaign`, а не общий `Campaign`: Phase 19 резервирует
-  `TelegramBroadcastCampaign` для outbound-рассылок, audience snapshot и
-  delivery state.
-- `marketing-attribution` владеет `MarketingCampaign`, `MarketingTouch`,
-  `UserMarketingAttribution`, `OrderMarketingAttribution`, campaign audit и
-  их API/read models.
-- `referrals` остаётся единственным owner `ReferralLink`, регистрации
-  реферала и его mutable-until-first-primary-order policy.
-- `promo-codes` остаётся owner скидки, reservation и reward-policy snapshot.
-- `PartnerRewardsService` остаётся единственной точкой записи
-  `REFERRAL_BONUS`; marketing attribution не рассчитывает и не начисляет CPA.
-- `orders` создаёт immutable attribution snapshot в своей transaction, но не
-  строит campaign/business rules локально.
-- `auth` проверяет Telegram `initData`; `bot`, `client` и `admin` только
-  передают launch intent через backend API.
-- Dependency direction: `auth`, `users` и `orders` вызывают exported marketing
-  owner; `marketing-attribution` может потреблять `ReferralsService`, но не
-  импортирует `OrdersModule`, `AuthModule` или `UsersModule` обратно.
-- Existing `analytics` dashboard не расширяется campaign-логикой; отчёты
-  принадлежат marketing module, хотя admin screen использует существующий
-  маршрут `/analytics`.
+Dependency direction односторонний: `auth`, `users` и `orders` вызывают
+exported marketing owner. Marketing module не импортирует их модули обратно и
+не создаёт Nest cycle. Связь с `ReferralsService` допустима только для
+делегирования canonical referral registration после trusted user association.
 
-## Target data contract
+## Данные и их lifecycle
 
-### `MarketingCampaign`
+### Marketing campaign
 
-Campaign хранит человеческое имя, URL-safe short code, canonical UTM tuple
-(`source`, `medium`, `campaign`, optional `content`/`term`), relative target
-path, activation state и optional `referralLinkId`.
+`MarketingCampaign` хранит:
 
-`referralLinkId` только связывает кампанию с уже существующей партнёрской
-ссылкой. Discount, partner owner, bonus percent и payout mode читаются у
-`ReferralLink`/`PromoCode`, не копируются в campaign.
+- backend-generated URL-safe `shortCode`;
+- `name`, canonical UTM tuple (`source`, `medium`, `campaign`, optional
+  `content`/`term`) и относительный `targetPath`;
+- `isActive`/`deactivatedAt`;
+- optional `referralLinkId` как ссылку на существующий `ReferralLink`.
 
-После первого accepted touch short code, UTM tuple, target path и linked
-referral link immutable; для новой разметки создаётся новая campaign. Кампания
-деактивируется, но не удаляется и не деактивирует linked referral link/promo.
+Campaign не копирует promo, partner owner, bonus percent или payout mode.
+После первого accepted touch immutable: short code, UTM tuple, target path и
+linked referral link. Для новой разметки создаётся новая campaign. Кампания
+только деактивируется, не удаляется и не меняет linked referral/promo.
+Capture берёт `FOR SHARE` на campaign row: concurrent captures одной active
+campaign выполняются параллельно, а operator mutation с `FOR UPDATE` ждёт их
+commit. Поэтому active/freeze checks всё ещё выполняются после row lock в той
+же transaction, что и touch write, но viral traffic не сериализуется на одном
+exclusive capture lock.
 
-### `MarketingTouch`
+Каждая operator mutation создаёт `MarketingCampaignAudit` с actor, ролью,
+event и before/after snapshot. Audit не зависит от существования actor record.
 
-Touch — append-only факт входа по active campaign:
+### Marketing touch
 
-- channel: `WEB`, `TELEGRAM_BOT` или `TELEGRAM_MINI_APP`;
-- campaign, occurrence time и source-event idempotency key;
-- optional canonical user after trusted claim;
-- pseudonymous visitor-key HMAC только пока нужен для web claim.
+`MarketingTouch` — append-only факт входа по active campaign. Он хранит
+campaign, `channel`, `occurredAt`, unique source-event idempotency key и только
+необходимую association:
 
-В touch не хранятся raw Telegram `initData`, bot token, IP, full referrer или
-произвольный landing URL. У UTM нет самостоятельного client input: backend
-берёт tuple из выбранной campaign.
+- canonical `userId` — после trusted association;
+- HMAC visitor key — только на время anonymous web claim.
+
+Новый touch принимает ровно одну association. DB constraint запрещает хранить
+`userId` и visitor HMAC одновременно; trusted association записывает canonical
+user и очищает HMAC одной мутацией. Оба поля могут быть `null` только у
+anonymized historical fact после разрешённого удаления пользователя.
+
+Retry сначала разрешается по source-event key независимо от текущей активности
+campaign. Совпавший key обязан описывать ту же campaign, channel, occurrence и
+association; mismatch завершается conflict и не создаёт/не перепривязывает
+touch. Concurrent insert использует conflict-safe insert/readback, не обработку
+unique violation внутри уже abort-нутой transaction.
+
+После trusted claim anonymous retry не может совпасть с association: visitor
+HMAC уже очищен, а canonical `userId` anonymous caller не предоставляет. Такой
+replay получает conflict без возврата claimed `userId`; idempotent retry после
+claim возможен только из trusted user flow с тем же canonical user.
+
+Допустимые каналы: `WEB`, `TELEGRAM_BOT`, `TELEGRAM_MINI_APP`. В touch нельзя
+хранить raw Telegram `initData`, bot token, IP, полный referrer, произвольный
+landing URL или client-supplied UTM tuple. UTM всегда читается из campaign.
 
 ### User и registration attribution
 
-`UserMarketingAttribution` — one-to-one read state рядом с `User`, а не новые
-колонки в `User`. Он хранит current first/last touch и отдельные immutable
-first/last snapshots на момент регистрации. Последние нужны, чтобы новый touch
-у уже зарегистрированного клиента не переписал историческую метрику
-«Регистрации».
+`UserMarketingAttribution` — отдельное one-to-one state рядом с `User`, а не
+набор новых полей в `User`. Оно хранит current first/last touch; first/last
+обновляются compare-and-set по времени touch, а не перезаписываются последним
+пришедшим запросом.
 
-Каждый новый account creation path открывает registration-attribution state.
-Trusted web claim или Telegram launch завершает его с campaign snapshot либо с
-явным direct/no-campaign outcome. Existing users и legacy UTM не получают
-синтетический historical backfill.
+Если state ещё нет, его создание сериализуется `FOR NO KEY UPDATE` lock на canonical
+строке существующего `User`: владелец lock повторно читает state и единолично создаёт
+его, а ожидавшая transaction только переиспользует этот state. Lock совместим с FK `KEY SHARE`, который
+уже взят при записи touch, но блокирует такой же initialization и user deletion. Ветка не
+восстанавливается из `P2002` в уже прерванной transaction. Если canonical user не найден
+под lock, lifecycle возвращает доменный `404` и не пытается создать state с невалидным FK.
+
+Registration фиксируется один раз в статусе `DIRECT` или `ATTRIBUTED`:
+first/last touch и campaign/UTM/channel snapshot сохраняются в state отдельно
+от current first/last. Новый touch у существующего пользователя не меняет
+registration metric. Legacy `User.utm*` и старые user/referral fields не
+являются touch history и не используются для synthetic backfill.
+
+Перед финализацией registration snapshot берёт `FOR UPDATE` на строке
+`UserMarketingAttribution`, затем перечитывает current first/last. Поэтому
+concurrent current-touch CAS либо commit до snapshot, либо ждёт после него;
+immutable registration result не может застыть на устаревшем состоянии.
 
 ### Order attribution
 
-`OrderMarketingAttribution` — one-to-one immutable snapshot first/last touch
-при создании primary order. Он создаётся внутри той же local transaction, что
-и order, через marketing owner. Dashboard читает именно snapshot, а не текущий
-`UserMarketingAttribution`.
+`OrderMarketingAttribution` — one-to-one immutable first/last snapshot при
+создании primary order. Snapshot создаётся idempotently по `orderId` внутри
+той же local transaction, что и primary order.
 
-Top-up (`parentOrderId != null`) не является first/repeat primary purchase и
-не входит в commissionable CPA/revenue. Если LTV top-up потребуется позднее,
-это отдельная secondary metric, не подмена основного отчёта.
+Top-up (`parentOrderId != null`) не получает primary-order snapshot и не
+участвует в first/repeat purchase, commissionable revenue или CPA. Отчёты
+читают order snapshot, а не current `UserMarketingAttribution`.
 
-## Capture flows
+## Canonical campaign links
 
-### Web
+Backend строит links только из configuration и campaign data:
 
-Каноническая web-ссылка строится backend-ом из `SITE_URL` как
-`/r/<shortCode>` и может дополнительно нести display UTM query. Campaign code
-остаётся единственным authoritative input: произвольные raw UTM без code не
-создают managed campaign/touch.
+- web: `SITE_URL/r/<shortCode>` с display UTM query;
+- bot: `https://t.me/<TELEGRAM_BOT_USERNAME>?start=ma_<shortCode>`;
+- Mini App: `https://t.me/<TELEGRAM_BOT_USERNAME>?startapp=ma_<shortCode>`.
 
-Client route создаёт opaque visitor token и per-launch idempotency key в
-first-party storage, а backend хранит только HMAC token. После JWT bootstrap
-authenticated claim связывает pending touches с canonical `User`; claim
-безопасно повторяем.
+Required link configuration валидирована до create/update campaign transaction;
+responses собираются в той же transaction, что campaign и audit. Config/link
+error не может оставить committed campaign или audit после failed API response.
 
-Это не зависит от несуществующего отдельного landing runtime на
-`mojomobile.ru` и не требует cross-subdomain cookie. Внешний лендинг при
-появлении должен передавать только short code на canonical app URL.
+`shortCode` — единственный authoritative campaign input. Display UTM не
+создаёт managed campaign и не меняет её internal attribution. `targetPath`
+всегда относительный path приложения: внешний redirect и `//` path запрещены.
 
-### Telegram
+`ma_` — namespace marketing attribution. `ref_` остаётся referral namespace.
+Telegram start parameter вместе с prefix не превышает 64 URL-safe символа.
 
-Есть два независимых Telegram entrypoint:
+## Trusted capture boundary
 
-- `https://t.me/<bot>?start=ma_<code>`: bot получает `/start`, передаёт
-  trusted service-token event в backend;
-- `https://t.me/<bot>?startapp=ma_<code>`: клиент передаёт existing raw
-  `initData` в WebApp auth request; backend после HMAC и `auth_date` freshness
-  извлекает из него `start_param` и передаёт marketing owner verified intent.
-  Для campaign namespace `ma_` raw `initDataUnsafe`/query parameter не является
-  отдельным входом capture; existing `ref_` parser сохраняет свой flow.
+Public capture принимает только active campaign code и bounded opaque
+idempotency/visitor identifiers. Из raw browser input он не получает campaign
+metadata, referral policy или UTM.
 
-`ref_` остаётся namespace referral flow. Mini App `startapp` не считается
-fallback-дублем bot `/start`; оба flow имеют свои event keys и не должны
-двойно увеличивать clicks.
+Web flow хранит opaque visitor token в first-party storage, передаёт в backend
+только его HMAC и idempotency key, а после JWT claim привязывает pending touch
+к canonical user. Claim идемпотентен и не может отвязать или присоединить touch
+к другому user.
 
-Telegram ограничивает start parameter 64 URL-safe символами. Short-code
-контракт и parser обязаны сохранять этот лимит, а WebApp verification должна
-проверять не только HMAC, но и freshness `auth_date` до attribution write.
+Bot flow принимает `ma_` раньше решения find-or-create и создаёт trusted event
+только через service-token boundary с проверкой canonical Telegram/user
+relation. Mini App извлекает `start_param` исключительно из server-validated
+`initData`: HMAC и freshness `auth_date` проверяются до write. Значения из
+`initDataUnsafe`, URL query или client state не являются source of truth.
+
+`start` и `startapp` — независимые event domains и имеют разные idempotency
+keys; один flow не является fallback-дублем другого.
 
 ## Referral, promo и CPA boundary
 
-Campaign, связанная с `ReferralLink`, может запросить у `ReferralsService`
-регистрацию этого link только после trusted user association. Сервис сохраняет
-свои current rules: legacy referral immutable, partner link может смениться до
-первого completed primary order, self-referral запрещён.
+Campaign с `referralLinkId` может только попросить `ReferralsService`
+зарегистрировать существующий link после trusted association. Она не пишет
+`User.referralLinkId` напрямую, не создаёт PromoCode и не начисляет reward.
 
-Campaign не пишет `User.referralLinkId` напрямую, не применяет promo и не
-добавляет reward. Existing checkout определяет auto-promo из current
-`ReferralLink`; completion accounting сохраняет precedence:
-manual partner promo → referral link → legacy referral.
+Checkout сохраняет действующий порядок: manual partner promo → referral link →
+legacy referral. CPA использует successful `REFERRAL_BONUS` ledger и reward
+snapshots, а не calculation from campaign fields. Смена label, деактивация или
+изменение текущего referral state не переписывают financial history.
 
-CPA report читает successful `REFERRAL_BONUS` ledger и snapshot payout mode,
-а не умножает revenue на campaign percent. Поэтому изменения campaign label или
-deactivation не переписывают финансовую историю.
+## API, access и read models
 
-## Reporting и admin surface
+Campaign read доступен admin roles. Создание, изменение и деактивация campaign
+разрешены только `MANAGER` и `SUPER_ADMIN`; `SUPPORT` получает read-only
+campaign/report/timeline access. Ограничение проверяется backend owner, а не
+только UI.
 
-`/analytics` становится экраном «Источники трафика» с тремя typed tabs:
+Campaign API отдаёт curated read model, а не Prisma row: linked referral
+ограничен `id`, `code`, `label` и `isActive`. Его owner id и relation counts
+остаются внутренними данными; они не становятся неявным публичным контрактом.
 
-1. Campaign constructor/list: generated web, bot and Mini App links, QR code,
-   activation и read-only linked partner offer.
-2. Attribution report: date/channel filters и explicit first-touch/last-touch
-   model. Clicks — deduplicated touches; registrations — registration snapshot;
-   purchases/revenue — completed primary orders through order snapshot.
-3. Bloggers/CPA: только campaigns with linked `ReferralLink`, actual reward
-   ledger, payout-mode split и XLSX export.
+Bodies и queries API — DTO classes. Public, user, admin и service-token routes
+имеют отдельные guards и rate limits. Public response не раскрывает linked
+partner policy.
 
-Promo codes и partner links остаются отдельными owner screens. Constructor
-может выбрать существующую referral link, но не создаёт PromoCode/ReferralLink
-через несколько неатомарных frontend calls.
+Admin reporting живёт в marketing module, даже если UI использует `/analytics`.
+Он использует только domain facts:
 
-User detail получает touch timeline отдельным admin-only marketing read route;
-mixed `GET /users/:id` не расширяется. Existing Phase 20 compact
-`attributionSummary` сохраняет legacy facts до отдельной consumer migration.
+- clicks — deduplicated touches;
+- registrations — registration snapshots;
+- purchases/revenue — completed primary orders через order snapshots;
+- CPA — actual successful reward ledger.
 
-`SUPPORT` получает read-only report/timeline; `MANAGER` и `SUPER_ADMIN` могут
-создавать, изменять и деактивировать campaigns. Backend проверяет роль, UI
-только отражает разрешения. Campaign audit фиксирует operator mutations.
+Все отчёты явно выбирают first-touch или last-touch dimension. User touch
+timeline — отдельный admin marketing read route; mixed `GET /users/:id` не
+расширяется marketing details.
 
-Это не молча меняет нынешнюю broad `JwtAdminGuard` policy у существующих
-PromoCodes/ReferralLinks. Если product потребует одинаковый role hardening для
-этих owner screens, он проходит отдельный consumer audit и contract change.
+## Retention и referential integrity
 
-## Security, lifecycle и rollout
+Campaign, touch, snapshots и campaign audit — исторические факты. Campaign
+history не исчезает cascade delete. Удаление removable empty user отвязывает
+`userId` от touch/state и очищает visitor HMAC; order-backed history остаётся
+доказуемой. Состояние с order/referral/promo/reward business data удалению
+пользователя не подлежит по правилам соответствующих owners.
 
-- Все новые bodies/query — DTO classes; admin/user/bot/public routes используют
-  соответствующие guards и отдельные rate limits.
-- Public capture принимает только campaign code + opaque bounded identifiers;
-  code не раскрывает linked partner policy.
-- Anonymous visitor HMAC очищается после claim либо после bounded TTL;
-  anonymized event остаётся только для aggregate click statistics.
-- User deletion не уничтожает historical campaign/order facts каскадом:
-  removable пустой account отвязывается/anonymizes, а order-backed history
-  продолжает жить.
-- Migration не materializes fake touches/snapshots из `User.utm*` или старых
-  orders. Отчёт явно показывает rollout boundary.
-- Schema/relations проходят migration preflight, `prisma migrate`, targeted
-  tests и consumer audit. New module появляется в `module-map.md` только
-  вместе с живым implementation.
+Schema changes проходят только Prisma migrations. Миграции marketing
+attribution никогда не materialize fake touches или snapshots из legacy UTM,
+старых orders либо current referral fields.
 
-## Links
+## Связанные контракты
 
-- [Phase 21](../phases/phase-21-marketing-attribution-and-campaign-links.md)
 - [Referral Runtime](./referrals-runtime.md)
 - [Promo Codes Runtime](./promo-codes-runtime.md)
 - [Auth Identity Runtime](./auth-identity-runtime.md)
-- [Telegram Mini Apps](https://core.telegram.org/bots/webapps)
-- [Telegram deep links](https://core.telegram.org/api/links)
