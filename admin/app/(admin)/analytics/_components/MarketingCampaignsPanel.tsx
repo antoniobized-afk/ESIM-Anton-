@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ExternalLink, Link2, Plus, Power } from 'lucide-react'
 import Button from '@/components/ui/Button'
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog'
 import Pagination from '@/components/ui/Pagination'
 import Spinner from '@/components/ui/Spinner'
 import { useToast } from '@/components/ui/ToastProvider'
@@ -54,6 +55,7 @@ export default function MarketingCampaignsPanel({
   onStatusChange,
 }: MarketingCampaignsPanelProps) {
   const toast = useToast()
+  const confirmDialog = useConfirmDialog()
   const [adminRole, setAdminRole] = useState<AdminRole | null>(null)
   const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([])
   const [meta, setMeta] = useState<PaginationMeta | null>(null)
@@ -62,7 +64,7 @@ export default function MarketingCampaignsPanel({
   const [formOpen, setFormOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [linksCampaign, setLinksCampaign] = useState<MarketingCampaign | null>(null)
-  const [changingCampaignId, setChangingCampaignId] = useState<string | null>(null)
+  const [changingCampaignIds, setChangingCampaignIds] = useState<Set<string>>(() => new Set())
   const [referralLinks, setReferralLinks] = useState<AdminReferralLink[]>([])
   const [referralMeta, setReferralMeta] = useState<PaginationMeta | null>(null)
   const [referralLinksLoading, setReferralLinksLoading] = useState(false)
@@ -145,10 +147,16 @@ export default function MarketingCampaignsPanel({
 
   const toggleCampaign = async (campaign: MarketingCampaign) => {
     const action = campaign.isActive ? 'деактивировать' : 'активировать'
-    if (!window.confirm(`Вы уверены, что хотите ${action} кампанию «${campaign.name}»?`)) return
+    const confirmed = await confirmDialog({
+      title: campaign.isActive ? 'Деактивация кампании' : 'Активация кампании',
+      description: `Вы уверены, что хотите ${action} кампанию «${campaign.name}»?`,
+      confirmLabel: campaign.isActive ? 'Деактивировать' : 'Активировать',
+      variant: campaign.isActive ? 'destructive' : 'default',
+    })
+    if (!confirmed) return
 
     try {
-      setChangingCampaignId(campaign.id)
+      setChangingCampaignIds((current) => new Set(current).add(campaign.id))
       const { data } = await marketingAttributionApi.updateCampaign(campaign.id, {
         isActive: !campaign.isActive,
       })
@@ -158,7 +166,11 @@ export default function MarketingCampaignsPanel({
     } catch (requestError) {
       toast.error(getErrorMessage(requestError, 'Не удалось изменить статус кампании'))
     } finally {
-      setChangingCampaignId(null)
+      setChangingCampaignIds((current) => {
+        const next = new Set(current)
+        next.delete(campaign.id)
+        return next
+      })
     }
   }
 
@@ -257,7 +269,7 @@ export default function MarketingCampaignsPanel({
                     <Button
                       variant={campaign.isActive ? 'destructive' : 'secondary'}
                       size="sm"
-                      disabled={changingCampaignId === campaign.id}
+                      disabled={changingCampaignIds.has(campaign.id)}
                       onClick={() => void toggleCampaign(campaign)}
                     >
                       <Power className="h-4 w-4" />

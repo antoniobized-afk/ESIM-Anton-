@@ -64,6 +64,9 @@ timeline без смешивания с PromoCodes, ReferralLinks или mixed u
   registration snapshots и factual touch history.
 - QR dependency audit: `qrcode@1.5.4` и `@types/qrcode@1.5.6`, лицензия MIT;
   QR строится локально только из canonical URL backend response.
+- Post-review: lifecycle confirmation переведён на общий admin
+  `useConfirmDialog`; pending mutations хранятся по campaign id, поэтому
+  завершение одной операции не разблокирует другую ещё выполняющуюся mutation.
 - Gates: `pnpm --filter backend build`; marketing contour — 16 suites / 84
   tests; full backend — 67 suites / 558 tests; `pnpm --filter admin lint`;
   `pnpm --filter admin build`. Consumer audit выполнен по
