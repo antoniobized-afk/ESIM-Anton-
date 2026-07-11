@@ -22,7 +22,8 @@
 - Колонка `Провайдер` заменена на `Вход`: chips строятся по `UserIdentity`
   через backend label owner, без fallback на legacy slot.
 - Колонка `Источник` заменена на `Атрибуция`: backend summary показывает
-  referral, UTM и entry-channel buckets вместе, если фактов несколько.
+  только фактические referral и legacy UTM buckets. Способ входа остаётся в
+  отдельной колонке `Вход`; campaign/touch facts показывает Phase 21 timeline.
 - Admin `/users` стал compact scan/action surface с URL-state
   search/sorting, стабильными sortable headers (`balance`, `totalSpent`,
   `createdAt`) и admin-only detail modal через `GET /users/admin/:id`.
@@ -44,9 +45,10 @@
   `shared/user-sorting.ts`: `id`, `balance`, `bonusBalance`, `totalSpent`,
   `loyaltyLevel`, `createdAt`. `name`, `telegram` и `attribution` остаются
   display/search-only.
-- `Атрибуция` в этой фазе — read model над текущими referral/UTM/entry-channel
-  данными. Campaign/touch tracking, `/go/:code`, CPA dashboard и полноценный
-  marketing attribution runtime вынесены в будущую фазу после отдельного audit.
+- `Атрибуция` в этой фазе — read model над фактическими referral/legacy UTM
+  данными. Способ входа не является источником трафика. Campaign/touch
+  tracking, `/go/:code`, CPA dashboard и полноценный marketing attribution
+  runtime вынесены в будущую фазу после отдельного audit.
 - Legacy `authProvider/providerId` остаются в schema только из-за live
   blockers: auth resolver continuity, identity backfill и merge-preflight
   drift-check. UI/API не используют их как display fallback.

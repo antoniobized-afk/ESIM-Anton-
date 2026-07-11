@@ -60,10 +60,6 @@ export function formatAttributionBucket(bucket: AdminUserAttributionBucket): str
     return parts.length > 0 ? `${bucket.label}: ${parts.join(' / ')}` : bucket.label
   }
 
-  if (bucket.kind === 'utm') {
-    const parts = [bucket.source, bucket.medium, bucket.campaign].filter(Boolean)
-    return parts.length > 0 ? `${bucket.label}: ${parts.join(' / ')}` : bucket.label
-  }
-
-  return bucket.label
+  const parts = [bucket.source, bucket.medium, bucket.campaign].filter(Boolean)
+  return parts.length > 0 ? `${bucket.label}: ${parts.join(' / ')}` : bucket.label
 }

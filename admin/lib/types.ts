@@ -113,15 +113,6 @@ export type AdminUserAttributionBucket =
       medium: string | null
       campaign: string | null
     }
-  | {
-      kind: 'entryChannel'
-      label: string
-      channel: 'telegram' | 'direct'
-    }
-  | {
-      kind: 'unknown'
-      label: string
-    }
 
 export interface AdminUserAttributionSummary {
   buckets: AdminUserAttributionBucket[]

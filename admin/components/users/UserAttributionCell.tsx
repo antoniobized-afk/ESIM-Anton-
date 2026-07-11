@@ -7,9 +7,7 @@ interface UserAttributionCellProps {
 
 function bucketClassName(bucket: AdminUserAttributionBucket): string {
   if (bucket.kind === 'referral') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
-  if (bucket.kind === 'utm') return 'border-sky-200 bg-sky-50 text-sky-700'
-  if (bucket.kind === 'entryChannel') return 'border-slate-200 bg-slate-50 text-slate-700'
-  return 'border-slate-200 bg-white text-slate-500'
+  return 'border-sky-200 bg-sky-50 text-sky-700'
 }
 
 export default function UserAttributionCell({ buckets }: UserAttributionCellProps) {

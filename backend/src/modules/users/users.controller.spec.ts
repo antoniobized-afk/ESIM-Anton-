@@ -148,7 +148,7 @@ describe('UsersController', () => {
     const adminDetail = {
       id: 'user_1',
       identityProviders: [],
-      attributionSummary: { buckets: [{ kind: 'unknown', label: 'Неизвестно' }] },
+      attributionSummary: { buckets: [] },
     };
     usersService.findAdminById.mockResolvedValue(adminDetail);
 

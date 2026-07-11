@@ -191,6 +191,31 @@ describe('Users sorting contract', () => {
 });
 
 describe('UsersService.findAll', () => {
+  it('не выводит способ входа как источник трафика без referral или legacy UTM', async () => {
+    const { service, prisma } = makeService();
+    prisma.user.findMany.mockResolvedValue([
+      makeAdminUserSource({
+        email: 'campaign-user@example.com',
+        identities: [
+          {
+            id: 'identity_1',
+            provider: AuthIdentityProvider.EMAIL,
+            email: 'campaign-user@example.com',
+            emailVerified: true,
+            displayName: null,
+            linkedAt: TEST_DATE,
+            lastLoginAt: TEST_DATE,
+          },
+        ],
+      }),
+    ]);
+    prisma.user.count.mockResolvedValue(1);
+
+    const result = await service.findAll();
+
+    expect(result.data[0].attributionSummary).toEqual({ buckets: [] });
+  });
+
   it('нормализует page/limit, ищет по support-friendly полям и сортирует до pagination', async () => {
     const { service, prisma } = makeService();
     const users = [makeAdminUserSource({ id: 'user_1' })];
@@ -235,7 +260,7 @@ describe('UsersService.findAll', () => {
           balance: '0',
           identityProviders: [],
           attributionSummary: {
-            buckets: [{ kind: 'unknown', label: 'Неизвестно' }],
+            buckets: [],
           },
         }),
       ],
@@ -367,11 +392,6 @@ describe('UsersService.findAll', () => {
         campaign: 'summer',
       },
     ]);
-    expect(result.data[0].attributionSummary.buckets).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ kind: 'entryChannel' }),
-      ]),
-    );
     expect(JSON.stringify(result)).not.toContain('firstTouch');
     expect(JSON.stringify(result)).not.toContain('lastTouch');
   });

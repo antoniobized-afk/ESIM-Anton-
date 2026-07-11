@@ -64,15 +64,6 @@ export type AdminUserAttributionBucket =
       source: string | null;
       medium: string | null;
       campaign: string | null;
-    }
-  | {
-      kind: 'entryChannel';
-      label: string;
-      channel: 'telegram' | 'direct';
-    }
-  | {
-      kind: 'unknown';
-      label: string;
     };
 
 export type AdminUserAttributionSummaryReadModel = {
@@ -180,28 +171,6 @@ function hasReferral(user: AdminUserReadModelSource): boolean {
   return Boolean(user.referredById || user.referralLinkId);
 }
 
-function resolveEntryChannel(
-  user: AdminUserReadModelSource,
-): AdminUserAttributionBucket | null {
-  const hasTelegramIdentity = user.identities.some(
-    (identity) => identity.provider === AuthIdentityProvider.TELEGRAM,
-  );
-  if (user.telegramId !== null || hasTelegramIdentity) {
-    return { kind: 'entryChannel', label: 'Telegram', channel: 'telegram' };
-  }
-
-  if (
-    user.email ||
-    user.phone ||
-    user.username ||
-    user.identities.length > 0
-  ) {
-    return { kind: 'entryChannel', label: 'Прямой вход', channel: 'direct' };
-  }
-
-  return null;
-}
-
 function buildAttributionSummary(
   user: AdminUserReadModelSource,
 ): AdminUserAttributionSummaryReadModel {
@@ -227,11 +196,6 @@ function buildAttributionSummary(
       medium: user.utmMedium,
       campaign: user.utmCampaign,
     });
-  }
-
-  if (buckets.length === 0) {
-    const entryChannel = resolveEntryChannel(user);
-    buckets.push(entryChannel ?? { kind: 'unknown', label: 'Неизвестно' });
   }
 
   return { buckets };
