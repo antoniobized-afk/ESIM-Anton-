@@ -29,9 +29,9 @@
 - bot как отдельный process
 - reverse proxy перед HTTP-сервисами
 
-`client` собирается как отдельное приложение и развёртывается как независимый сервис в Railway (в том же проекте, что и `backend`/`admin`/`bot`).
+`client` собирается как отдельное приложение и развёртывается как независимый сервис в Railway (в том же проекте, что и `backend`/`admin`/`bot`). Это shared-monorepo consumer: TypeScript-контракты берутся из `shared/`, поэтому Railway должен собирать сервис из корня репозитория, а не из изолированного `/client`.
 
-Текущий Railway client-service собирается из каталога `client` как `/app` через `npm install --include=dev --legacy-peer-deps && npm run build`; команда принадлежит `client/nixpacks.toml`. Поле Railway `Custom Build Command` должно оставаться пустым: ручное значение перекрывает Nixpacks-конфигурацию из репозитория. Явный `--include=dev` обязателен на build stage: Next.js запускает ESLint и TypeScript во время `next build`, поэтому их нельзя исключать через production npm config. В этом build context нет соседней папки `shared/`, поэтому runtime-код внутри `client` не должен импортировать `@shared/*`. Допустимы только `import type` контракты, которые стираются при сборке; runtime helpers для клиентского UI должны жить в `client/lib`.
+Railway client-service использует Config File `/client/railway.json`, пустой `Root Directory` и пустой UI `Custom Build Command`. Репозиторный конфиг владеет командами `pnpm --filter client build` / `pnpm --filter client start` и watch paths для `client/`, `shared/` и корневых workspace/lock/config файлов. `Root Directory=/client` недопустим: Railway исключает `shared/` из build context, а `next build` обязан разрешать даже type-only импорты `@shared/*` во время проверки TypeScript.
 
 ## Обязательные env-переменные
 
