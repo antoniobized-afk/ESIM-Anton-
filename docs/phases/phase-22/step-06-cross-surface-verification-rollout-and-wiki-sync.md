@@ -37,7 +37,7 @@
 ## Зависимости
 
 - Steps 02–05.
-- Реальные external gates Phase 21, необходимые для Telegram attribution path.
+- Завершённая Phase 21 как действующий marketing attribution owner.
 
 ## Статус
 

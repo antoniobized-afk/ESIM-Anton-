@@ -4,84 +4,47 @@
 
 ## Цель
 
-Создать проверяемый backend-owned контур маркетинговой атрибуции: кампании с
-короткими web/Telegram ссылками, trusted touches, first/last attribution,
-immutable snapshots регистрации и заказа, а также operator screen для
-источников трафика и CPA.
+Создать проверяемый backend-owned контур маркетинговой атрибуции: campaign
+links, trusted touches, immutable first/last snapshots регистрации и заказа,
+а также operator workspace для источников трафика, CPA и export.
 
 ## Результат
 
-- Появляется isolated module `marketing-attribution`; generic `Campaign` не
-  используется и не пересекается с planned `TelegramBroadcastCampaign` из
-  Phase 19.
-- Admin создаёт/деактивирует кампании, получает canonical web, bot и Mini App
-  ссылки и QR code без ручной сборки URL.
-- Web, bot `/start` и Telegram Mini App создают deduplicated trusted touches;
-  anonymous web facts безопасно связываются с account после JWT.
-- Registration и primary order получают immutable first/last snapshots;
-  отчёт не зависит от поздней смены current last touch.
-- Campaign может ссылаться на существующую `ReferralLink`, но не дублирует
-  PromoCode/reward ownership и не начисляет CPA самостоятельно.
-- `/analytics` становится экраном «Источники трафика»: campaigns, attribution
-  report, bloggers/CPA и domain-owned XLSX export.
-
-## Оценка
-
-- Размер фазы: `large`
-- Ожидаемое число шагов: `8`
-- Основные риски:
-  - перепутать marketing touch с referral/promo финансовым ownership;
-  - записывать Telegram `start_param` из untrusted client state;
-  - исказить регистрацию или revenue текущим last touch вместо snapshot;
-  - сделать cross-domain cookie предположением при фактическом app runtime;
-  - продублировать bot/Mini App touch или CPA reward;
-  - синтетически «восстановить» историю из legacy UTM и выдать её за факт;
-  - открыть destructive campaign control роли SUPPORT.
-
-## Зависит от
-
-- [Phase 16: Partner Referral Links](./phase-16-partner-referral-links.md)
-- [Phase 17: Partner Promo Codes](./phase-17-partner-promo-codes.md)
-- [Phase 18: Account Identity Linking & Merge](./phase-18-account-identity-linking-and-merge.md)
-- [Phase 20: Admin Users Table Identity & Attribution](./phase-20-admin-users-table-identity-attribution.md)
-- [Marketing Attribution Runtime](../architecture/marketing-attribution-runtime.md)
-- [Referral Runtime](../architecture/referrals-runtime.md)
-- [Promo Codes Runtime](../architecture/promo-codes-runtime.md)
-- [Auth Identity Runtime](../architecture/auth-identity-runtime.md)
-
-Phase 19 не является dependency: у неё только naming/semantic boundary,
-которую эта фаза соблюдает через `MarketingCampaign` namespace.
-
-## Пререквизиты
-
-- `SITE_URL`, `TELEGRAM_BOT_USERNAME` и existing app route hosting подтверждены
-  через `.env.example`/live code; боевые credentials не читаются.
-- Existing `ReferralLink`/`PromoCode`/reward ledger не меняются без
-  consumer-audit через their owners.
-- `auth/telegram/webapp` до первого attribution write проверяет HMAC и
-  `auth_date` freshness.
+- Изолированный backend-модуль `marketing-attribution` владеет campaigns,
+  trusted capture, current attribution, registration/order snapshots, audit и
+  read models.
+- Admin создаёт и деактивирует campaigns, получает canonical web, bot и Mini
+  App links и локальный QR без ручной сборки URL/UTM.
+- Web, Grammy `/start` и Telegram Mini App `startapp` создают deduplicated
+  trusted touches; anonymous web facts безопасно связываются с canonical user.
+- Registration и primary order сохраняют immutable first/last snapshots;
+  поздний current touch не переписывает историческую атрибуцию.
+- Campaign может делегировать регистрацию существующей `ReferralLink`, но не
+  дублирует promo/reward ownership; manual partner promo и top-up boundaries
+  сохранены.
+- `/analytics` содержит campaigns, first/last attribution reports,
+  bloggers/CPA и domain-owned XLSX export с backend role enforcement.
+- Production rollout, post-rollout behavior и положительные live Telegram
+  transport flows подтверждены оператором; история до rollout не
+  синтезируется из legacy данных.
 
 ## Архитектурные решения
 
-- Durable contract живёт в
-  [Marketing Attribution Runtime](../architecture/marketing-attribution-runtime.md);
-  phase не дублирует Prisma/API specification.
-- Campaign связывается только с existing `ReferralLink`; no nested frontend
-  creation PromoCode/ReferralLink и no duplicated reward fields.
-- Registration/order report читают immutable snapshot, current user profile —
-  только для support/current-state view.
-- Generated campaign code является authoritative; display UTM не превращаются
-  в arbitrary client-controlled internal attribution.
-- Web capture использует first-party opaque visitor token + backend HMAC/claim,
-  не cross-subdomain cookie и не raw referrer/IP.
-- `start=ma_…` и `startapp=ma_…` — разные verified flows; `ref_…` остаётся
-  referral namespace.
-- Campaign mutations: `MANAGER`/`SUPER_ADMIN`; `SUPPORT` read-only; enforcement
-  только backend-side. Это не неявный change текущих PromoCodes/ReferralLinks
-  permissions; их role hardening требует отдельного consumer audit. New
-  endpoint/DTO/auth/migration work следует
-  `INV-ARCH-1`, `INV-BND-1`, `INV-DTO-1`, `INV-AUTH-1`, `INV-PRISMA-1` и
-  `INV-TX-1`.
+- Durable ownership, trust boundary, lifecycle, reporting и retention живут в
+  [Marketing Attribution Runtime](../architecture/marketing-attribution-runtime.md).
+- `MarketingCampaign` не пересекается с outbound
+  `TelegramBroadcastCampaign`; campaign code является authoritative input, а
+  client UTM — только display data.
+- Web capture использует opaque visitor token и backend HMAC/claim; raw
+  referrer/IP и cross-domain cookie assumptions не являются attribution truth.
+- Bot `start=ma_…` и Mini App `startapp=ma_…` — независимые verified domains;
+  canonical Telegram ownership доказывает `UserIdentity`, а не contact field.
+- Registration/order reports читают immutable snapshots, не mutable current
+  attribution. First/last dimension выбирается явно.
+- Referral registration остаётся за `ReferralsService`, reward writes — за
+  `PartnerRewardsService`, CPA — за successful ledger facts.
+- Campaign mutations разрешены `MANAGER`/`SUPER_ADMIN`; `SUPPORT` имеет
+  read-only campaign/report/timeline access с backend enforcement.
 
 ## Шаги
 
@@ -94,61 +57,17 @@ Phase 19 не является dependency: у неё только naming/semanti
 7. [Step 07 — Attribution reports, CPA и XLSX export](./phase-21/step-07-attribution-reports-cpa-and-xlsx-export.md)
 8. [Step 08 — Cross-surface verification, rollout и wiki sync](./phase-21/step-08-verification-rollout-and-wiki-sync.md)
 
-## Execution topology
-
-Одна сессия выполняет один step и обновляет его evidence + phase snapshot.
-
-- Step 02 открывает data contract.
-- Steps 03, 04 и 05 после Step 02 затрагивают разные entry/runtime paths и
-  могут выполняться отдельными сессиями. Step 03 — единственный владелец
-  post-JWT web claim в `AuthProvider`; Step 04 не меняет этот файл и передаёт
-  Mini App launch через уже проверяемый backend auth flow. Каждый step
-  потребляет один marketing owner.
-- Step 06 требует stable campaign API; Step 07 требует факты из Steps 03–05.
-- Step 08 закрывает phase только после всех consumer/manual flows.
-- Для всех следующих шагов подтверждение Telegram subject → canonical user опирается
-  на `UserIdentity`; `User.telegramId` остаётся contact/drift field и не может
-  становиться auth/ownership fallback в новом attribution code.
-
-## Верификация
-
-- Web: generated campaign URL → anonymous touch → email/OAuth account →
-  immutable registration snapshot → primary order snapshot.
-- Telegram: `start` и `startapp` independently create one trusted touch,
-  respect namespaces and do not duplicate referral/reward effects.
-- Financial boundary: linked campaign delegates to `ReferralsService`; manual
-  partner promo still wins over referral reward; top-up remains non-commissionable.
-- Reporting: first/last switch changes only the chosen snapshot dimension;
-  revenue/CPA are backed by completed primary order/ledger facts, not mutable
-  campaign fields.
-- Automated gates follow `INV-VER-1..4`: Prisma validation/migration preflight,
-  targeted backend specs, touched client/admin/bot builds, manual smoke and
-  cross-app consumer audit. Infra failure is reported separately per
-  `INV-VER-3`.
-
 ## Связанные документы
 
-- [Marketing Attribution Runtime](../architecture/marketing-attribution-runtime.md) — target ownership, flows и data lifecycle.
-- [Referral Runtime](../architecture/referrals-runtime.md) — existing referral/reward policy.
-- [Promo Codes Runtime](../architecture/promo-codes-runtime.md) — reservation и reward snapshots.
-- [Phase 19](./phase-19-telegram-broadcasts.md) — reserved broadcast campaign semantics.
-- [Phase Authoring Guide](./PHASE_AUTHORING_GUIDE.md) — форма phase/step evidence.
+- [Marketing Attribution Runtime](../architecture/marketing-attribution-runtime.md)
+  — текущий технический контракт контура.
+- [Referral Runtime](../architecture/referrals-runtime.md) — registration и
+  partner-link boundary.
+- [Promo Codes Runtime](../architecture/promo-codes-runtime.md) — reservation и
+  reward-policy snapshots.
+- [Auth Identity Runtime](../architecture/auth-identity-runtime.md) — web и
+  Telegram identity trust boundary.
 
-## Статус / Evidence
+## Статус
 
-- Status: `in_progress`
-- Current step: Step 08 `partial`; Steps 03 и 06 закрыты итоговыми migration,
-  browser и integration gates, Step 04 ждёт live Telegram smoke.
-- Last evidence: чистая PostgreSQL 16 приняла все 26 migrations; все три
-  conditional DB-suites прошли, full backend — 73 suites / 576 tests,
-  `nest build` green. Admin
-  desktop/mobile, URL history и SUPPORT role matrix подтверждены browser-smoke;
-  generated web link прошёл production client → backend capture и retry создал
-  ровно один touch. Synthetic HTTP runtime также подтвердил exactly-one bot и
-  signed Mini App capture/registration paths; DB scenario доказал linked
-  referral/manual promo/top-up/FIRST-LAST/CPA, а admin download сохранил
-  валидный XLSX. Подробности и release blockers зафиксированы в
-  [Step 08](./phase-21/step-08-verification-rollout-and-wiki-sync.md).
-  До phase closure остаются production rollout/post-rollout smoke и
-  положительные bot `/start` + Mini App `startapp` проверки на настроенном
-  Telegram runtime; history до rollout timestamp не заявляется.
+✅ Завершена 2026-07-11.

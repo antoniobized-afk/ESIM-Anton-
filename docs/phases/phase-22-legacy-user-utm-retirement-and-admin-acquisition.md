@@ -43,8 +43,8 @@ registration attribution по кампании и отдельный referral-ф
 - [Phase 20](./phase-20-admin-users-table-identity-attribution.md) — текущий
   admin users read model и compact table/detail boundary.
 - [Phase 21](./phase-21-marketing-attribution-and-campaign-links.md) — campaign,
-  touch, registration snapshot и user timeline owners; production rollout
-  Phase 21 остаётся отдельным обязательным gate.
+  touch, registration snapshot и user timeline owners; фаза завершена с
+  подтверждённым production rollout и live Telegram transport.
 - [Marketing Attribution Runtime](../architecture/marketing-attribution-runtime.md)
   — durable ownership и compact acquisition summary contract.
 
@@ -52,8 +52,8 @@ registration attribution по кампании и отдельный referral-ф
 
 - На каждом целевом окружении разрешён read-only aggregate по legacy UTM без
   чтения самих значений.
-- Phase 21 registration lifecycle и timeline API проходят текущие targeted
-  tests; Telegram production smoke не подменяется synthetic evidence.
+- Phase 21 завершена; registration lifecycle, timeline API и реальные
+  web/bot/Mini App transport flows подтверждены её closure evidence.
 - Текущий bot consumer подтверждён как не отправляющий UTM в
   `/users/find-or-create`; вне-репозиторные consumers должны быть исключены
   отдельным transport audit.

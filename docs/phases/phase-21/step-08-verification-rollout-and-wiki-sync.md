@@ -31,7 +31,7 @@
 
 ## Статус
 
-`partial`
+`completed`
 
 ## Evidence
 
@@ -74,12 +74,13 @@
   (481 строка).
   `client/lib/api.ts` остаётся на существующем warning budget в 511
   строк, но новый API-base responsibility вынесен в четырёхстрочный owner и не
-  увеличивает mixed responsibility; Step 08 не объявляется completed.
-- Step остаётся `partial`: production migration/deploy не выполнялись без
-  отдельной команды пользователя, а bot `/start` и Mini App `startapp` smoke
-  через реальный Telegram transport требует настроенного runtime. После них нужно
-  выполнить post-rollout primary order/top-up/report/CPA/XLSX smoke и только
-  затем переводить Phase 21 в completed/archive.
+  увеличивает mixed responsibility.
+- Closure evidence 2026-07-11: оператор подтвердил, что production rollout
+  выполнен, Phase 21 работает, а положительные live Telegram flows
+  `/start ma_…` и `startapp=ma_…` прошли на настроенном runtime. Это закрывает
+  оставшиеся external gates поверх уже зафиксированных DB, browser,
+  order/top-up/report/CPA/XLSX и role-boundary проверок; production credentials
+  агентом не читались.
 
 ## Файлы
 

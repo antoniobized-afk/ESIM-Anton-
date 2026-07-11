@@ -24,6 +24,7 @@
 | 17 | Partner Promo Codes | ✅ Завершена | Добавлены owned partner promo codes, reward policy snapshots, shared reward ledger, checkout completion, admin UI и analytics. | [phase-17-partner-promo-codes.md](./phase-17-partner-promo-codes.md) |
 | 18 | Account Identity Linking & Merge | ✅ Завершена | Введен durable `UserIdentity`, общий identity resolver, link/unlink flows, duplicate preflight и downstream ownership hardening. | [phase-18-account-identity-linking-and-merge.md](./phase-18-account-identity-linking-and-merge.md) |
 | 20 | Admin Users Table Identity & Attribution | ✅ Завершена | Admin `/users` получил backend-owned search/sort, admin-safe user read model, `UserIdentity` login chips, attribution buckets, compact table и detail modal. | [phase-20-admin-users-table-identity-attribution.md](./phase-20-admin-users-table-identity-attribution.md) |
+| 21 | Marketing Attribution & Campaign Links | ✅ Завершена | Добавлены campaign links, trusted web/bot/Mini App touches, immutable registration/order snapshots, admin workspace, first/last reports, CPA и XLSX; production rollout и live Telegram transport подтверждены. | [phase-21-marketing-attribution-and-campaign-links.md](./phase-21-marketing-attribution-and-campaign-links.md) |
 
 ## Правило архива
 

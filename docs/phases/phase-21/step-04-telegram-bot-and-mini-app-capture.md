@@ -42,7 +42,7 @@ collision с `ref_` и двойного capture между bot/Mini App paths.
 
 ## Статус
 
-`partial`
+`completed`
 
 ## Evidence
 
@@ -76,9 +76,10 @@ collision с `ref_` и двойного capture между bot/Mini App paths.
   `query_engine-windows.dll.node`. Обычный `pnpm --filter bot build` —
   существующим `bot/tsconfig.json` `ignoreDeprecations: "6.0"` при TypeScript
   5.9.3. Проверка bot `tsc --noEmit --ignoreDeprecations 5.0` остаётся зелёной.
-- До closure нужен manual smoke на настроенном runtime: bot update/retry,
-  подписанный Mini App `initData`, отсутствие/ошибка service token и
-  просроченный `auth_date`.
+- Closure evidence 2026-07-11: оператор подтвердил работу production rollout
+  и положительные live Telegram flows `/start ma_…` и `startapp=ma_…` на
+  настроенном transport runtime. Ранее закрытые negative/retry/idempotency
+  paths остаются подтверждены automated и synthetic runtime evidence ниже.
 - Local backend runtime подтверждает загрузку нового маршрута: `POST
   /api/marketing-attribution/telegram/bot/capture` возвращает `401` без
   service token и `403` с неверным token; forged `POST
@@ -115,10 +116,8 @@ collision с `ref_` и двойного capture между bot/Mini App paths.
   Mini App `initData` сохранили один intent, cron создал ровно один
   `TELEGRAM_MINI_APP` touch и удалил intent. Оба registration snapshot стали
   `ATTRIBUTED`; повтор bot capture вернул accepted без повторной финализации.
-- Реальный Telegram transport не проверялся: isolation policy запрещает чтение
-  production bot token/credentials. До `completed` остаются настоящий Grammy
-  update `/start ma_…` и Telegram Mini App `startapp=ma_…` с подтверждением
-  отсутствия duplicate referral/reward на deploy runtime.
+- Production credentials по-прежнему не читались агентом: внешний gate закрыт
+  операторским подтверждением live transport, без нарушения Isolation Gate.
 
 ## Файлы
 
