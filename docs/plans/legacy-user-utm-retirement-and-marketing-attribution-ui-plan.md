@@ -1,7 +1,12 @@
 # План: retirement legacy User UTM и ясная marketing attribution в карточке пользователя
 
-Status: planned
+Status: superseded
 Дата: 2026-07-11
+
+План после audit и contract lock перенесён в
+[Phase 22](../phases/phase-22-legacy-user-utm-retirement-and-admin-acquisition.md).
+Этот supporting-файл больше не владеет scope, порядком реализации или
+Definition of Done.
 
 ## Проблема
 

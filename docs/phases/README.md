@@ -13,6 +13,7 @@
 | 12 | Client PWA & Telegram Mini App Refactoring                   | ⬜ Не начата         | [phase-12-client-refactoring.md](./phase-12-client-refactoring.md)       |
 | 19 | Telegram Broadcast Campaigns                                 | 🔄 Планирование     | [phase-19-telegram-broadcasts.md](./phase-19-telegram-broadcasts.md)     |
 | 21 | Marketing Attribution & Campaign Links                       | 🔄 В работе         | [phase-21-marketing-attribution-and-campaign-links.md](./phase-21-marketing-attribution-and-campaign-links.md) |
+| 22 | Удаление legacy User UTM и ясное привлечение в admin users   | ⬜ Не начата         | [phase-22-legacy-user-utm-retirement-and-admin-acquisition.md](./phase-22-legacy-user-utm-retirement-and-admin-acquisition.md) |
 
 **Легенда:** ⬜ Не начата · 🔄 В работе / планирование · ✅ Завершена в [архиве](./COMPLETED_PHASES.md)
 
