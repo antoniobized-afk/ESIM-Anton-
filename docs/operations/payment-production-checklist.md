@@ -52,7 +52,8 @@
 - order/payment unit tests зелёные;
 - production/staging env не требуют новых secrets;
 - CloudPayments public id и API secret заполнены корректно;
-- CloudPayments callback URLs направлены на правильный backend domain;
+- CloudPayments transport gates зелёные по
+  [CloudPayments runbook](./cloudpayments-runbook.md);
 - terminal-side tokenization / card-save option реально включены в CloudPayments Back Office;
 - Robokassa credentials не сломаны, если path всё ещё поддерживается;
 - support понимает policy `Payment session expired` и умеет читать reconciliation signals.
@@ -107,6 +108,10 @@ Source:
   - bonus hold, если был, release-ится корректно.
 
 ### 2A. Saved-card purchase success
+
+На 2026-07-11 этот gate заблокирован transport gap
+`Railway -> api.cloudpayments.ru`. Не включать saved-card CTA до выполнения
+[saved-card recovery plan](../plans/cloudpayments-saved-card-recovery-plan.md).
 
 - Под пользователем с уже сохранённым token открыть product page.
 - Проверить:

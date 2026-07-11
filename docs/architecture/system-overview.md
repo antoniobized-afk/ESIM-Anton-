@@ -66,6 +66,11 @@
 - OAuth: Google, Yandex, VK
 - ЦБ РФ JSON API для курса USD/RUB
 
+### Production edge для CloudPayments
+
+Текущий transport contract: [Payment Flow Audit](./payment-flow-audit.md).
+Эксплуатация: [CloudPayments runbook](../operations/cloudpayments-runbook.md).
+
 ## Главные архитектурные факты, подтвержденные кодом
 
 - Проект использует один backend для `admin`, `client` и `bot`.

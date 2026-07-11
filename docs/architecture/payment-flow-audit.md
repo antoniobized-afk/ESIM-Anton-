@@ -27,6 +27,29 @@
 - `client/app/balance/page.tsx`
 - `client/lib/api.ts`
 
+## Production CloudPayments Transport
+
+### Widget callbacks
+
+Канонический production ingress:
+
+```text
+CloudPayments
+  -> payments.mojomobile.ru (Timeweb, DNS only)
+  -> payments-backend.mojomobile.ru (Cloudflare Proxied + WAF)
+  -> Railway backend /api/payments/cloudpayments/{check,pay,fail}
+```
+
+Timeweb/Cloudflare не принимают payment decision. HMAC и payment state остаются
+backend-owned. Точные URL, WAF и gates принадлежат
+[CloudPayments runbook](../operations/cloudpayments-runbook.md).
+
+### Saved-card outbound API
+
+Прямой `Railway -> api.cloudpayments.ru/payments/tokens/charge` даёт
+`AMBIGUOUS/transport_error`. Saved-card contour не production-green. План:
+[saved-card recovery](../plans/cloudpayments-saved-card-recovery-plan.md).
+
 ## Current Runtime Map
 
 ### 1. Purchase by card
@@ -223,7 +246,8 @@ Backend owner этого правила — `OrdersService.buildOrderPricingSnap
 - Legacy Robokassa flow остаётся отдельным runtime path и использует свой webhook lifecycle.
 - Client пока не показывает отдельный UI для bonus spend на product page, хотя backend pricing formula это поддерживает.
 - `POST /orders/:id/fulfill-free` остаётся отдельным client-visible step вместо полного server-side auto-fulfill внутри `POST /orders`.
-- Saved-card repeat charge уже защищён durable attempt contract, но для `AMBIGUOUS` outcome по-прежнему нет автоматического reconciliation worker: текущий baseline опирается на persisted attempt state + support/runbook triage.
+- Saved-card transport/reconciliation gap описан в
+  [Saved-card outbound API](#saved-card-outbound-api).
 
 ### Closed after follow-up hardening
 
