@@ -4,21 +4,28 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { QrCode, Copy, CheckCircle, Download, Info } from '@/components/icons'
 import BackHeader from '@/components/BackHeader'
-import { ordersApi, Order } from '@/lib/api'
+import { ordersApi, type Order } from '@/lib/api'
 import { getFlagUrl, getCountryName } from '@/lib/utils'
+import type { UserOrderStatus } from '@shared/contracts/user-order'
 
-function getStatusBadge(status: Order['status']) {
-  const badges = {
-    PENDING: { label: 'Ожидает оплаты', class: 'badge-warning', icon: '⏳' },
-    PAID: { label: 'Оплачен', class: 'badge-info', icon: '✅' },
-    PROCESSING: { label: 'Обработка', class: 'badge-info', icon: '⚙️' },
-    COMPLETED: { label: 'Выполнен', class: 'badge-success', icon: '🎉' },
-    FAILED: { label: 'Ошибка', class: 'badge-error', icon: '❌' },
-    REFUNDED: { label: 'Возврат', class: 'badge-warning', icon: '💰' },
-    CANCELLED: { label: 'Отменён', class: 'badge-error', icon: '🚫' },
-  }
+type StatusBadge = {
+  label: string
+  class: string
+  icon: string
+}
 
-  return badges[status] || { label: status, class: 'badge-info', icon: '📦' }
+const STATUS_BADGES = {
+  PENDING: { label: 'Ожидает оплаты', class: 'badge-warning', icon: '⏳' },
+  PAID: { label: 'Оплачен', class: 'badge-info', icon: '✅' },
+  PROCESSING: { label: 'Обработка', class: 'badge-info', icon: '⚙️' },
+  COMPLETED: { label: 'Выполнен', class: 'badge-success', icon: '🎉' },
+  FAILED: { label: 'Ошибка', class: 'badge-error', icon: '❌' },
+  REFUNDED: { label: 'Возврат', class: 'badge-warning', icon: '💰' },
+  CANCELLED: { label: 'Отменён', class: 'badge-error', icon: '🚫' },
+} satisfies Record<UserOrderStatus, StatusBadge>
+
+function getStatusBadge(status: UserOrderStatus): StatusBadge {
+  return STATUS_BADGES[status] ?? { label: status, class: 'badge-info', icon: '📦' }
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
