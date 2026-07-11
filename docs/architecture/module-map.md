@@ -25,8 +25,8 @@
 - `esim-provider` — eSIM Access integration, webhook handling
 - `loyalty` — `/loyalty/me`, CRUD уровней, пересчёт уровня после purchase
 - `marketing-attribution` — campaign links, append-only trusted touches,
-  user/order attribution snapshots, campaign audit и future campaign reports;
-  не владеет скидками, referral registration или partner rewards.
+  user/order attribution snapshots, campaign audit, attribution/CPA reports и
+  XLSX export; не владеет скидками, referral registration или partner rewards.
 - `notifications` — email, web push. (Включает подмодуль `traffic-monitor` для мониторинга трафика/валидности)
 - `orders` — заказ, free fulfill, usage, top-up flow, balance purchase flow
 - `payments` — Robokassa flow + CloudPayments (сохранение карт, рекуррентные списания)
@@ -64,6 +64,8 @@ Next.js 15 Admin Panel (App Router).
 - **Пополнение:** `/balance`, `/topup`
 - **Auth:** `/login`
 - **Партнерская программа:** `/ref`, `/referrals`
+- **Маркетинговые входы:** `/r/[shortCode]` — thin campaign landing с
+  backend-owned trusted capture; `/ref/[code]` остаётся отдельным referral flow
 - **Info:** `/help`, `/agreement`, `/offer`, `/devices`, `/mojo-animation`
 
 ### `bot`
@@ -94,7 +96,9 @@ Telegram bot runtime (Grammy).
 - **Catalog & Orders:** `EsimProduct`, `Order`, `PromoCode`, `PromoCodeRedemption`, `LoyaltyLevel`
 - **Payments:** `Transaction`, `CloudPaymentsCardToken`, `RepeatChargeAttempt`
 - **Providers:** `EsimWebhookReceipt`
-- **Marketing:** `ReferralLink`
+- **Marketing:** `ReferralLink`, `MarketingCampaign`, `MarketingCampaignAudit`,
+  `MarketingTouch`, `MarketingMiniAppCaptureIntent`,
+  `UserMarketingAttribution`, `OrderMarketingAttribution`
 - **System:** `SystemSettings`, `Admin`, `Notification`
 
 **Ключевые архитектурные паттерны БД:**

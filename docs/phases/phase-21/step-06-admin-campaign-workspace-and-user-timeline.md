@@ -43,7 +43,7 @@ timeline без смешивания с PromoCodes, ReferralLinks или mixed u
 
 ## Статус
 
-`partial`
+`completed`
 
 ## Evidence
 
@@ -72,9 +72,17 @@ timeline без смешивания с PromoCodes, ReferralLinks или mixed u
   `pnpm --filter admin build`. Consumer audit выполнен по
   `backend/admin/client/bot/shared`: новый timeline contract имеет только admin
   consumer, существующие web/client capture consumers не изменены.
-- Browser smoke не выполнен из-за infra: in-app browser backend отсутствует
-  в текущей сессии. Visual desktop/mobile и refresh/back-forward proof остаётся
-  единственным gate до `completed`; product/build result при этом green.
+- Step 08 закрыл browser gate на production builds и disposable PostgreSQL:
+  SUPER_ADMIN создал campaign, получил canonical web/bot/Mini App links и
+  локальный data-URL QR; desktop 1440px и mobile 390px layouts не имеют page
+  overflow, dense navigation/tabs остаются горизонтально прокручиваемыми.
+- User navigation теперь использует `router.push`, поэтому Campaigns → Report
+  → CPA восстанавливаются через Back/Forward и после reload; `replace` оставлен
+  только для canonical normalization URL. SUPPORT увидел read-only banner и
+  не получил mutation controls, а прямой backend mutation вернул `403`.
+- Operator hint `targetPath` исправлен на существующие client routes (`/` и
+  `/country/TH`), чтобы constructor не предлагал несуществующий `/catalog`.
+  Финальные admin lint/build green.
 
 ## Файлы
 

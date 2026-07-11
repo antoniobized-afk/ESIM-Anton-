@@ -117,8 +117,8 @@ export default function CampaignFormModal({
 
         <label className="block text-sm font-medium text-slate-700">
           Относительный target path
-          <input required maxLength={512} value={targetPath} onChange={(event) => setTargetPath(event.target.value)} className={inputClassName} placeholder="/catalog" />
-          <span className="mt-1 block text-xs text-slate-400">Только путь внутри приложения, например /catalog?region=eu.</span>
+          <input required maxLength={512} value={targetPath} onChange={(event) => setTargetPath(event.target.value)} className={inputClassName} placeholder="/" />
+          <span className="mt-1 block text-xs text-slate-400">Только путь внутри приложения, например / или /country/TH.</span>
         </label>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

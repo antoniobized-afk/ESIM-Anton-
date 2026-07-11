@@ -63,12 +63,18 @@ export function useMarketingAttributionUrlState() {
     ? rawChannel as MarketingTouchChannel
     : undefined
 
-  const replaceParams = useCallback((mutate: (params: URLSearchParams) => void) => {
+  const buildHref = useCallback((mutate: (params: URLSearchParams) => void) => {
     const next = new URLSearchParams(searchParams.toString())
     mutate(next)
     const query = next.toString()
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
-  }, [pathname, router, searchParams])
+    return query ? `${pathname}?${query}` : pathname
+  }, [pathname, searchParams])
+  const replaceParams = useCallback((mutate: (params: URLSearchParams) => void) => {
+    router.replace(buildHref(mutate), { scroll: false })
+  }, [buildHref, router])
+  const pushParams = useCallback((mutate: (params: URLSearchParams) => void) => {
+    router.push(buildHref(mutate), { scroll: false })
+  }, [buildHref, router])
 
   useEffect(() => {
     const rawTab = searchParams.get('tab')
@@ -126,21 +132,21 @@ export function useMarketingAttributionUrlState() {
     status,
     page,
     reportFilters,
-    setTab: (value: MarketingWorkspaceTab) => replaceParams((next) => {
+    setTab: (value: MarketingWorkspaceTab) => pushParams((next) => {
       if (value === 'campaigns') next.delete('tab')
       else next.set('tab', value)
       next.delete('page')
     }),
-    setStatus: (value: MarketingCampaignStatusFilter) => replaceParams((next) => {
+    setStatus: (value: MarketingCampaignStatusFilter) => pushParams((next) => {
       if (value === 'all') next.delete('status')
       else next.set('status', value)
       next.delete('page')
     }),
-    setPage: (value: number) => replaceParams((next) => {
+    setPage: (value: number) => pushParams((next) => {
       if (value > 1) next.set('page', String(value))
       else next.delete('page')
     }),
-    setReportFilters: (value: MarketingAttributionReportFilters) => replaceParams((next) => {
+    setReportFilters: (value: MarketingAttributionReportFilters) => pushParams((next) => {
       const currentDefaults = getDefaultMarketingReportDateRange()
       if (value.dateFrom === currentDefaults.dateFrom && value.dateTo === currentDefaults.dateTo) {
         next.delete('from')

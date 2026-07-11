@@ -8,11 +8,11 @@ import { isTelegramWebApp, getToken } from '@/lib/auth'
 import { useAuth } from '@/components/AuthProvider'
 import TelegramLoginWidgetButton from '@/components/TelegramLoginWidgetButton'
 import { sanitizeRedirect } from '@/lib/security'
+import { API_BASE_URL } from '@/lib/api-url'
 import { Suspense } from 'react'
 
 type Step = 'choose' | 'email' | 'code'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
 const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || 'mojo_mobile_bot'
 
 const OAUTH_PROVIDERS = [
@@ -122,7 +122,7 @@ function LoginInner() {
   const handleOAuth = (provider: string) => {
     const safeReturnTo = sanitizeRedirect(searchParams.get('returnTo'), '/')
     const state = encodeURIComponent(safeReturnTo)
-    window.location.href = `${BACKEND_URL}/auth/oauth/${provider}/redirect?state=${state}`
+    window.location.href = `${API_BASE_URL}/auth/oauth/${provider}/redirect?state=${state}`
   }
 
 

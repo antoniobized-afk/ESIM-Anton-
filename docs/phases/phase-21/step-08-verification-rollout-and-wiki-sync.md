@@ -31,18 +31,63 @@
 
 ## Статус
 
-`planned`
+`partial`
 
 ## Evidence
 
-- Pending implementation.
+- Migration preflight выполнен на disposable PostgreSQL 16: чистая БД приняла
+  все 26 migrations, `prisma migrate status` показал up-to-date schema,
+  `prisma validate` green. Три conditional DB-suites (lifecycle, report и
+  source-to-CPA) запущены явно и прошли; production БД и credentials не
+  затрагивались.
+- Добавлен отдельный integrated source-to-CPA DB-spec через production owners:
+  anonymous WEB capture/claim регистрирует linked `ReferralLink`, explicit
+  Telegram identity при `User.telegramId = null` добавляет более поздний bot
+  touch, а registration/order snapshots сохраняют разные FIRST/LAST channels.
+  Primary order получает referral reward, manual partner promo второго заказа
+  блокирует referral reward и пишет promo-backed ledger row, top-up не получает
+  snapshot/accounting. FIRST/LAST channel reports расходятся ожидаемо, CPA
+  считает только linked-referral payout, XLSX читает те же DB-backed read models.
+- Full backend: 73 suites / 576 tests green; отдельный `nest build` green.
+  Canonical backend wrapper до compile по-прежнему может останавливаться на
+  локальном Windows Prisma engine lock (`EPERM`), что классифицировано как
+  harness failure по `INV-VER-3`, а не code defect.
+- Admin lint/build, client lint/type/build и bot build green. В client удалены
+  production type/lint bypasses, исправлен единый API-base owner и подтверждён
+  реальный generated web link: повторные browser capture requests создали одну
+  запись. В admin подтверждены desktop/mobile, generated links/QR, report URL
+  refresh/Back/Forward и SUPPORT read-only/`403` role boundary.
+- Реальный admin download-flow также подтверждён production builds: кнопка
+  `Скачать XLSX` вызвала authenticated export route с `200`, показала success
+  toast и сохранила валидный workbook с листами `Атрибуция` и `Блогеры и CPA`.
+- Synthetic Telegram runtime дополнил fixtures реальными HTTP routes:
+  service-token bot capture/retry дал one touch и one registration snapshot;
+  server-verified signed Mini App `initData`/retry прошёл login, durable intent,
+  cron capture и cleanup с one touch. Production token и `.env` не читались.
+- Consumer audit по backend/admin/client/bot/shared не нашёл параллельного
+  marketing owner: web/OAuth consumers используют общий API-base, bot/Mini App
+  сходятся в existing capture/lifecycle services, reports/CPA/export читают
+  snapshots и ledger. Module map, deployment и runtime rollout boundary
+  синхронизированы; synthetic history до rollout timestamp прямо запрещена.
+- Cross-domain DB scenario вынесен из narrow report DB-spec в отдельный
+  source-to-CPA spec. Расширенный scenario остаётся в бюджете `INV-SIZE-1`
+  (481 строка).
+  `client/lib/api.ts` остаётся на существующем warning budget в 511
+  строк, но новый API-base responsibility вынесен в четырёхстрочный owner и не
+  увеличивает mixed responsibility; Step 08 не объявляется completed.
+- Step остаётся `partial`: production migration/deploy не выполнялись без
+  отдельной команды пользователя, а bot `/start` и Mini App `startapp` smoke
+  через реальный Telegram transport требует настроенного runtime. После них нужно
+  выполнить post-rollout primary order/top-up/report/CPA/XLSX smoke и только
+  затем переводить Phase 21 в completed/archive.
 
 ## Файлы
 
 - `docs/architecture/{marketing-attribution-runtime,module-map,README}.md`
 - `docs/architecture/{auth-identity-runtime,referrals-runtime,promo-codes-runtime}.md` when implementation changes their live contract
 - `docs/phases/phase-21*`
-- affected backend/admin/client/bot specs
+- `backend/src/modules/marketing-attribution/marketing-attribution-source-to-cpa.db.spec.ts`
+- affected admin/client/bot files and specs
 
 ## Тестирование / Верификация
 

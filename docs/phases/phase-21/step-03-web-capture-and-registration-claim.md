@@ -36,7 +36,7 @@ cross-domain cookie assumptions или mutable registration analytics.
 
 ## Статус
 
-`in_progress`
+`completed`
 
 ## Evidence
 
@@ -61,14 +61,19 @@ cross-domain cookie assumptions или mutable registration analytics.
   одной CTE-мутацией привязывает весь pending batch, а lifecycle получает только
   deterministic earliest/latest representatives без N+1 writes. Referral
   one-shot не переписан и `/ref/[code]` не менялся.
-- Automated evidence: Prisma client generation, 59 Jest suites / 523 tests,
-  `nest build`, targeted backend ESLint, client ESLint/build и
-  `tsc --noEmit --ignoreDeprecations 5.0` прошли. Обычный `tsc --noEmit`
-  остаётся blocked существующим `ignoreDeprecations: "6.0"` при текущем
-  TypeScript 5.9.3 до анализа исходников.
-- До closure остаются migration apply/preflight и ручной browser smoke:
-  anonymous campaign → new email/OAuth account, existing account, retry/reload
-  и parallel claim на запущенной конфигурации с HMAC secret.
+- Step 08 закрыл оставшиеся gates: все 26 migrations применены на чистой
+  PostgreSQL 16, `prisma migrate status` и `prisma validate` green. Реальный
+  production client route `/r/<shortCode>` отправил capture в backend и после
+  redirect открыл каталог; два browser retry дали ровно один WEB touch в БД.
+- Registration/order интеграция подтверждена conditional DB-spec: trusted WEB
+  touch финализирует immutable registration attribution, primary completed
+  order получает snapshot, top-up остаётся без него. Existing-user, conflict,
+  parallel claim и email/OAuth branches остаются покрыты owner specs.
+- Client gate исправлен как контракт, а не флагом обхода: `NEXT_PUBLIC_API_URL`
+  трактуется как backend origin, `/api` добавляет общий `client/lib/api-url.ts`;
+  OAuth использует тот же owner. Удалены `ignoreBuildErrors` и
+  `ignoreDuringBuilds`, `ignoreDeprecations` согласован с TypeScript 5.9.3.
+  Client lint, `tsc --noEmit` и production build green.
 
 ## Файлы
 

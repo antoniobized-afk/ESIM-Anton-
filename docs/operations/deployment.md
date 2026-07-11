@@ -50,6 +50,10 @@
 - `SITE_URL`
 - `NEXT_PUBLIC_API_URL`
 
+`NEXT_PUBLIC_API_URL` — origin backend без `/api` и без завершающего `/`:
+например, `https://api.mojomobile.ru`. Admin и client сами добавляют `/api`;
+значение с уже включённым suffix создаёт неверный двойной API path.
+
 Если нужен рабочий eSIM flow:
 
 - `ESIMACCESS_ACCESS_CODE`
@@ -120,6 +124,12 @@ pnpm --filter client start
 3. `prisma migrate status`;
 4. только потом merge/push в `main`, который вызовет Railway autodeploy.
 
+Для Phase 21 marketing attribution migrations остаются additive и не создают
+synthetic history. После deploy backend должен пройти readiness до публикации
+campaign links. Отчёты считаются достоверными только для capture/order/reward
+фактов, возникших после фактического rollout; legacy UTM/orders/referral state
+не являются источником backfill.
+
 ## Reverse proxy
 
 Минимум нужно маршрутизировать:
@@ -140,3 +150,6 @@ pnpm --filter client start
 4. bot запускается и может делать `find-or-create` по service-token contract (`x-telegram-bot-token`)
 5. payment callbacks доходят
 6. OAuth redirect/callback URLs совпадают с production hostnames
+7. marketing campaign web link создаёт один touch при retry, bot `start` и
+   Mini App `startapp` проходят trusted capture, primary order виден в
+   attribution/CPA export, top-up исключён, SUPPORT mutation получает `403`

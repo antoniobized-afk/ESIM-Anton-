@@ -137,11 +137,18 @@ Phase 19 не является dependency: у неё только naming/semanti
 ## Статус / Evidence
 
 - Status: `in_progress`
-- Current step: Step 07 completed; Step 06 browser-only gate остаётся до Step 08.
-- Last evidence: Step 07 и его audit-remediation закрыты; нормативный contract
-  живёт в [Marketing Attribution Runtime](../architecture/marketing-attribution-runtime.md),
-  а подробные code/test evidence — в
-  [Step 07](./phase-21/step-07-attribution-reports-cpa-and-xlsx-export.md).
-  Full backend: 73 suites / 576 tests green, 2 DB-suites skipped без test DB;
-  admin lint/build green. Visual desktop/mobile и URL navigation остаются
-  незакрытым cross-surface evidence Step 08.
+- Current step: Step 08 `partial`; Steps 03 и 06 закрыты итоговыми migration,
+  browser и integration gates, Step 04 ждёт live Telegram smoke.
+- Last evidence: чистая PostgreSQL 16 приняла все 26 migrations; все три
+  conditional DB-suites прошли, full backend — 73 suites / 576 tests,
+  `nest build` green. Admin
+  desktop/mobile, URL history и SUPPORT role matrix подтверждены browser-smoke;
+  generated web link прошёл production client → backend capture и retry создал
+  ровно один touch. Synthetic HTTP runtime также подтвердил exactly-one bot и
+  signed Mini App capture/registration paths; DB scenario доказал linked
+  referral/manual promo/top-up/FIRST-LAST/CPA, а admin download сохранил
+  валидный XLSX. Подробности и release blockers зафиксированы в
+  [Step 08](./phase-21/step-08-verification-rollout-and-wiki-sync.md).
+  До phase closure остаются production rollout/post-rollout smoke и
+  положительные bot `/start` + Mini App `startapp` проверки на настроенном
+  Telegram runtime; history до rollout timestamp не заявляется.

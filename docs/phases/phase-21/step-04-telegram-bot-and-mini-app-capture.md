@@ -42,7 +42,7 @@ collision с `ref_` и двойного capture между bot/Mini App paths.
 
 ## Статус
 
-`in_progress`
+`partial`
 
 ## Evidence
 
@@ -104,6 +104,21 @@ collision с `ref_` и двойного capture между bot/Mini App paths.
   boundary). Граница «поведенческая веб-аналитика = внешний счётчик»
   зафиксирована в runtime doc. Полный прогон 64 suites / 544 tests, nest build
   и `prisma migrate dev` на локальной БД зелёные.
+- Step 08 устранил ложный canonical build blocker: `bot/tsconfig.json`
+  использует поддерживаемый TypeScript 5.9 уровень `ignoreDeprecations: "5.0"`;
+  `pnpm --filter bot build` green. Full backend 73 suites / 576 tests green;
+  signed `initData` fixture, bot owner/controller, Mini App intent/cron,
+  identity drift, retry и service-token negative paths проходят.
+- Положительный backend runtime smoke выполнен на disposable PostgreSQL и
+  synthetic credentials без чтения `.env`: service-token bot capture + retry
+  создали ровно один `TELEGRAM_BOT` touch; два запроса с корректно подписанным
+  Mini App `initData` сохранили один intent, cron создал ровно один
+  `TELEGRAM_MINI_APP` touch и удалил intent. Оба registration snapshot стали
+  `ATTRIBUTED`; повтор bot capture вернул accepted без повторной финализации.
+- Реальный Telegram transport не проверялся: isolation policy запрещает чтение
+  production bot token/credentials. До `completed` остаются настоящий Grammy
+  update `/start ma_…` и Telegram Mini App `startapp=ma_…` с подтверждением
+  отсутствия duplicate referral/reward на deploy runtime.
 
 ## Файлы
 

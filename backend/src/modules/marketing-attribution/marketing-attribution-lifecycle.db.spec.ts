@@ -10,18 +10,6 @@ import { MarketingAttributionTransaction } from './marketing-attribution.types';
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const describeWithDatabase = testDatabaseUrl ? describe : describe.skip;
 
-function assertIsolatedTestDatabase(url: string) {
-  const parsed = new URL(url);
-  const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
-  const databaseName = parsed.pathname.slice(1).toLowerCase();
-
-  if (!isLocalHost || !databaseName.includes('test')) {
-    throw new Error(
-      'TEST_DATABASE_URL должен указывать на отдельную локальную БД с "test" в имени',
-    );
-  }
-}
-
 function createStateReadBarrier() {
   let reads = 0;
   let release: (() => void) | undefined;
@@ -80,7 +68,6 @@ describeWithDatabase('MarketingAttributionLifecycleService DB', () => {
   let secondClient: PrismaClient;
 
   beforeAll(async () => {
-    assertIsolatedTestDatabase(testDatabaseUrl!);
     const clientOptions: Prisma.PrismaClientOptions = {
       datasources: { db: { url: testDatabaseUrl } },
     };

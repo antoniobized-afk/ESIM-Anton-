@@ -11,8 +11,7 @@ import type {
 } from '@shared/contracts/checkout';
 import type { UserOrderReadModel } from '@shared/contracts/user-order';
 import type { ProductDataTypeValue } from '@shared/product-data-type';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+import { API_BASE_URL } from './api-url';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

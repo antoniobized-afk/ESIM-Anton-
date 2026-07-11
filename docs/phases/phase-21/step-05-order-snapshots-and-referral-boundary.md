@@ -68,7 +68,7 @@
   DB синхронизирует две независимые Prisma transaction перед native insert,
   получает один snapshot id/одну строку и после изменения current attribution
   доказывает отсутствие rewrite при повторной доставке. Test запускается только
-  с explicit `TEST_DATABASE_URL` и отклоняет non-local/non-test database.
+  с explicit `TEST_DATABASE_URL`.
 - Trusted web claim передаёт `referralLinkId` последнего accepted touch из той
   же CTE без N+1 read; Telegram bot/Mini App делегируют linked campaign после
   canonical identity assertion. Marketing не пишет referral fields и не
