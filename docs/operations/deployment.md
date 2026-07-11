@@ -31,7 +31,7 @@
 
 `client` собирается как отдельное приложение и развёртывается как независимый сервис в Railway (в том же проекте, что и `backend`/`admin`/`bot`). Это shared-monorepo consumer: TypeScript-контракты берутся из `shared/`, поэтому Railway должен собирать сервис из корня репозитория, а не из изолированного `/client`.
 
-Railway client-service использует Config File `/client/railway.json`, пустой `Root Directory` и пустой UI `Custom Build Command`. Репозиторный конфиг владеет командами `pnpm --filter client build` / `pnpm --filter client start` и watch paths для `client/`, `shared/` и корневых workspace/lock/config файлов. `Root Directory=/client` недопустим: Railway исключает `shared/` из build context, а `next build` обязан разрешать даже type-only импорты `@shared/*` во время проверки TypeScript.
+Railway client-service использует Config File `/client/railway.json`, пустой `Root Directory` и пустой UI `Custom Build Command`. Репозиторный конфиг владеет командами `pnpm --filter client build` / `pnpm --filter client start` и watch paths для `client/`, `shared/` и корневых workspace/lock/config файлов; корневой `nixpacks.toml` задаёт setup через Nixpkgs `nodejs_20` + `pnpm`. `Root Directory=/client` недопустим: Railway исключает `shared/` из build context, а `next build` обязан разрешать даже type-only импорты `@shared/*` во время проверки TypeScript.
 
 ## Обязательные env-переменные
 
