@@ -31,7 +31,7 @@
 
 `client` собирается как отдельное приложение и развёртывается как независимый сервис в Railway (в том же проекте, что и `backend`/`admin`/`bot`).
 
-Текущий Railway client-service собирается из каталога `client` как `/app` через `npm install --include=dev --legacy-peer-deps && npm run build`. Явный `--include=dev` обязателен на build stage: Next.js запускает ESLint и TypeScript во время `next build`, поэтому их нельзя исключать через production npm config. В этом build context нет соседней папки `shared/`, поэтому runtime-код внутри `client` не должен импортировать `@shared/*`. Допустимы только `import type` контракты, которые стираются при сборке; runtime helpers для клиентского UI должны жить в `client/lib`.
+Текущий Railway client-service собирается из каталога `client` как `/app` через `npm install --include=dev --legacy-peer-deps && npm run build`; команда принадлежит `client/nixpacks.toml`. Поле Railway `Custom Build Command` должно оставаться пустым: ручное значение перекрывает Nixpacks-конфигурацию из репозитория. Явный `--include=dev` обязателен на build stage: Next.js запускает ESLint и TypeScript во время `next build`, поэтому их нельзя исключать через production npm config. В этом build context нет соседней папки `shared/`, поэтому runtime-код внутри `client` не должен импортировать `@shared/*`. Допустимы только `import type` контракты, которые стираются при сборке; runtime helpers для клиентского UI должны жить в `client/lib`.
 
 ## Обязательные env-переменные
 
