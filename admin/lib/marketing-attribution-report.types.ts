@@ -1,5 +1,6 @@
 import type {
   MarketingAttributionModel,
+  MarketingAttributionOrderSource,
   MarketingTouchChannel,
 } from '@shared/marketing-attribution-report'
 import type {
@@ -8,6 +9,7 @@ import type {
 } from './types'
 
 export type { MarketingAttributionModel } from '@shared/marketing-attribution-report'
+export type { MarketingAttributionOrderSource } from '@shared/marketing-attribution-report'
 
 export interface MarketingAttributionReportFilters {
   dateFrom: string
@@ -54,6 +56,45 @@ export interface MarketingAttributionReport {
   semantics: MarketingReportSemantics
   totals: MarketingAttributionReportRow['metrics']
   rows: MarketingAttributionReportRow[]
+}
+
+export interface MarketingAttributionOrderDetailsQuery extends MarketingAttributionReportFilters {
+  source: MarketingAttributionOrderSource
+  campaignId?: string
+  page?: number
+  limit?: number
+}
+
+export interface MarketingAttributionOrderDetails {
+  id: string
+  completedAt: string
+  totalAmount: NumericLike
+  purchaseSequence: number
+  purchaseKind: 'FIRST' | 'REPEAT'
+  user: {
+    id: string
+    firstName: string | null
+    lastName: string | null
+    username: string | null
+    email: string | null
+  }
+  product: {
+    name: string | null
+    country: string | null
+  }
+}
+
+export interface MarketingAttributionOrderDetailsResponse {
+  filters: MarketingAttributionReport['filters']
+  source: MarketingAttributionOrderSource
+  campaignId: string | null
+  data: MarketingAttributionOrderDetails[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
 }
 
 export type MarketingCpaPayoutMode = ReferralPayoutMode | 'UNKNOWN'

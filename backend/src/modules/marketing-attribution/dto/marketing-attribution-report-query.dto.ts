@@ -1,9 +1,23 @@
 import { MarketingTouchChannel } from '@prisma/client';
-import { IsDateString, IsEnum, IsIn, IsOptional, Matches } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import {
   MARKETING_ATTRIBUTION_MODELS,
+  MARKETING_ATTRIBUTION_ORDER_SOURCES,
   MARKETING_REPORT_DATE_PATTERN,
   type MarketingAttributionModel,
+  type MarketingAttributionOrderSource,
 } from '@shared/marketing-attribution-report';
 
 export { MARKETING_ATTRIBUTION_MODELS } from '@shared/marketing-attribution-report';
@@ -27,4 +41,28 @@ export class MarketingAttributionReportQueryDto {
   @IsOptional()
   @IsIn(MARKETING_ATTRIBUTION_MODELS)
   model?: MarketingAttributionModel;
+}
+
+export class MarketingAttributionOrderDetailsQueryDto extends MarketingAttributionReportQueryDto {
+  @IsIn(MARKETING_ATTRIBUTION_ORDER_SOURCES)
+  source!: MarketingAttributionOrderSource;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/, { message: 'campaignId должен быть непустым идентификатором' })
+  @MaxLength(191)
+  campaignId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }

@@ -1,6 +1,8 @@
 import type { AdminUser, AdminUserAttributionBucket, NumericLike } from '@/lib/types'
 
-type UserNameSource = Pick<AdminUser, 'id' | 'firstName' | 'lastName' | 'username' | 'email' | 'phone'>
+type UserNameSource = Pick<AdminUser, 'id' | 'firstName' | 'lastName' | 'username' | 'email'> & {
+  phone?: AdminUser['phone']
+}
 
 export function getAdminUserDisplayName(user: UserNameSource): string {
   const fullName = [user.firstName, user.lastName]

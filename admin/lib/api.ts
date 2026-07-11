@@ -50,6 +50,8 @@ import type {
   UsersQueryParams,
 } from './types'
 import type {
+  MarketingAttributionOrderDetailsQuery,
+  MarketingAttributionOrderDetailsResponse,
   MarketingAttributionReport,
   MarketingAttributionReportFilters,
   MarketingCpaReport,
@@ -211,6 +213,11 @@ export const marketingAttributionApi = {
     api.get<MarketingUserTimeline>(`/marketing-attribution/users/${userId}/timeline`, { params }),
   getAttributionReport: (params: MarketingAttributionReportFilters) =>
     api.get<MarketingAttributionReport>('/marketing-attribution/reports/attribution', { params }),
+  getAttributionOrderDetails: (params: MarketingAttributionOrderDetailsQuery) =>
+    api.get<MarketingAttributionOrderDetailsResponse>(
+      '/marketing-attribution/reports/attribution/orders',
+      { params },
+    ),
   getCpaReport: (params: MarketingAttributionReportFilters) =>
     api.get<MarketingCpaReport>('/marketing-attribution/reports/cpa', { params }),
   exportReports: (params: MarketingAttributionReportFilters) =>

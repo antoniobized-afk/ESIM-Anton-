@@ -288,8 +288,9 @@ Compile-time vocabulary отчётов принадлежит
 
 Admin-only report API принадлежит `marketing-attribution` и состоит из
 `GET /marketing-attribution/reports/attribution`,
+`GET /marketing-attribution/reports/attribution/orders`,
 `GET /marketing-attribution/reports/cpa` и
-`GET /marketing-attribution/reports/export`. Все три route используют один
+`GET /marketing-attribution/reports/export`. Summary и export route используют один
 typed filter contract: обязательная пара `dateFrom`/`dateTo` в формате
 `YYYY-MM-DD` либо rolling default за последние 30 UTC-календарных дней,
 optional `channel` и `model=FIRST_TOUCH|LAST_TOUCH` с default `LAST_TOUCH`.
@@ -310,6 +311,15 @@ optional `channel` и `model=FIRST_TOUCH|LAST_TOUCH` с default `LAST_TOUCH`.
   если первый order лежит вне выбранного окна;
 - direct registrations/orders образуют отдельную factual строку без campaign;
   channel filter исключает её, потому что у direct snapshot нет channel.
+
+`GET /marketing-attribution/reports/attribution/orders` — paginated operator
+drill-down именно для purchase/revenue строки. Он принимает те же date/channel/
+model filters и требует `source=CAMPAIGN` вместе с `campaignId` либо
+`source=DIRECT` без campaign id. Route возвращает только exact completed primary
+orders (max 100 на страницу), из которых сложена выбранная строка, и для каждого
+отдаёт lifetime purchase sequence (`FIRST` или `REPEAT`). `meta.total` отражает
+весь matching set и не обнуляется для пустой страницы за его пределами. General `/orders`
+не получает campaign-фильтры и не становится владельцем attribution rules.
 
 API возвращает эти date-field semantics рядом с filters. UI подписывает их и
 не вычисляет click-to-registration, registration-to-order или другие ratios

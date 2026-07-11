@@ -9,12 +9,17 @@ import {
 } from '@shared/marketing-attribution-report';
 import {
   MarketingAttributionReportQueryDto,
+  MarketingAttributionOrderDetailsQueryDto,
 } from './dto/marketing-attribution-report-query.dto';
 import {
+  type AttributionOrderDetailsDataDbRow,
+  type AttributionOrderDetailsDbRow,
   type AttributionReportDbRow,
+  buildAttributionOrderDetailsQuery,
   buildAttributionReportQuery,
   buildCpaReportQuery,
   type CpaReportDbRow,
+  type ResolvedAttributionOrderDetailsQuery,
   type ResolvedMarketingAttributionReportFilters,
 } from './marketing-attribution-report.queries';
 
@@ -104,6 +109,30 @@ export class MarketingAttributionReportService {
     };
   }
 
+  async getAttributionOrderDetails(query: MarketingAttributionOrderDetailsQueryDto) {
+    const resolvedQuery = this.resolveAttributionOrderDetailsQuery(query);
+    const rows = await this.prisma.$queryRaw<AttributionOrderDetailsDbRow[]>(
+      buildAttributionOrderDetailsQuery(resolvedQuery),
+    );
+    const total = rows.length > 0 ? this.count(rows[0].totalCount) : 0;
+    const data = rows.flatMap((row) => (
+      row.orderId === null ? [] : [this.mapAttributionOrderDetailsRow(row)]
+    ));
+
+    return {
+      filters: this.publicFilters(resolvedQuery.filters),
+      source: resolvedQuery.source,
+      campaignId: resolvedQuery.campaignId,
+      data,
+      meta: {
+        page: resolvedQuery.page,
+        limit: resolvedQuery.limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / resolvedQuery.limit)),
+      },
+    };
+  }
+
   resolveFilters(
     query: MarketingAttributionReportQueryDto = {},
   ): ResolvedMarketingAttributionReportFilters {
@@ -141,6 +170,38 @@ export class MarketingAttributionReportService {
     };
   }
 
+  private resolveAttributionOrderDetailsQuery(
+    query: MarketingAttributionOrderDetailsQueryDto,
+  ): ResolvedAttributionOrderDetailsQuery {
+    const filters = this.resolveFilters(query);
+    const source = query.source;
+    const campaignId = query.campaignId?.trim() || null;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 50;
+
+    if (source !== 'CAMPAIGN' && source !== 'DIRECT') {
+      throw new BadRequestException('source должен быть CAMPAIGN или DIRECT');
+    }
+    if (source === 'CAMPAIGN' && !campaignId) {
+      throw new BadRequestException('Для источника CAMPAIGN требуется campaignId');
+    }
+    if (source === 'DIRECT' && query.campaignId !== undefined) {
+      throw new BadRequestException('Для источника DIRECT campaignId не передаётся');
+    }
+    if (!Number.isSafeInteger(page) || page < 1) {
+      throw new BadRequestException('page должен быть положительным целым числом');
+    }
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new BadRequestException('limit должен быть целым числом от 1 до 100');
+    }
+    const offset = (page - 1) * limit;
+    if (!Number.isSafeInteger(offset)) {
+      throw new BadRequestException('page и limit образуют слишком большое смещение');
+    }
+
+    return { filters, source, campaignId, page, limit, offset };
+  }
+
   private publicFilters(filters: ResolvedMarketingAttributionReportFilters) {
     return {
       dateFrom: filters.dateFrom,
@@ -174,6 +235,29 @@ export class MarketingAttributionReportService {
         repeatPurchases,
         purchases: firstPurchases + repeatPurchases,
         revenue: this.money(row.revenue),
+      },
+    };
+  }
+
+  private mapAttributionOrderDetailsRow(row: AttributionOrderDetailsDataDbRow) {
+    const purchaseSequence = this.count(row.purchaseSequence);
+
+    return {
+      id: row.orderId,
+      completedAt: row.completedAt,
+      totalAmount: this.money(row.totalAmount),
+      purchaseSequence,
+      purchaseKind: purchaseSequence === 1 ? 'FIRST' as const : 'REPEAT' as const,
+      user: {
+        id: row.userId,
+        firstName: row.userFirstName,
+        lastName: row.userLastName,
+        username: row.userUsername,
+        email: row.userEmail,
+      },
+      product: {
+        name: row.productName,
+        country: row.productCountry,
       },
     };
   }

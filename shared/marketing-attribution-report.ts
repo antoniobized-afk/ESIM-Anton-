@@ -2,6 +2,11 @@ export const MARKETING_ATTRIBUTION_MODELS = ['FIRST_TOUCH', 'LAST_TOUCH'] as con
 
 export type MarketingAttributionModel = (typeof MARKETING_ATTRIBUTION_MODELS)[number];
 
+export const MARKETING_ATTRIBUTION_ORDER_SOURCES = ['CAMPAIGN', 'DIRECT'] as const;
+
+export type MarketingAttributionOrderSource =
+  (typeof MARKETING_ATTRIBUTION_ORDER_SOURCES)[number];
+
 export const MARKETING_ATTRIBUTION_DEFAULT_MODEL: MarketingAttributionModel = 'LAST_TOUCH';
 
 export const MARKETING_ATTRIBUTION_MODEL_LABELS: Record<MarketingAttributionModel, string> = {

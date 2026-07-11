@@ -9,7 +9,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { JwtAdminGuard } from '@/common/auth/jwt-user.guard';
-import { MarketingAttributionReportQueryDto } from './dto/marketing-attribution-report-query.dto';
+import {
+  MarketingAttributionOrderDetailsQueryDto,
+  MarketingAttributionReportQueryDto,
+} from './dto/marketing-attribution-report-query.dto';
 import { MarketingAttributionReportExportService } from './marketing-attribution-report-export.service';
 import { MarketingAttributionReportService } from './marketing-attribution-report.service';
 
@@ -22,6 +25,12 @@ export class MarketingAttributionReportsController {
     private readonly reports: MarketingAttributionReportService,
     private readonly exportService: MarketingAttributionReportExportService,
   ) {}
+
+  @Get('attribution/orders')
+  @ApiOperation({ summary: 'Получить конкретные primary-заказы из строки attribution отчёта' })
+  getAttributionOrderDetails(@Query() query: MarketingAttributionOrderDetailsQueryDto) {
+    return this.reports.getAttributionOrderDetails(query);
+  }
 
   @Get('attribution')
   @ApiOperation({ summary: 'Получить source-backed отчёт по marketing attribution' })

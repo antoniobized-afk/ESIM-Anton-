@@ -10,3 +10,10 @@ export function formatMarketingMoney(value: NumericLike | null) {
     maximumFractionDigits: 2,
   })} ₽`
 }
+
+export function formatMarketingDateTimeUtc(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+
+  return `${date.toLocaleString('ru-RU', { timeZone: 'UTC' })} UTC`
+}

@@ -9,6 +9,7 @@ import { MarketingAttributionReportService } from './marketing-attribution-repor
 describe('MarketingAttributionReportsController', () => {
   const reports = {
     getAttributionReport: jest.fn(),
+    getAttributionOrderDetails: jest.fn(),
     getCpaReport: jest.fn(),
   };
   const exportService = { buildExcelFile: jest.fn() };
@@ -22,6 +23,19 @@ describe('MarketingAttributionReportsController', () => {
   it('закрывает весь report owner JwtAdminGuard для SUPPORT read access', () => {
     expect(Reflect.getMetadata(GUARDS_METADATA, MarketingAttributionReportsController))
       .toEqual([JwtAdminGuard]);
+  });
+
+  it('делегирует детализацию purchase-строки тому же report owner', () => {
+    const query = {
+      dateFrom: '2026-07-01',
+      dateTo: '2026-07-10',
+      source: 'CAMPAIGN' as const,
+      campaignId: 'campaign_1',
+    };
+
+    controller.getAttributionOrderDetails(query);
+
+    expect(reports.getAttributionOrderDetails).toHaveBeenCalledWith(query);
   });
 
   it('возвращает XLSX с exposed authenticated download headers', async () => {

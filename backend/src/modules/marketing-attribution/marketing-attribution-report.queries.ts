@@ -1,5 +1,8 @@
 import { MarketingTouchChannel, Prisma } from '@prisma/client';
-import type { MarketingAttributionModel } from '@shared/marketing-attribution-report';
+import type {
+  MarketingAttributionModel,
+  MarketingAttributionOrderSource,
+} from '@shared/marketing-attribution-report';
 
 export type ResolvedMarketingAttributionReportFilters = {
   dateFrom: string;
@@ -46,6 +49,40 @@ export type CpaReportDbRow = {
   payoutMode: 'BALANCE' | 'EXTERNAL' | 'UNKNOWN' | null;
   rewardsCount: bigint | number;
   payout: Prisma.Decimal | number | string | null;
+};
+
+export type AttributionOrderDetailsDataDbRow = {
+  orderId: string;
+  userId: string;
+  userFirstName: string | null;
+  userLastName: string | null;
+  userUsername: string | null;
+  userEmail: string | null;
+  productName: string | null;
+  productCountry: string | null;
+  completedAt: Date;
+  totalAmount: Prisma.Decimal | number | string;
+  purchaseSequence: bigint | number;
+};
+
+type EmptyAttributionOrderDetailsDbRow = {
+  [Field in keyof AttributionOrderDetailsDataDbRow]: null;
+};
+
+export type AttributionOrderDetailsDbRow = (
+  | AttributionOrderDetailsDataDbRow
+  | EmptyAttributionOrderDetailsDbRow
+) & {
+  totalCount: bigint | number;
+};
+
+export type ResolvedAttributionOrderDetailsQuery = {
+  filters: ResolvedMarketingAttributionReportFilters;
+  source: MarketingAttributionOrderSource;
+  campaignId: string | null;
+  page: number;
+  limit: number;
+  offset: number;
 };
 
 type SnapshotColumns = {
@@ -120,6 +157,16 @@ function selectedCpaOrdersCte(
   `;
 }
 
+function attributionOrderSourcePredicate(
+  orderCampaign: Prisma.Sql,
+  source: MarketingAttributionOrderSource,
+  campaignId: string | null,
+): Prisma.Sql {
+  return source === 'DIRECT'
+    ? Prisma.sql`${orderCampaign} IS NULL`
+    : Prisma.sql`${orderCampaign} = ${campaignId}`;
+}
+
 export function buildAttributionReportQuery(
   filters: ResolvedMarketingAttributionReportFilters,
 ): Prisma.Sql {
@@ -191,6 +238,76 @@ export function buildAttributionReportQuery(
              SUM(facts.revenue) DESC,
              mc.name ASC,
              facts."campaignId" ASC
+  `;
+}
+
+export function buildAttributionOrderDetailsQuery(
+  query: ResolvedAttributionOrderDetailsQuery,
+): Prisma.Sql {
+  const { filters, source, campaignId, limit, offset } = query;
+  const columns = snapshotColumns(filters);
+
+  return Prisma.sql`
+    WITH selected_orders AS MATERIALIZED (
+      SELECT order_record.id AS "orderId",
+             order_record."userId" AS "userId",
+             order_record."completedAt" AS "completedAt",
+             order_record."totalAmount" AS "totalAmount"
+      FROM orders order_record
+      JOIN order_marketing_attribution oma ON oma."orderId" = order_record.id
+      WHERE order_record.status = 'COMPLETED'
+        AND order_record."parentOrderId" IS NULL
+        AND order_record."completedAt" IS NOT NULL
+        AND order_record."completedAt" >= ${filters.from}
+        AND order_record."completedAt" < ${filters.toExclusive}
+        AND ${attributionOrderSourcePredicate(columns.orderCampaign, source, campaignId)}
+        ${channelPredicate(columns.orderChannel, filters.channel)}
+    ),
+    matching_count AS (
+      SELECT COUNT(*)::bigint AS "totalCount"
+      FROM selected_orders
+    ),
+    page_orders AS MATERIALIZED (
+      SELECT *
+      FROM selected_orders
+      ORDER BY "completedAt" DESC, "orderId" DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    ),
+    page_user_sequences AS (
+      SELECT history.id AS "orderId",
+             ROW_NUMBER() OVER (
+               PARTITION BY history."userId"
+               ORDER BY history."completedAt", history.id
+             ) AS "purchaseSequence"
+      FROM orders history
+      JOIN (
+        SELECT DISTINCT "userId"
+        FROM page_orders
+      ) page_users ON page_users."userId" = history."userId"
+      WHERE history.status = 'COMPLETED'
+        AND history."parentOrderId" IS NULL
+        AND history."completedAt" IS NOT NULL
+    )
+    SELECT page_orders."orderId" AS "orderId",
+           page_orders."userId" AS "userId",
+           user_record."firstName" AS "userFirstName",
+           user_record."lastName" AS "userLastName",
+           user_record.username AS "userUsername",
+           user_record.email AS "userEmail",
+           product.name AS "productName",
+           product.country AS "productCountry",
+           page_orders."completedAt" AS "completedAt",
+           page_orders."totalAmount" AS "totalAmount",
+           page_user_sequences."purchaseSequence" AS "purchaseSequence",
+           matching_count."totalCount" AS "totalCount"
+    FROM matching_count
+    LEFT JOIN page_orders ON TRUE
+    LEFT JOIN page_user_sequences ON page_user_sequences."orderId" = page_orders."orderId"
+    LEFT JOIN users user_record ON user_record.id = page_orders."userId"
+    LEFT JOIN orders order_record ON order_record.id = page_orders."orderId"
+    LEFT JOIN esim_products product ON product.id = order_record."productId"
+    ORDER BY page_orders."completedAt" DESC, page_orders."orderId" DESC
   `;
 }
 
