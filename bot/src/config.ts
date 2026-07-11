@@ -6,7 +6,8 @@ dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 export const config = {
   botToken: process.env.TELEGRAM_BOT_TOKEN || '',
-  // API_BASE_URL - без /api, API_URL - может быть с /api
+  // API_BASE_URL и fallback BACKEND_URL — backend origin без /api.
+  // Bot API client добавляет единый /api prefix в src/api.ts.
   apiUrl: process.env.API_BASE_URL || process.env.BACKEND_URL || 'http://localhost:3000',
   useWebhook: process.env.TELEGRAM_USE_WEBHOOK === 'true',
   webhookUrl: process.env.TELEGRAM_WEBHOOK_URL || '',

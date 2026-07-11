@@ -52,7 +52,21 @@ Railway client-service использует Config File `/client/railway.json`, 
 
 `NEXT_PUBLIC_API_URL` — origin backend без `/api` и без завершающего `/`:
 например, `https://api.mojomobile.ru`. Admin и client сами добавляют `/api`;
-значение с уже включённым suffix создаёт неверный двойной API path.
+значение с уже включённым suffix создаёт неверный двойной API path. Client
+проверяет этот контракт при `next build` и отклоняет URL с path/query/hash.
+
+Формат внутренних URL-переменных:
+
+| Railway service | Переменная | Формат |
+| --- | --- | --- |
+| `client` | `NEXT_PUBLIC_API_URL` | backend origin без `/api` |
+| `admin` | `NEXT_PUBLIC_API_URL` | backend origin без `/api` |
+| `bot` | `API_BASE_URL` (fallback `BACKEND_URL`) | backend origin без `/api` |
+| `backend` | `BACKEND_URL` | собственный backend origin без `/api` |
+| `backend` / `bot` | `FRONTEND_URL`, `MINI_APP_URL`, `ADMIN_PANEL_URL` | UI origin без `/api` |
+
+Внешние provider variables (`ESIM_PRIMARY_API_URL`, `ESIM_FALLBACK_API_URL`)
+хранят полный URL по контракту провайдера, включая обязательный path вроде `/v2`.
 
 Если нужен рабочий eSIM flow:
 
