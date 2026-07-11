@@ -67,6 +67,13 @@ ReferralLink {
 
 ## Attribution Policy
 
+Telegram Mini App `startapp=ref_<code>` не проходит через client
+`initDataUnsafe` или URL query. `AuthController` извлекает `start_param` только
+из подписанного и свежего `initData`, после canonical login делегирует код в
+`ReferralsService` с Telegram identity assertion. Ошибка referral registration
+не отменяет успешный login, но фиксируется в backend log; повторный запуск той
+же ссылки повторяет безопасную idempotent registration попытку.
+
 - Ищет `ReferralLink.code` (партнерский). Fallback на `User.referralCode` (legacy user-to-user).
 - Self-referral заблокирован.
 - Legacy attribution (`referredById` без линка) immutable.

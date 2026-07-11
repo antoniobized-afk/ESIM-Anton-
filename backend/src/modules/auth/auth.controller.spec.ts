@@ -43,6 +43,9 @@ describe('AuthController', () => {
   const miniAppCapture = {
     enqueueVerifiedMiniAppLaunch: jest.fn(),
   };
+  const referralsService = {
+    registerReferral: jest.fn(),
+  };
 
   const controller = new AuthController(
     authService as any,
@@ -51,6 +54,7 @@ describe('AuthController', () => {
     identityManagementService as any,
     callbackUrlService as any,
     miniAppCapture as any,
+    referralsService as any,
   );
 
   beforeEach(() => {
@@ -62,6 +66,7 @@ describe('AuthController', () => {
     );
     callbackUrlService.getFrontendUrl.mockReturnValue('https://app.example.com');
     miniAppCapture.enqueueVerifiedMiniAppLaunch.mockResolvedValue({ id: 'intent_1' });
+    referralsService.registerReferral.mockResolvedValue({ id: 'referrer_1' });
   });
 
   // ─── Admin ────────────────────────────────────────────────────
@@ -310,6 +315,61 @@ describe('AuthController', () => {
     });
 
     expect(miniAppCapture.enqueueVerifiedMiniAppLaunch).not.toHaveBeenCalled();
+    expect(referralsService.registerReferral).not.toHaveBeenCalled();
+  });
+
+  it('применяет ref_ только из verified Mini App initData через referral owner', async () => {
+    oauthService.verifyTelegramWebAppInitData.mockReturnValue({
+      provider: 'telegram',
+      providerId: '123456789',
+      telegramWebAppStartParam: 'ref_ANASTASIAV',
+      telegramWebAppEventKey: 'telegram-mini-app:event_1',
+    });
+    authService.loginWithOAuth.mockResolvedValue({
+      access_token: 'jwt_token',
+      userId: 'user_1',
+    });
+
+    await expect(
+      controller.telegramWebAppAuth({ initData: 'verified-init-data' }),
+    ).resolves.toEqual({
+      access_token: 'jwt_token',
+      userId: 'user_1',
+    });
+
+    expect(referralsService.registerReferral).toHaveBeenCalledWith(
+      'user_1',
+      'ANASTASIAV',
+      BigInt('123456789'),
+    );
+    expect(miniAppCapture.enqueueVerifiedMiniAppLaunch).not.toHaveBeenCalled();
+  });
+
+  it('не отменяет verified Mini App login при временной ошибке referral owner', async () => {
+    oauthService.verifyTelegramWebAppInitData.mockReturnValue({
+      provider: 'telegram',
+      providerId: '123456789',
+      telegramWebAppStartParam: 'ref_ANASTASIAV',
+      telegramWebAppEventKey: 'telegram-mini-app:event_1',
+    });
+    authService.loginWithOAuth.mockResolvedValue({
+      access_token: 'jwt_token',
+      userId: 'user_1',
+    });
+    referralsService.registerReferral.mockRejectedValue(new Error('database unavailable'));
+
+    await expect(
+      controller.telegramWebAppAuth({ initData: 'verified-init-data' }),
+    ).resolves.toEqual({
+      access_token: 'jwt_token',
+      userId: 'user_1',
+    });
+
+    expect(referralsService.registerReferral).toHaveBeenCalledWith(
+      'user_1',
+      'ANASTASIAV',
+      BigInt('123456789'),
+    );
   });
 
   it('не отменяет успешный Mini App login, если campaign intent временно не записался', async () => {

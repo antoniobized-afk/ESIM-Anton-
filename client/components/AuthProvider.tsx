@@ -10,7 +10,6 @@ import {
   clearToken,
   isTelegramEnvironment,
   hasTelegramLaunchParams,
-  getTelegramStartParam,
 } from '@/lib/auth'
 import { api, marketingAttributionApi, referralsApi } from '@/lib/api'
 import {
@@ -49,11 +48,6 @@ const PENDING_REFERRAL_KEY = 'pendingReferralCode'
 
 function extractReferralCodeCandidate(): string | null {
   if (typeof window === 'undefined') return null
-
-  const telegramStartParam = getTelegramStartParam()
-  if (telegramStartParam?.startsWith('ref_')) {
-    return telegramStartParam.slice(4).trim() || null
-  }
 
   const pendingCode = localStorage.getItem(PENDING_REFERRAL_KEY)?.trim() || null
   if (pendingCode) {
@@ -203,7 +197,8 @@ export function AuthProvider({ children }: { children: any }) {
     }
   }, [token])
 
-  // One-shot: отправить pending referral code / Telegram start_param после авторизации
+  // One-shot для web /ref/<code>. Telegram start_param применяет backend
+  // только после проверки подписанного initData.
   const referralAttemptedRef = useRef(false)
   useEffect(() => {
     if (!isBootstrapped || !user || referralAttemptedRef.current) return

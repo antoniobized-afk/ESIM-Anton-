@@ -28,6 +28,7 @@ import { normalizeRelativeReturnTo } from './identity/auth-redirect-normalizer';
 import { AuthIdentityManagementService } from './identity-management/auth-identity-management.service';
 import { OAuthService } from './oauth.service';
 import { MarketingAttributionMiniAppCaptureService } from '../marketing-attribution/marketing-attribution-mini-app-capture.service';
+import { ReferralsService } from '../referrals/referrals.service';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -41,6 +42,7 @@ export class AuthController {
     private readonly identityManagementService: AuthIdentityManagementService,
     private readonly callbackUrlService: AuthCallbackUrlService,
     private readonly miniAppCapture: MarketingAttributionMiniAppCaptureService,
+    private readonly referralsService: ReferralsService,
   ) {}
 
   // ─── Admin ───────────────────────────────────────────────────
@@ -236,6 +238,26 @@ export class AuthController {
         this.logger.warn(
           `Mini App marketing intent enqueue failed for ${login.userId}: ${this.authErrorMessage(error)}`,
         );
+      }
+    } else if (profile.telegramWebAppStartParam?.startsWith('ref_')) {
+      const referralCode = profile.telegramWebAppStartParam.slice(4).trim();
+      if (referralCode) {
+        try {
+          const referrer = await this.referralsService.registerReferral(
+            login.userId,
+            referralCode,
+            BigInt(profile.providerId),
+          );
+          if (!referrer) {
+            this.logger.warn(
+              `Verified Mini App referral was not applied for ${login.userId}: ${referralCode}`,
+            );
+          }
+        } catch (error) {
+          this.logger.warn(
+            `Verified Mini App referral registration failed for ${login.userId}: ${this.authErrorMessage(error)}`,
+          );
+        }
       }
     }
     return login;

@@ -110,6 +110,12 @@ collision с `ref_` и двойного capture между bot/Mini App paths.
   `pnpm --filter bot build` green. Full backend 73 suites / 576 tests green;
   signed `initData` fixture, bot owner/controller, Mini App intent/cron,
   identity drift, retry и service-token negative paths проходят.
+- Post-rollout regression correction 2026-07-11: внешний smoke покрывал `ma_`,
+  но не доказал старый `ref_` end-to-end. Mini App referral перенесён с
+  client-side `initDataUnsafe` one-shot на уже verified backend `start_param`;
+  `AuthController` делегирует `ref_<code>` canonical `ReferralsService` после
+  login. Обычный web `/ref/<code>` оставлен без изменений после положительного
+  production smoke нового аккаунта с применённой скидкой в checkout.
 - Положительный backend runtime smoke выполнен на disposable PostgreSQL и
   synthetic credentials без чтения `.env`: service-token bot capture + retry
   создали ровно один `TELEGRAM_BOT` touch; два запроса с корректно подписанным
