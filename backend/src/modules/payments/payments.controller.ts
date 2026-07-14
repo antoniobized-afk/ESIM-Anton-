@@ -138,7 +138,7 @@ export class PaymentsController {
     try {
       const result = await this.paymentsService.handleWebhook(payload);
       res.send(result);
-    } catch (error) {
+    } catch (error: any) {
       res.status(400).send(`error: ${error.message}`);
     }
   }
@@ -198,7 +198,7 @@ export class PaymentsController {
   async handleFail(@Query() query: any, @Res() res: any) {
     const { InvId } = query;
     const botUsername = process.env.TELEGRAM_BOT_USERNAME || 'mojo_mobile_bot';
-    const returnUrl = `https://t.me/${botUsername}/app`; // Простой редирект
+    const returnUrl = `https://telegram.me/${botUsername}/app`; // Простой редирект
 
     res.send(`
       <!DOCTYPE html>

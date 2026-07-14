@@ -63,10 +63,10 @@ export default function ReferralsPage() {
     const tg = (window as any).Telegram?.WebApp
     
     if (tg?.openTelegramLink) {
-      const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(stats.referralLink)}&text=${encodeURIComponent('Покупай eSIM со скидкой! 🌍')}`
+      const shareUrl = `https://telegram.me/share/url?url=${encodeURIComponent(stats.referralLink)}&text=${encodeURIComponent('Покупай eSIM со скидкой! 🌍')}`
       tg.openTelegramLink(shareUrl)
     } else {
-      window.open(`https://t.me/share/url?url=${encodeURIComponent(stats.referralLink)}`, '_blank')
+      window.open(`https://telegram.me/share/url?url=${encodeURIComponent(stats.referralLink)}`, '_blank')
     }
   }
 
@@ -97,7 +97,7 @@ export default function ReferralsPage() {
               Откройте приложение из бота заново, чтобы получить JWT и загрузить ваши реферальные данные.
             </p>
             <a
-              href={`https://t.me/${botUsername}`}
+              href={`https://telegram.me/${botUsername}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center rounded-xl bg-[#f77430] px-4 py-3 text-sm font-medium text-white"

@@ -180,7 +180,7 @@ export default function AndroidInstallPage() {
         <div className="card-neutral p-5 text-center">
           <p className="text-sm text-gray-600 mb-3">Что-то пошло не так?</p>
           <a
-            href="https://t.me/mojo_mobile_bot"
+            href="https://telegram.me/mojo_mobile_bot"
             target="_blank"
             rel="noreferrer"
             className="inline-block w-full py-3 rounded-2xl bg-[#f77430] text-white font-semibold text-sm"

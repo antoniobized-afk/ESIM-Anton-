@@ -74,7 +74,7 @@ export default function LoyaltyPage() {
                 Откройте приложение из бота заново, чтобы загрузить ваш уровень лояльности.
               </p>
               <a
-                href={`https://t.me/${botUsername}`}
+                href={`https://telegram.me/${botUsername}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center rounded-xl bg-[#f77430] px-4 py-3 text-sm font-medium text-white"

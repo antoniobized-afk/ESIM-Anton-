@@ -309,7 +309,7 @@ export default function ReferralLinks() {
                           <Button
                             onClick={() =>
                               handleCopy(
-                                `https://t.me/${BOT_USERNAME}?startapp=ref_${link.code}`,
+                                `https://telegram.me/${BOT_USERNAME}?startapp=ref_${link.code}`,
                                 `tg-${link.id}`,
                               )
                             }

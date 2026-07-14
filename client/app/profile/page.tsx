@@ -47,7 +47,7 @@ export default function ProfilePage() {
     const tg = (window as any).Telegram?.WebApp
     if (tg?.openTelegramLink) {
       tg.openTelegramLink(
-        `https://t.me/share/url?url=${encodeURIComponent(referralStats.referralLink)}&text=${encodeURIComponent(shareText)}`
+        `https://telegram.me/share/url?url=${encodeURIComponent(referralStats.referralLink)}&text=${encodeURIComponent(shareText)}`
       )
     } else if (navigator.share) {
       navigator.share({ title: shareTitle, text: shareText, url: referralStats.referralLink }).catch(() => { })

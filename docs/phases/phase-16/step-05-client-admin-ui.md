@@ -16,7 +16,7 @@
     каталог;
   - если valid, сохранить `pendingReferralCode` в `localStorage`;
   - показать CTA:
-    - открыть Telegram: `https://t.me/<bot>?start=ref_<code>`;
+    - открыть Telegram: `https://telegram.me/<bot>?start=ref_<code>`;
     - продолжить на сайте: `/`;
   - если есть promo code, показать его и copy action.
 - В `client/components/AuthProvider.tsx` добавить one-shot `useEffect`:

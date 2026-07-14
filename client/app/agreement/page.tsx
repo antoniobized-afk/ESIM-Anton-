@@ -19,8 +19,8 @@ export default function AgreementPage() {
           Данные условия использования (далее – Соглашение) устанавливают условия, которые применяются к использованию
           информационных и сопроводительных услуг (далее – Услуги) предоставляемых ИП Кирпичевой Еленой Сергеевной
           (ИНН 402918235949, ОГРНИП 323400000038692) (далее – Исполнитель) с использованием Telegram-бота (
-          <a href="https://t.me/mojo_mobile_bot" className="text-[#f77430] underline" target="_blank" rel="noreferrer">
-            https://t.me/mojo_mobile_bot
+          <a href="https://telegram.me/mojo_mobile_bot" className="text-[#f77430] underline" target="_blank" rel="noreferrer">
+            https://telegram.me/mojo_mobile_bot
           </a>
           ) и веб-сайта (
           <a href="https://app.mojomobile.ru/" className="text-[#f77430] underline" target="_blank" rel="noreferrer">
@@ -80,7 +80,7 @@ export default function AgreementPage() {
         <Section title="2. Порядок оказания услуг">
           <p className="mb-3">Оказание услуг Исполнителем происходит в следующем порядке:</p>
           <ul className="list-disc pl-5 [&>li+li]:mt-2 mb-3">
-            <li>Клиент заходит на сайт <a href="https://app.mojomobile.ru/" className="text-[#f77430] underline" target="_blank" rel="noreferrer">https://app.mojomobile.ru/</a> либо в Telegram-бот <a href="https://t.me/mojo_mobile_bot" className="text-[#f77430] underline" target="_blank" rel="noreferrer">https://t.me/mojo_mobile_bot</a>;</li>
+            <li>Клиент заходит на сайт <a href="https://app.mojomobile.ru/" className="text-[#f77430] underline" target="_blank" rel="noreferrer">https://app.mojomobile.ru/</a> либо в Telegram-бот <a href="https://telegram.me/mojo_mobile_bot" className="text-[#f77430] underline" target="_blank" rel="noreferrer">https://telegram.me/mojo_mobile_bot</a>;</li>
             <li>Выбирает тариф с наименованием страны-использования eSIM;</li>
             <li>Выбирает срок действия (количество дней) после активации Тарифа и количество трафика в гигабайтах;</li>
             <li>Клиент получает подробную информацию о eSIM: срок активации, срок действия тарифа и трафик, возможность раздачи интернета, страны, в которых будет работать eSIM.</li>

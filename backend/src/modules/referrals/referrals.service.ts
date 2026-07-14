@@ -610,7 +610,7 @@ export class ReferralsService {
 
     return {
       referralCode: user.referralCode,
-      referralLink: `https://t.me/${this.configService.get('TELEGRAM_BOT_USERNAME', 'mojo_mobile_bot')}?start=ref_${user.referralCode}`,
+      referralLink: `https://telegram.me/${this.configService.get('TELEGRAM_BOT_USERNAME', 'mojo_mobile_bot')}?start=ref_${user.referralCode}`,
       referralsCount: user.referrals.length,
       totalEarnings: totalReferralEarnings._sum.amount || 0,
       referralPercent: settings.bonusPercent,

@@ -492,10 +492,10 @@ export class MarketingCampaignsService {
     if (campaign.utmContent) webUrl.searchParams.set('utm_content', campaign.utmContent);
     if (campaign.utmTerm) webUrl.searchParams.set('utm_term', campaign.utmTerm);
 
-    const telegramUrl = new URL(`https://t.me/${linkConfig.botUsername}`);
+    const telegramUrl = new URL(`https://telegram.me/${linkConfig.botUsername}`);
     telegramUrl.searchParams.set('start', startParam);
 
-    const miniAppUrl = new URL(`https://t.me/${linkConfig.botUsername}`);
+    const miniAppUrl = new URL(`https://telegram.me/${linkConfig.botUsername}`);
     miniAppUrl.searchParams.set('startapp', startParam);
 
     return {

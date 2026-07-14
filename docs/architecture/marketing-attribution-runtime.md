@@ -139,8 +139,8 @@ Top-up (`parentOrderId != null`) не получает primary-order snapshot и
 Backend строит links только из configuration и campaign data:
 
 - web: `SITE_URL/r/<shortCode>` с display UTM query;
-- bot: `https://t.me/<TELEGRAM_BOT_USERNAME>?start=ma_<shortCode>`;
-- Mini App: `https://t.me/<TELEGRAM_BOT_USERNAME>?startapp=ma_<shortCode>`.
+- bot: `https://telegram.me/<TELEGRAM_BOT_USERNAME>?start=ma_<shortCode>`;
+- Mini App: `https://telegram.me/<TELEGRAM_BOT_USERNAME>?startapp=ma_<shortCode>`.
 
 Required link configuration валидирована до create/update campaign transaction;
 responses собираются в той же transaction, что campaign и audit. Config/link

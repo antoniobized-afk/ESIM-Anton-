@@ -108,7 +108,7 @@ export default function TelegramLoginWidgetButton({
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
           <p className="text-[11px] text-amber-800 text-center">{fallbackText}</p>
           <a
-            href={`https://t.me/${botUsername}?start=${encodeURIComponent(fallbackStart)}`}
+            href={`https://telegram.me/${botUsername}?start=${encodeURIComponent(fallbackStart)}`}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-2 block w-full rounded-lg bg-[#2AABEE] py-2.5 text-center text-xs font-semibold text-white"

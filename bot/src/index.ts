@@ -57,7 +57,7 @@ bot.start({
     console.log(`
 ✅ Бот успешно запущен!
 🤖 Username: @${bot.botInfo.username}
-🔗 Link: https://t.me/${bot.botInfo.username}
+🔗 Link: https://telegram.me/${bot.botInfo.username}
     `);
   },
 });

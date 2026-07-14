@@ -977,7 +977,7 @@ describe('ReferralsService', () => {
       );
       expect(result).toEqual({
         referralCode: 'REF123',
-        referralLink: 'https://t.me/mojo_mobile_bot?start=ref_REF123',
+        referralLink: 'https://telegram.me/mojo_mobile_bot?start=ref_REF123',
         referralsCount: 1,
         totalEarnings: 55,
         referralPercent: 9,
